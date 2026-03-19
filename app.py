@@ -18,12 +18,7 @@ INTERVAL_MAP = {
     "15m": {"interval": "15m", "days": 59},
     "30m": {"interval": "30m", "days": 59},
     "1h":  {"interval": "60m", "days": 720},
-    "1d":  {"interval": "1d",  "days": 99999},  # sejak IPO
-}
-
-# Yahoo Finance max intraday limits (hard limit dari API mereka)
-INTRADAY_MAX_DAYS = {
-    "5m": 60, "15m": 60, "30m": 60, "60m": 60,
+    "1d":  {"interval": "1d",  "days": 99999},
 }
 
 @app.route("/")
@@ -43,12 +38,7 @@ def ohlcv():
 
     now     = datetime.now(timezone.utc)
     period2 = int(now.timestamp())
-    # Untuk daily: period1=0 → Yahoo return data sejak IPO / awal tersedia
-    # Untuk intraday: Yahoo hard limit ~60 hari
-    if p["days"] >= 9999:
-        period1 = 0
-    else:
-        period1 = int((now - timedelta(days=p["days"])).timestamp())
+    period1 = 0 if p["days"] >= 9999 else int((now - timedelta(days=p["days"])).timestamp())
 
     try:
         url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -57,8 +47,9 @@ def ohlcv():
             "period1":              period1,
             "period2":              period2,
             "includePrePost":       "false",
-            "includeAdjustedClose": "true",
-        }, timeout=15)
+            # PENTING: false → pakai harga asli tanpa adjustment
+            "includeAdjustedClose": "false",
+        }, timeout=20)
 
         data   = resp.json()
         result = data.get("chart", {}).get("result")
@@ -76,28 +67,39 @@ def ohlcv():
         closes  = quote.get("close",  [])
         volumes = quote.get("volume", [])
 
-        candles_map = {}  # key=date string untuk dedup daily, key=timestamp untuk intraday
+        candles_map = {}
         for i, ts in enumerate(timestamps):
             try:
-                o = opens[i]; h = highs[i]; l = lows[i]; c = closes[i]
+                o = opens[i] if i < len(opens)   else None
+                h = highs[i] if i < len(highs)   else None
+                l = lows[i]  if i < len(lows)    else None
+                c = closes[i] if i < len(closes) else None
+                v = volumes[i] if i < len(volumes) else 0
+
+                # Skip candle yang ada nilai None atau tidak masuk akal
                 if None in (o, h, l, c):
                     continue
+                if any(x <= 0 for x in (o, h, l, c)):
+                    continue
+                # Validasi OHLC logic: high harus >= semua, low harus <= semua
+                if not (h >= o and h >= l and h >= c):
+                    continue
+                if not (l <= o and l <= h and l <= c):
+                    continue
 
-                # Konversi UTC → WIB (+7 jam) untuk display yang benar
                 dt_wib = datetime.fromtimestamp(ts, tz=WIB)
 
+                # IDX: harga bulat (tidak ada desimal)
                 candle = {
-                    "time":   int(dt_wib.timestamp()),
-                    "open":   round(float(o), 2),
-                    "high":   round(float(h), 2),
-                    "low":    round(float(l), 2),
-                    "close":  round(float(c), 2),
-                    "volume": int(volumes[i]) if i < len(volumes) and volumes[i] else 0,
+                    "time":         int(dt_wib.timestamp()),
+                    "open":         int(round(float(o))),
+                    "high":         int(round(float(h))),
+                    "low":          int(round(float(l))),
+                    "close":        int(round(float(c))),
+                    "volume":       int(v) if v else 0,
                     "datetime_wib": dt_wib.strftime("%Y-%m-%d %H:%M"),
                 }
 
-                # Untuk daily: dedup pakai tanggal (keep yang terakhir = lebih lengkap)
-                # Untuk intraday: pakai full timestamp
                 if p["interval"] == "1d":
                     key = dt_wib.strftime("%Y-%m-%d")
                 else:
@@ -113,6 +115,9 @@ def ohlcv():
             return jsonify({"error": "Data kosong atau semua null"}), 404
 
         meta = r.get("meta", {})
+        price_raw = meta.get("regularMarketPrice")
+        price = int(round(float(price_raw))) if price_raw else None
+
         return jsonify({
             "ticker":     ticker,
             "symbol":     symbol,
@@ -120,7 +125,7 @@ def ohlcv():
             "candles":    candles,
             "count":      len(candles),
             "name":       meta.get("longName", ticker),
-            "price":      meta.get("regularMarketPrice"),
+            "price":      price,
             "data_range": f"{candles[0]['datetime_wib']} → {candles[-1]['datetime_wib']} WIB",
         })
 
@@ -133,22 +138,23 @@ def info():
     ticker = request.args.get("ticker", "BBRI").upper().strip()
     symbol = f"{ticker}.JK"
     try:
-        now     = datetime.now(timezone.utc)
-        period1 = int((now - timedelta(days=2)).timestamp())
-        period2 = int(now.timestamp())
-
+        now = datetime.now(timezone.utc)
         url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         resp = requests.get(url, headers=YF_HEADERS, params={
-            "interval": "1d", "period1": period1, "period2": period2
+            "interval": "1d",
+            "period1":  int((now - timedelta(days=2)).timestamp()),
+            "period2":  int(now.timestamp()),
+            "includeAdjustedClose": "false",
         }, timeout=10)
         data   = resp.json()
         result = data.get("chart", {}).get("result")
         if not result:
             return jsonify({"error": "not found"}), 404
-        meta = result[0].get("meta", {})
+        meta  = result[0].get("meta", {})
+        price_raw = meta.get("regularMarketPrice")
         return jsonify({
             "name":  meta.get("longName") or meta.get("shortName") or ticker,
-            "price": meta.get("regularMarketPrice"),
+            "price": int(round(float(price_raw))) if price_raw else None,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

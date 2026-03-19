@@ -235,8 +235,8 @@
     <button class="tf-btn" data-tf="1h"  onclick="setTF('1h')">1h</button>
     <button class="tf-btn" data-tf="1d"  onclick="setTF('1d')">1D</button>
     <div style="flex:1"></div>
-    <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')">⊡ Auto</button>
-    <button class="tf-btn" id="btnLog"  onclick="setScale('log')">Log</button>
+    <button class="tf-btn" id="btnLog" onclick="setScale('log')" title="Logarithmic scale">Log</button>
+    <button class="tf-btn" id="btnAuto" onclick="setScale('auto')" title="Fit all data to screen" style="font-size:15px; padding: 3px 10px;">⤢</button>
   </div>
 
   <div class="chart-card">
@@ -310,7 +310,7 @@ function initChart() {
       },
     },
     localization: {
-      priceFormatter: p => p.toLocaleString('id-ID'),
+      priceFormatter: p => Math.round(p).toLocaleString('id-ID'),
     },
     handleScroll: true,
     handleScale: true,
@@ -350,7 +350,7 @@ function initChart() {
     const bar = param.seriesData.get(candleSeries);
     if (!bar) { tooltip.classList.remove('visible'); return; }
 
-    const fmt = v => parseFloat(v).toLocaleString('id-ID');
+    const fmt = v => Math.round(parseFloat(v)).toLocaleString('id-ID');
     const fmtVol = v => {
       if (!v) return '—';
       if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
