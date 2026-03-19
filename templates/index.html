@@ -472,7 +472,15 @@ async function loadChart() {
       color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
     })));
 
-    chart.timeScale().fitContent();
+    // Tampilkan 181 candle terakhir saat pertama load
+    const INIT_CANDLES = 181;
+    if (candles.length > INIT_CANDLES) {
+      const from = candles[candles.length - INIT_CANDLES].time;
+      const to   = candles[candles.length - 1].time;
+      chart.timeScale().setVisibleRange({ from, to });
+    } else {
+      chart.timeScale().fitContent();
+    }
     applyAutoScale(isAutoScale);  // reapply after data load
     hideLoading();
 
