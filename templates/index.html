@@ -129,12 +129,11 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     overflow: hidden;
-    flex: 1;
-    min-height: 480px;
     position: relative;
+    height: 500px;
   }
 
-  #chart { width: 100%; height: 100%; }
+  #chart { width: 100%; height: 500px; }
 
   .chart-overlay-title {
     position: absolute; top: 16px; left: 16px; z-index: 10;
@@ -312,8 +311,8 @@ function initChart() {
     },
     handleScroll: true,
     handleScale: true,
-    width:  container.clientWidth,
-    height: container.clientHeight || 480,
+    width:  container.clientWidth || 800,
+    height: 500,
   });
 
   // Candlestick series
@@ -339,7 +338,7 @@ function initChart() {
 
   // Resize
   const ro = new ResizeObserver(() => {
-    chart.applyOptions({ width: container.clientWidth, height: container.clientHeight || 480 });
+    chart.applyOptions({ width: container.clientWidth });
   });
   ro.observe(container);
 }
@@ -362,14 +361,20 @@ async function loadChart() {
   showLoading('Mengambil data dari Yahoo Finance...');
   document.getElementById('statusDot').className = 'status-dot';
 
+  // Reinit jika series belum siap
+  if (!candleSeries || !volumeSeries) {
+    if (chart) { chart.remove(); chart = null; }
+    initChart();
+  }
+
   try {
-    // fetch OHLCV
     const res  = await fetch(`/api/ohlcv?ticker=${currentTicker}&tf=${currentTF}`);
     const data = await res.json();
 
     if (data.error) throw new Error(data.error);
 
     const candles = data.candles;
+    if (!candles || candles.length === 0) throw new Error('Data kosong — ticker tidak ditemukan di Yahoo Finance');
 
     candleSeries.setData(candles);
     volumeSeries.setData(candles.map(c => ({
@@ -381,19 +386,16 @@ async function loadChart() {
     chart.timeScale().fitContent();
     hideLoading();
 
-    // update stats (last candle)
     const last = candles[candles.length - 1];
     const fmt = v => v.toLocaleString('id-ID');
-    document.getElementById('sOpen').textContent   = fmt(last.open);
-    document.getElementById('sHigh').textContent   = fmt(last.high);
-    document.getElementById('sLow').textContent    = fmt(last.low);
-    document.getElementById('sClose').textContent  = fmt(last.close);
-    document.getElementById('sVol').textContent    = last.volume.toLocaleString('id-ID');
+    document.getElementById('sOpen').textContent    = fmt(last.open);
+    document.getElementById('sHigh').textContent    = fmt(last.high);
+    document.getElementById('sLow').textContent     = fmt(last.low);
+    document.getElementById('sClose').textContent   = fmt(last.close);
+    document.getElementById('sVol').textContent     = last.volume.toLocaleString('id-ID');
     document.getElementById('sCandles').textContent = candles.length;
 
     document.getElementById('statusDot').className = 'status-dot live';
-
-    // fetch info (non-blocking)
     fetchInfo(currentTicker);
 
   } catch (err) {
@@ -438,9 +440,11 @@ document.getElementById('tickerInput').addEventListener('keydown', e => {
   if (e.key === 'Enter') loadChart();
 });
 
-// Init
-initChart();
-loadChart();
+// Init setelah DOM siap
+window.addEventListener('DOMContentLoaded', () => {
+  initChart();
+  loadChart();
+});
 </script>
 </body>
 </html>
