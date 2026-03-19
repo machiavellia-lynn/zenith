@@ -136,10 +136,10 @@
     border-radius: 10px;
     overflow: hidden;
     position: relative;
-    height: 620px;
+    height: 500px;
   }
 
-  #chart { width: 100%; height: 620px; }
+  #chart { width: 100%; height: 500px; }
 
   .chart-overlay-title {
     position: absolute; top: 16px; left: 16px; z-index: 10;
@@ -235,8 +235,8 @@
     <button class="tf-btn" data-tf="1h"  onclick="setTF('1h')">1h</button>
     <button class="tf-btn" data-tf="1d"  onclick="setTF('1d')">1D</button>
     <div style="flex:1"></div>
-    <button class="tf-btn" id="btnLog" onclick="setScale('log')" title="Logarithmic scale">Log</button>
-    <button class="tf-btn" id="btnAuto" onclick="setScale('auto')" title="Fit all data to screen" style="font-size:15px; padding: 3px 10px;">⤢</button>
+    <button class="tf-btn" id="btnLog"  onclick="setScale('log')"  title="Logarithmic scale">L</button>
+    <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')" title="Auto scale (TradingView style)">A</button>
   </div>
 
   <div class="chart-card">
@@ -315,7 +315,7 @@ function initChart() {
     handleScroll: true,
     handleScale: true,
     width:  container.clientWidth || 800,
-    height: 620,
+    height: 500,
   });
 
   // Candlestick series
@@ -390,6 +390,9 @@ function initChart() {
   // Store ref for crosshair
   chart._candleSeries = candleSeries;
 
+  // Apply auto scale default ON (seperti TradingView)
+  applyAutoScale(true);
+
   // Resize
   const ro = new ResizeObserver(() => {
     chart.applyOptions({ width: container.clientWidth });
@@ -397,14 +400,34 @@ function initChart() {
   ro.observe(container);
 }
 
-let isLogScale = false;
+let isLogScale  = false;
+let isAutoScale = true;  // default ON seperti TradingView
+
+function applyAutoScale(on) {
+  if (!chart) return;
+  chart.priceScale('right').applyOptions({
+    autoScale:   on,   // true = harga otomatis fit ke candle yang terlihat
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  });
+  // Kalau auto ON: matikan drag vertikal (persis TradingView)
+  chart.applyOptions({
+    handleScale: {
+      axisPressedMouseMove: {
+        price: !on,  // false = price axis tidak bisa di-drag manual
+        time:  true,
+      },
+    },
+  });
+}
 
 function setScale(mode) {
   if (mode === 'auto') {
-    if (chart) chart.timeScale().fitContent();
+    isAutoScale = !isAutoScale;
+    applyAutoScale(isAutoScale);
+    document.getElementById('btnAuto').classList.toggle('active', isAutoScale);
   } else if (mode === 'log') {
     isLogScale = !isLogScale;
-    if (candleSeries) {
+    if (chart) {
       chart.priceScale('right').applyOptions({
         mode: isLogScale ? 1 : 0,
       });
@@ -455,6 +478,7 @@ async function loadChart() {
     })));
 
     chart.timeScale().fitContent();
+    applyAutoScale(isAutoScale);  // reapply after data load
     hideLoading();
 
     document.getElementById('statusDot').className = 'status-dot live';
