@@ -136,10 +136,10 @@
     border-radius: 10px;
     overflow: hidden;
     position: relative;
-    height: 500px;
+    height: 620px;
   }
 
-  #chart { width: 100%; height: 500px; }
+  #chart { width: 100%; height: 620px; }
 
   .chart-overlay-title {
     position: absolute; top: 16px; left: 16px; z-index: 10;
@@ -171,24 +171,6 @@
 
   .state-msg { font-size: 13px; color: var(--muted); }
   .state-err { font-size: 13px; color: var(--danger); }
-
-  /* stats row */
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-    gap: 12px;
-  }
-  .stat-card {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 14px 16px;
-  }
-  .stat-label { font-size: 10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px; }
-  .stat-val {
-    font-family: 'Space Mono', monospace;
-    font-size: 16px; font-weight: 700; color: var(--text);
-  }
-  .stat-val.up   { color: var(--up); }
-  .stat-val.down { color: var(--down); }
 
   /* footer note */
   .footer-note {
@@ -252,6 +234,9 @@
     <button class="tf-btn" data-tf="30m" onclick="setTF('30m')">30m</button>
     <button class="tf-btn" data-tf="1h"  onclick="setTF('1h')">1h</button>
     <button class="tf-btn" data-tf="1d"  onclick="setTF('1d')">1D</button>
+    <div style="flex:1"></div>
+    <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')">⊡ Auto</button>
+    <button class="tf-btn" id="btnLog"  onclick="setScale('log')">Log</button>
   </div>
 
   <div class="chart-card">
@@ -279,33 +264,6 @@
     </div>
 
     <div id="chart"></div>
-  </div>
-
-  <div class="stats-row">
-    <div class="stat-card">
-      <div class="stat-label">Open</div>
-      <div class="stat-val" id="sOpen">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">High</div>
-      <div class="stat-val up" id="sHigh">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Low</div>
-      <div class="stat-val down" id="sLow">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Close</div>
-      <div class="stat-val" id="sClose">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Vol (last candle)</div>
-      <div class="stat-val" id="sVol">—</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-label">Total Candles</div>
-      <div class="stat-val" id="sCandles">—</div>
-    </div>
   </div>
 
   <div class="footer-note">
@@ -357,7 +315,7 @@ function initChart() {
     handleScroll: true,
     handleScale: true,
     width:  container.clientWidth || 800,
-    height: 500,
+    height: 620,
   });
 
   // Candlestick series
@@ -439,9 +397,25 @@ function initChart() {
   ro.observe(container);
 }
 
+let isLogScale = false;
+
+function setScale(mode) {
+  if (mode === 'auto') {
+    if (chart) chart.timeScale().fitContent();
+  } else if (mode === 'log') {
+    isLogScale = !isLogScale;
+    if (candleSeries) {
+      chart.priceScale('right').applyOptions({
+        mode: isLogScale ? 1 : 0,
+      });
+    }
+    document.getElementById('btnLog').classList.toggle('active', isLogScale);
+  }
+}
+
 function setTF(tf) {
   currentTF = tf;
-  document.querySelectorAll('.tf-btn').forEach(b => {
+  document.querySelectorAll('.tf-btn[data-tf]').forEach(b => {
     b.classList.toggle('active', b.dataset.tf === tf);
   });
   document.getElementById('chartTFBadge').textContent = tf;
@@ -454,7 +428,8 @@ async function loadChart() {
   currentTicker = input;
 
   document.getElementById('chartLabel').textContent = currentTicker;
-  showLoading('Mengambil data dari Yahoo Finance...');
+  const msg = currentTF === '1d' ? 'Mengambil data historis (mungkin butuh beberapa detik)...' : 'Mengambil data dari Yahoo Finance...';
+  showLoading(msg);
   document.getElementById('statusDot').className = 'status-dot';
 
   // Reinit jika series belum siap
@@ -481,15 +456,6 @@ async function loadChart() {
 
     chart.timeScale().fitContent();
     hideLoading();
-
-    const last = candles[candles.length - 1];
-    const fmt = v => v.toLocaleString('id-ID');
-    document.getElementById('sOpen').textContent    = fmt(last.open);
-    document.getElementById('sHigh').textContent    = fmt(last.high);
-    document.getElementById('sLow').textContent     = fmt(last.low);
-    document.getElementById('sClose').textContent   = fmt(last.close);
-    document.getElementById('sVol').textContent     = last.volume.toLocaleString('id-ID');
-    document.getElementById('sCandles').textContent = candles.length;
 
     document.getElementById('statusDot').className = 'status-dot live';
     fetchInfo(currentTicker);

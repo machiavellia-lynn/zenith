@@ -14,11 +14,16 @@ YF_HEADERS = {
 WIB = timezone(timedelta(hours=7))
 
 INTERVAL_MAP = {
-    "5m":  {"interval": "5m",  "days": 5},
-    "15m": {"interval": "15m", "days": 5},
-    "30m": {"interval": "30m", "days": 5},
-    "1h":  {"interval": "60m", "days": 30},
-    "1d":  {"interval": "1d",  "days": 180},
+    "5m":  {"interval": "5m",  "days": 59},
+    "15m": {"interval": "15m", "days": 59},
+    "30m": {"interval": "30m", "days": 59},
+    "1h":  {"interval": "60m", "days": 720},
+    "1d":  {"interval": "1d",  "days": 99999},  # sejak IPO
+}
+
+# Yahoo Finance max intraday limits (hard limit dari API mereka)
+INTRADAY_MAX_DAYS = {
+    "5m": 60, "15m": 60, "30m": 60, "60m": 60,
 }
 
 @app.route("/")
@@ -36,10 +41,14 @@ def ohlcv():
     p      = INTERVAL_MAP[tf]
     symbol = f"{ticker}.JK"
 
-    # Pakai period1/period2 eksplisit agar dapat data terbaru
     now     = datetime.now(timezone.utc)
     period2 = int(now.timestamp())
-    period1 = int((now - timedelta(days=p["days"])).timestamp())
+    # Untuk daily: period1=0 → Yahoo return data sejak IPO / awal tersedia
+    # Untuk intraday: Yahoo hard limit ~60 hari
+    if p["days"] >= 9999:
+        period1 = 0
+    else:
+        period1 = int((now - timedelta(days=p["days"])).timestamp())
 
     try:
         url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
