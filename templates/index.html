@@ -196,6 +196,33 @@
     padding-bottom: 16px;
   }
   .footer-note span { color: var(--accent); }
+
+  /* ── HOVER TOOLTIP ───────────────────────── */
+  .hover-tooltip {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(14,19,24,0.92);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    white-space: nowrap;
+  }
+  .hover-tooltip.visible { opacity: 1; }
+  .ht-date { color: var(--muted); font-size: 10px; letter-spacing: .05em; }
+  .ht-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .ht-label { font-size: 9px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .ht-val { font-size: 12px; font-weight: 700; color: var(--text); }
+  .ht-val.up   { color: var(--up); }
+  .ht-val.down { color: var(--down); }
+  .ht-sep { width: 1px; height: 28px; background: var(--border); }
 </style>
 </head>
 <body>
@@ -231,6 +258,18 @@
     <div class="chart-overlay-title">
       <span id="chartLabel">BBRI</span>
       <span class="tf-badge" id="chartTFBadge">15m</span>
+    </div>
+
+    <!-- Hover tooltip -->
+    <div class="hover-tooltip" id="hoverTooltip">
+      <span class="ht-date" id="htDate">—</span>
+      <div class="ht-sep"></div>
+      <div class="ht-item"><span class="ht-label">O</span><span class="ht-val" id="htOpen">—</span></div>
+      <div class="ht-item"><span class="ht-label">H</span><span class="ht-val up" id="htHigh">—</span></div>
+      <div class="ht-item"><span class="ht-label">L</span><span class="ht-val down" id="htLow">—</span></div>
+      <div class="ht-item"><span class="ht-label">C</span><span class="ht-val" id="htClose">—</span></div>
+      <div class="ht-sep"></div>
+      <div class="ht-item"><span class="ht-label">Vol</span><span class="ht-val" id="htVol">—</span></div>
     </div>
 
     <!-- loading overlay -->
@@ -341,6 +380,57 @@ function initChart() {
   chart.priceScale('volume').applyOptions({
     scaleMargins: { top: 0.85, bottom: 0 },
   });
+
+  // Crosshair hover → update tooltip
+  let candleData = [];
+  chart.subscribeCrosshairMove(param => {
+    const tooltip = document.getElementById('hoverTooltip');
+    if (!param.time || !param.seriesData) {
+      tooltip.classList.remove('visible');
+      return;
+    }
+    const bar = param.seriesData.get(candleSeries);
+    if (!bar) { tooltip.classList.remove('visible'); return; }
+
+    const fmt = v => parseFloat(v).toLocaleString('id-ID');
+    const fmtVol = v => {
+      if (!v) return '—';
+      if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+      if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+      if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+      return v.toString();
+    };
+
+    // Format date label
+    const d = new Date(param.time * 1000);
+    const pad = n => String(n).padStart(2,'0');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let dateStr;
+    if (currentTF === '1d') {
+      dateStr = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+    } else {
+      dateStr = `${d.getDate()} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // Color close vs open
+    const closeEl = document.getElementById('htClose');
+    closeEl.className = 'ht-val ' + (bar.close >= bar.open ? 'up' : 'down');
+
+    document.getElementById('htDate').textContent  = dateStr;
+    document.getElementById('htOpen').textContent  = fmt(bar.open);
+    document.getElementById('htHigh').textContent  = fmt(bar.high);
+    document.getElementById('htLow').textContent   = fmt(bar.low);
+    closeEl.textContent                            = fmt(bar.close);
+
+    // Volume from volumeSeries
+    const volBar = param.seriesData.get(volumeSeries);
+    document.getElementById('htVol').textContent = volBar ? fmtVol(volBar.value) : '—';
+
+    tooltip.classList.add('visible');
+  });
+
+  // Store ref for crosshair
+  chart._candleSeries = candleSeries;
 
   // Resize
   const ro = new ResizeObserver(() => {

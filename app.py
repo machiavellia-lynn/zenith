@@ -1,9 +1,9 @@
 from flask import Flask, jsonify, render_template, request
+from datetime import datetime, timedelta, timezone
 import requests
 
 app = Flask(__name__)
 
-# Yahoo Finance direct API — no key needed, pakai header browser
 YF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "application/json",
@@ -11,12 +11,14 @@ YF_HEADERS = {
     "Referer": "https://finance.yahoo.com",
 }
 
+WIB = timezone(timedelta(hours=7))
+
 INTERVAL_MAP = {
-    "5m":  {"interval": "5m",  "range": "5d"},
-    "15m": {"interval": "15m", "range": "5d"},
-    "30m": {"interval": "30m", "range": "5d"},
-    "1h":  {"interval": "60m", "range": "1mo"},
-    "1d":  {"interval": "1d",  "range": "6mo"},
+    "5m":  {"interval": "5m",  "days": 5},
+    "15m": {"interval": "15m", "days": 5},
+    "30m": {"interval": "30m", "days": 5},
+    "1h":  {"interval": "60m", "days": 30},
+    "1d":  {"interval": "1d",  "days": 180},
 }
 
 @app.route("/")
@@ -34,16 +36,22 @@ def ohlcv():
     p      = INTERVAL_MAP[tf]
     symbol = f"{ticker}.JK"
 
+    # Pakai period1/period2 eksplisit agar dapat data terbaru
+    now     = datetime.now(timezone.utc)
+    period2 = int(now.timestamp())
+    period1 = int((now - timedelta(days=p["days"])).timestamp())
+
     try:
         url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         resp = requests.get(url, headers=YF_HEADERS, params={
-            "interval":          p["interval"],
-            "range":             p["range"],
-            "includePrePost":    "false",
+            "interval":             p["interval"],
+            "period1":              period1,
+            "period2":              period2,
+            "includePrePost":       "false",
             "includeAdjustedClose": "true",
         }, timeout=15)
 
-        data = resp.json()
+        data   = resp.json()
         result = data.get("chart", {}).get("result")
         if not result:
             err = data.get("chart", {}).get("error", {})
@@ -51,43 +59,60 @@ def ohlcv():
 
         r          = result[0]
         timestamps = r.get("timestamp", [])
-        ohlcv      = r.get("indicators", {}).get("quote", [{}])[0]
+        quote      = r.get("indicators", {}).get("quote", [{}])[0]
 
-        opens   = ohlcv.get("open",   [])
-        highs   = ohlcv.get("high",   [])
-        lows    = ohlcv.get("low",    [])
-        closes  = ohlcv.get("close",  [])
-        volumes = ohlcv.get("volume", [])
+        opens   = quote.get("open",   [])
+        highs   = quote.get("high",   [])
+        lows    = quote.get("low",    [])
+        closes  = quote.get("close",  [])
+        volumes = quote.get("volume", [])
 
-        candles = []
+        candles_map = {}  # key=date string untuk dedup daily, key=timestamp untuk intraday
         for i, ts in enumerate(timestamps):
             try:
-                o = opens[i];  h = highs[i];  l = lows[i];  c = closes[i]
+                o = opens[i]; h = highs[i]; l = lows[i]; c = closes[i]
                 if None in (o, h, l, c):
                     continue
-                candles.append({
-                    "time":   int(ts),
+
+                # Konversi UTC → WIB (+7 jam) untuk display yang benar
+                dt_wib = datetime.fromtimestamp(ts, tz=WIB)
+
+                candle = {
+                    "time":   int(dt_wib.timestamp()),
                     "open":   round(float(o), 2),
                     "high":   round(float(h), 2),
                     "low":    round(float(l), 2),
                     "close":  round(float(c), 2),
-                    "volume": int(volumes[i]) if volumes[i] else 0,
-                })
+                    "volume": int(volumes[i]) if i < len(volumes) and volumes[i] else 0,
+                    "datetime_wib": dt_wib.strftime("%Y-%m-%d %H:%M"),
+                }
+
+                # Untuk daily: dedup pakai tanggal (keep yang terakhir = lebih lengkap)
+                # Untuk intraday: pakai full timestamp
+                if p["interval"] == "1d":
+                    key = dt_wib.strftime("%Y-%m-%d")
+                else:
+                    key = int(dt_wib.timestamp())
+
+                candles_map[key] = candle
             except Exception:
                 continue
+
+        candles = sorted(candles_map.values(), key=lambda x: x["time"])
 
         if not candles:
             return jsonify({"error": "Data kosong atau semua null"}), 404
 
-        meta  = r.get("meta", {})
+        meta = r.get("meta", {})
         return jsonify({
-            "ticker":  ticker,
-            "symbol":  symbol,
-            "tf":      tf,
-            "candles": candles,
-            "count":   len(candles),
-            "name":    meta.get("longName", ticker),
-            "price":   meta.get("regularMarketPrice"),
+            "ticker":     ticker,
+            "symbol":     symbol,
+            "tf":         tf,
+            "candles":    candles,
+            "count":      len(candles),
+            "name":       meta.get("longName", ticker),
+            "price":      meta.get("regularMarketPrice"),
+            "data_range": f"{candles[0]['datetime_wib']} → {candles[-1]['datetime_wib']} WIB",
         })
 
     except Exception as e:
@@ -99,11 +124,15 @@ def info():
     ticker = request.args.get("ticker", "BBRI").upper().strip()
     symbol = f"{ticker}.JK"
     try:
+        now     = datetime.now(timezone.utc)
+        period1 = int((now - timedelta(days=2)).timestamp())
+        period2 = int(now.timestamp())
+
         url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
         resp = requests.get(url, headers=YF_HEADERS, params={
-            "interval": "1d", "range": "1d"
+            "interval": "1d", "period1": period1, "period2": period2
         }, timeout=10)
-        data = resp.json()
+        data   = resp.json()
         result = data.get("chart", {}).get("result")
         if not result:
             return jsonify({"error": "not found"}), 404
