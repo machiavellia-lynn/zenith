@@ -89,9 +89,13 @@ def ohlcv():
 
                 dt_wib = datetime.fromtimestamp(ts, tz=WIB)
 
+                # Shift timestamp ke WIB: tambah 7 jam ke Unix ts
+                # Sehingga frontend bisa pakai getUTCHours() dan dapat jam WIB
+                wib_ts = ts + (7 * 3600)
+
                 # IDX: harga bulat (tidak ada desimal)
                 candle = {
-                    "time":         int(dt_wib.timestamp()),
+                    "time":         wib_ts,
                     "open":         int(round(float(o))),
                     "high":         int(round(float(h))),
                     "low":          int(round(float(l))),
@@ -103,7 +107,7 @@ def ohlcv():
                 if p["interval"] == "1d":
                     key = dt_wib.strftime("%Y-%m-%d")
                 else:
-                    key = int(dt_wib.timestamp())
+                    key = wib_ts
 
                 candles_map[key] = candle
             except Exception:
