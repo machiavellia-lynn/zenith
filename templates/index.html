@@ -300,11 +300,12 @@ function initChart() {
       timeVisible: true,
       secondsVisible: false,
       tickMarkFormatter: (t) => {
-        const d = new Date(t * 1000);
-        const h = String(d.getHours()).padStart(2,'0');
-        const m = String(d.getMinutes()).padStart(2,'0');
-        const day = d.getDate();
-        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getMonth()];
+        const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+        const d = new Date(t * 1000 + WIB_OFFSET_MS);
+        const h   = String(d.getUTCHours()).padStart(2,'0');
+        const m   = String(d.getUTCMinutes()).padStart(2,'0');
+        const day = d.getUTCDate();
+        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
         if (currentTF === '1d') return `${day} ${mon}`;
         return `${h}:${m}`;
       },
@@ -340,7 +341,6 @@ function initChart() {
   });
 
   // Crosshair hover → update tooltip
-  let candleData = [];
   chart.subscribeCrosshairMove(param => {
     const tooltip = document.getElementById('hoverTooltip');
     if (!param.time || !param.seriesData) {
@@ -359,18 +359,18 @@ function initChart() {
       return v.toString();
     };
 
-    // Format date label
-    const d = new Date(param.time * 1000);
+    // Force WIB (UTC+7) — JANGAN pakai getHours() karena itu browser timezone
+    const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+    const d = new Date(param.time * 1000 + WIB_OFFSET_MS);
     const pad = n => String(n).padStart(2,'0');
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     let dateStr;
     if (currentTF === '1d') {
-      dateStr = `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+      dateStr = `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
     } else {
-      dateStr = `${d.getDate()} ${months[d.getMonth()]} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      dateStr = `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
     }
 
-    // Color close vs open
     const closeEl = document.getElementById('htClose');
     closeEl.className = 'ht-val ' + (bar.close >= bar.open ? 'up' : 'down');
 
@@ -380,15 +380,11 @@ function initChart() {
     document.getElementById('htLow').textContent   = fmt(bar.low);
     closeEl.textContent                            = fmt(bar.close);
 
-    // Volume from volumeSeries
     const volBar = param.seriesData.get(volumeSeries);
     document.getElementById('htVol').textContent = volBar ? fmtVol(volBar.value) : '—';
 
     tooltip.classList.add('visible');
   });
-
-  // Store ref for crosshair
-  chart._candleSeries = candleSeries;
 
   // Apply auto scale default ON (seperti TradingView)
   applyAutoScale(true);
