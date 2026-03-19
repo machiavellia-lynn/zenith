@@ -3,23 +3,20 @@ import requests
 
 app = Flask(__name__)
 
-TWELVE_KEY = "aae8495bdf1444c2b9840062b0ed74e1"
-TWELVE_BASE = "https://api.twelvedata.com"
-
-INTERVAL_MAP = {
-    "5m":  "5min",
-    "15m": "15min",
-    "30m": "30min",
-    "1h":  "1h",
-    "1d":  "1day",
+# Yahoo Finance direct API — no key needed, pakai header browser
+YF_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "application/json",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://finance.yahoo.com",
 }
 
-OUTPUTSIZE_MAP = {
-    "5m":  90,
-    "15m": 90,
-    "30m": 90,
-    "1h":  90,
-    "1d":  180,
+INTERVAL_MAP = {
+    "5m":  {"interval": "5m",  "range": "5d"},
+    "15m": {"interval": "15m", "range": "5d"},
+    "30m": {"interval": "30m", "range": "5d"},
+    "1h":  {"interval": "60m", "range": "1mo"},
+    "1d":  {"interval": "1d",  "range": "6mo"},
 }
 
 @app.route("/")
@@ -28,56 +25,69 @@ def index():
 
 @app.route("/api/ohlcv")
 def ohlcv():
-    ticker   = request.args.get("ticker", "BBRI").upper().strip()
-    tf       = request.args.get("tf", "15m")
+    ticker = request.args.get("ticker", "BBRI").upper().strip()
+    tf     = request.args.get("tf", "15m")
 
     if tf not in INTERVAL_MAP:
         return jsonify({"error": f"Timeframe tidak valid: {tf}"}), 400
 
-    symbol   = f"{ticker}:IDX"
-    interval = INTERVAL_MAP[tf]
-    outputsize = OUTPUTSIZE_MAP[tf]
+    p      = INTERVAL_MAP[tf]
+    symbol = f"{ticker}.JK"
 
     try:
-        resp = requests.get(f"{TWELVE_BASE}/time_series", params={
-            "symbol":     symbol,
-            "interval":   interval,
-            "outputsize": outputsize,
-            "order":      "ASC",
-            "apikey":     TWELVE_KEY,
+        url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        resp = requests.get(url, headers=YF_HEADERS, params={
+            "interval":          p["interval"],
+            "range":             p["range"],
+            "includePrePost":    "false",
+            "includeAdjustedClose": "true",
         }, timeout=15)
 
         data = resp.json()
+        result = data.get("chart", {}).get("result")
+        if not result:
+            err = data.get("chart", {}).get("error", {})
+            return jsonify({"error": err.get("description", f"Tidak ada data untuk {symbol}")}), 404
 
-        if data.get("status") == "error":
-            return jsonify({"error": data.get("message", "Error dari Twelve Data")}), 400
+        r          = result[0]
+        timestamps = r.get("timestamp", [])
+        ohlcv      = r.get("indicators", {}).get("quote", [{}])[0]
 
-        values = data.get("values", [])
-        if not values:
-            return jsonify({"error": f"Tidak ada data untuk {symbol}"}), 404
+        opens   = ohlcv.get("open",   [])
+        highs   = ohlcv.get("high",   [])
+        lows    = ohlcv.get("low",    [])
+        closes  = ohlcv.get("close",  [])
+        volumes = ohlcv.get("volume", [])
 
         candles = []
-        for row in values:
+        for i, ts in enumerate(timestamps):
             try:
-                from datetime import datetime
-                dt = datetime.strptime(row["datetime"], "%Y-%m-%d %H:%M:%S") if " " in row["datetime"] else datetime.strptime(row["datetime"], "%Y-%m-%d")
+                o = opens[i];  h = highs[i];  l = lows[i];  c = closes[i]
+                if None in (o, h, l, c):
+                    continue
                 candles.append({
-                    "time":   int(dt.timestamp()),
-                    "open":   float(row["open"]),
-                    "high":   float(row["high"]),
-                    "low":    float(row["low"]),
-                    "close":  float(row["close"]),
-                    "volume": int(row.get("volume", 0)),
+                    "time":   int(ts),
+                    "open":   round(float(o), 2),
+                    "high":   round(float(h), 2),
+                    "low":    round(float(l), 2),
+                    "close":  round(float(c), 2),
+                    "volume": int(volumes[i]) if volumes[i] else 0,
                 })
             except Exception:
                 continue
 
+        if not candles:
+            return jsonify({"error": "Data kosong atau semua null"}), 404
+
+        meta  = r.get("meta", {})
         return jsonify({
             "ticker":  ticker,
             "symbol":  symbol,
             "tf":      tf,
             "candles": candles,
             "count":   len(candles),
+            "name":    meta.get("longName", ticker),
+            "price":   meta.get("regularMarketPrice"),
         })
 
     except Exception as e:
@@ -87,19 +97,20 @@ def ohlcv():
 @app.route("/api/info")
 def info():
     ticker = request.args.get("ticker", "BBRI").upper().strip()
-    symbol = f"{ticker}:IDX"
+    symbol = f"{ticker}.JK"
     try:
-        resp = requests.get(f"{TWELVE_BASE}/quote", params={
-            "symbol": symbol,
-            "apikey": TWELVE_KEY,
+        url  = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        resp = requests.get(url, headers=YF_HEADERS, params={
+            "interval": "1d", "range": "1d"
         }, timeout=10)
         data = resp.json()
-        if data.get("status") == "error":
-            return jsonify({"error": data.get("message")}), 400
+        result = data.get("chart", {}).get("result")
+        if not result:
+            return jsonify({"error": "not found"}), 404
+        meta = result[0].get("meta", {})
         return jsonify({
-            "name":   data.get("name", ticker),
-            "price":  float(data.get("close", 0)),
-            "change": data.get("percent_change", "0"),
+            "name":  meta.get("longName") or meta.get("shortName") or ticker,
+            "price": meta.get("regularMarketPrice"),
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
