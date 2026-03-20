@@ -33,18 +33,27 @@ _gain_cache_lock = threading.Lock()
 CACHE_TTL        = 300  # detik
 
 
-def fetch_gain_yf(ticker: str):
-    """Fetch % change hari ini dari Yahoo Finance. Return (gain_pct, price)."""
+def fetch_gain_range(ticker: str, date_from: str, date_to: str):
+    """
+    Hitung % change harga saham dari date_from ke date_to.
+    date_from & date_to format: DD-MM-YYYY
+    Return (gain_pct, close_price_at_date_to)
+    """
     symbol = f"{ticker}.JK"
-    now    = datetime.now(timezone.utc)
     try:
+        d0 = parse_date(date_from)
+        d1 = parse_date(date_to)
+        # Ambil sedikit lebih lebar agar dapat candle di kedua ujung
+        p1 = int((datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc) - timedelta(days=5)).timestamp())
+        p2 = int((datetime(d1.year, d1.month, d1.day, tzinfo=timezone.utc) + timedelta(days=2)).timestamp())
+
         resp = requests.get(
             f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
             headers=YF_HEADERS,
             params={
                 "interval":             "1d",
-                "period1":              int((now - timedelta(days=5)).timestamp()),
-                "period2":              int(now.timestamp()),
+                "period1":              p1,
+                "period2":              p2,
                 "includeAdjustedClose": "false",
             },
             timeout=8,
@@ -53,35 +62,81 @@ def fetch_gain_yf(ticker: str):
         result = data.get("chart", {}).get("result")
         if not result:
             return None, None
-        meta      = result[0].get("meta", {})
-        price_raw = meta.get("regularMarketPrice")
-        prev_raw  = meta.get("chartPreviousClose") or meta.get("previousClose")
-        if price_raw and prev_raw and float(prev_raw) > 0:
-            gain = round((float(price_raw) - float(prev_raw)) / float(prev_raw) * 100, 2)
-            return gain, int(round(float(price_raw)))
-        return None, None
+
+        r          = result[0]
+        timestamps = r.get("timestamp", [])
+        quote      = r.get("indicators", {}).get("quote", [{}])[0]
+        closes     = quote.get("close", [])
+
+        # Pasangkan timestamp → close, filter None
+        candles = []
+        for i, ts in enumerate(timestamps):
+            c = closes[i] if i < len(closes) else None
+            if c is None or float(c) <= 0:
+                continue
+            candles.append((ts, float(c)))
+
+        if len(candles) < 1:
+            return None, None
+
+        # Kalau single day: pakai prev close dari meta vs close hari itu
+        if d0 == d1:
+            meta     = r.get("meta", {})
+            prev_raw = meta.get("chartPreviousClose") or meta.get("previousClose")
+            price_raw = meta.get("regularMarketPrice")
+            if prev_raw and price_raw and float(prev_raw) > 0:
+                gain = round((float(price_raw) - float(prev_raw)) / float(prev_raw) * 100, 2)
+                return gain, int(round(float(price_raw)))
+            # fallback: pakai candle pertama open vs terakhir close
+            if len(candles) >= 1:
+                close_last = candles[-1][1]
+                quote_open = quote.get("open", [])
+                open_first = None
+                for i, ts in enumerate(timestamps):
+                    o = quote_open[i] if i < len(quote_open) else None
+                    if o and float(o) > 0:
+                        open_first = float(o)
+                        break
+                if open_first:
+                    gain = round((close_last - open_first) / open_first * 100, 2)
+                    return gain, int(round(close_last))
+            return None, None
+
+        # Multi-day: close hari terakhir vs close hari pertama
+        close_first = candles[0][1]
+        close_last  = candles[-1][1]
+        gain = round((close_last - close_first) / close_first * 100, 2)
+        return gain, int(round(close_last))
+
     except Exception:
         return None, None
 
 
-def get_gains_batch(tickers: list):
-    """Return dict ticker → {gain, price} dengan cache 5 menit."""
+# Cache gain per (ticker, date_from, date_to)
+_gain_cache      = {}
+_gain_cache_lock = threading.Lock()
+CACHE_TTL        = 300
+
+
+def get_gains_batch(tickers: list, date_from: str, date_to: str):
     now    = time.time()
     result = {}
     to_fetch = []
 
     with _gain_cache_lock:
         for t in tickers:
-            cached = _gain_cache.get(t)
+            key    = f"{t}|{date_from}|{date_to}"
+            cached = _gain_cache.get(key)
             if cached and (now - cached["ts"]) < CACHE_TTL:
                 result[t] = {"gain": cached["gain"], "price": cached["price"]}
             else:
                 to_fetch.append(t)
 
     for t in to_fetch:
-        gain, price = fetch_gain_yf(t)
+        gain, price = fetch_gain_range(t, date_from, date_to)
+        key = f"{t}|{date_from}|{date_to}"
         with _gain_cache_lock:
-            _gain_cache[t] = {"gain": gain, "price": price, "ts": time.time()}
+            _gain_cache[key] = {"gain": gain, "price": price, "ts": time.time()}
         result[t] = {"gain": gain, "price": price}
 
     return result
@@ -180,31 +235,35 @@ def flow():
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Fetch gain% batch
-    gains = get_gains_batch(list(data.keys()))
+    # Fetch gain% berdasarkan rentang tanggal yang dipilih user
+    gains = get_gains_batch(list(data.keys()), date_from, date_to)
 
     tickers = []
     for t, d in data.items():
-        sm   = round(d["sm_val"],  2)
-        bm   = round(d["bm_val"],  2)
-        mfp  = round(d["mf_plus"], 2)
-        mfm  = round(abs(d["mf_minus"]), 2)  # simpan absolut, tanda dari net
-        net  = round(mfp - mfm, 2)
-        cm   = round(sm - bm, 2)
-        rsm  = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
+        sm  = round(d["sm_val"], 2)
+        bm  = round(d["bm_val"], 2)
+        cm  = round(sm - bm, 2)
+        rsm = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
 
-        g    = gains.get(t, {})
+        # MF: hanya tampilkan kalau ada data (tidak semua 0)
+        mfp_raw = d["mf_plus"]
+        mfm_raw = abs(d["mf_minus"])
+        mfp  = round(mfp_raw, 2) if mfp_raw else None
+        mfm  = round(mfm_raw, 2) if mfm_raw else None
+        net  = round((mfp_raw - abs(d["mf_minus"])), 2) if (mfp_raw or d["mf_minus"]) else None
+
+        g = gains.get(t, {})
         tickers.append({
-            "ticker":     t,
+            "ticker":      t,
             "clean_money": cm,
-            "sm_val":     sm,
-            "bm_val":     bm,
-            "rsm":        rsm,
-            "mf_plus":    mfp,
-            "mf_minus":   mfm,
-            "net_mf":     net,
-            "gain_pct":   g.get("gain"),
-            "price":      g.get("price"),
+            "sm_val":      sm,
+            "bm_val":      bm,
+            "rsm":         rsm,
+            "mf_plus":     mfp,
+            "mf_minus":    mfm,
+            "net_mf":      net,
+            "gain_pct":    g.get("gain"),
+            "price":       g.get("price"),
         })
 
     # Sort default: clean_money desc
