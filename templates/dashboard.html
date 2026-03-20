@@ -286,7 +286,8 @@ td:first-child { text-align: left; }
   border: 1px solid var(--border2);
   border-radius: 10px;
   width: min(88vw, 1080px);
-  max-height: 82vh;
+  height: 88vh;
+  max-height: 88vh;
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
@@ -356,10 +357,12 @@ td:first-child { text-align: left; }
 .mht-sep { width: 1px; height: 26px; background: var(--border); }
 
 .modal-chart-wrap {
-  position: relative; flex: 1;
+  position: relative;
+  flex: 1;
   min-height: 0;
+  overflow: hidden;
 }
-#modalChart { width: 100%; height: 100%; }
+#modalChart { width: 100%; height: 100%; display: block; }
 
 /* ── PIKADAY DARK THEME ──────────────────────── */
 .pika-single {
@@ -844,8 +847,8 @@ function initModalChart() {
       },
     },
     localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
-    width:  container.clientWidth || 900,
-    height: container.clientHeight || 500,
+    width:  container.clientWidth  || 900,
+    height: container.offsetHeight || 560,
   });
 
   modalCandle = modalChart.addCandlestickSeries({
@@ -895,7 +898,10 @@ function initModalChart() {
   });
 
   const ro = new ResizeObserver(() => {
-    if (modalChart) modalChart.applyOptions({ width: container.clientWidth });
+    if (modalChart) modalChart.applyOptions({
+      width:  container.clientWidth,
+      height: container.offsetHeight || 560,
+    });
   });
   ro.observe(container);
 }
