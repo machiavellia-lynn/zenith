@@ -285,8 +285,8 @@ td:first-child { text-align: left; }
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 10px;
-  width: min(95vw, 960px);
-  max-height: 90vh;
+  width: min(90vw, 1400px);
+  max-height: 85vh;
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
@@ -357,7 +357,7 @@ td:first-child { text-align: left; }
 
 .modal-chart-wrap {
   position: relative; flex: 1;
-  min-height: 420px; height: 480px;
+  min-height: 0;
 }
 #modalChart { width: 100%; height: 100%; }
 
@@ -467,6 +467,7 @@ td:first-child { text-align: left; }
     <thead>
       <tr>
         <th onclick="sortBy('ticker',event)"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
+        <th onclick="sortBy('price',event)"         data-col="price" title="Harga terakhir">PRICE <span class="sort-icon"></span></th>
         <th onclick="sortBy('clean_money',event)"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
         <th onclick="sortBy('sm_val',event)"       data-col="sm_val" title="Smart Money">SM VAL <span class="sort-icon"></span></th>
         <th onclick="sortBy('bm_val',event)"       data-col="bm_val" title="Bad Money">BM VAL <span class="sort-icon"></span></th>
@@ -478,7 +479,7 @@ td:first-child { text-align: left; }
       </tr>
     </thead>
     <tbody id="flowBody">
-      <tr class="state-row"><td colspan="9"><span class="spinner-inline"></span>Memuat data...</td></tr>
+      <tr class="state-row"><td colspan="10"><span class="spinner-inline"></span>Memuat data...</td></tr>
     </tbody>
   </table>
 </div>
@@ -499,8 +500,8 @@ td:first-child { text-align: left; }
         <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
       </div>
       <div class="modal-scale-btns">
-        <button class="mtf-btn" onclick="modalFit()" title="Fit screen">⤢</button>
-        <button class="mtf-btn" id="mBtnLog" onclick="modalToggleLog()">Log</button>
+        <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
+        <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
       </div>
       <div class="modal-price" id="mPrice">—</div>
       <button class="close-btn" onclick="closeModal()">✕</button>
@@ -532,7 +533,8 @@ let modalVolume  = null;
 let modalTF      = '1d';
 let modalTicker  = '';
 let modalIsLog   = false;
-const INIT_CANDLES = 181;
+let modalIsAuto  = true;
+const INIT_CANDLES = 180;
 
 // ── Date helpers ──────────────────────────────────────────────────────
 // Input/display: DD/MM/YYYY
@@ -742,7 +744,7 @@ function renderTable() {
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="9">Tidak ada data untuk tanggal ini</td></tr>`;
+    tbody.innerHTML = `<tr class="state-row"><td colspan="10">Tidak ada data untuk tanggal ini</td></tr>`;
     return;
   }
 
@@ -759,6 +761,7 @@ function renderTable() {
 
     return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
+      <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
       <td class="cm-cell">
         <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
         <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
@@ -784,11 +787,11 @@ function rsmToColor(rsm) {
 
 function showLoading() {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="9"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+    `<tr class="state-row"><td colspan="10"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="9">⚠ ${msg}</td></tr>`;
+    `<tr class="state-row"><td colspan="10">⚠ ${msg}</td></tr>`;
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────
@@ -796,7 +799,9 @@ function openModal(ticker) {
   modalTicker = ticker;
   modalTF     = '1d';
   modalIsLog  = false;
+  modalIsAuto = true;
   document.getElementById('mBtnLog').classList.remove('active');
+  document.getElementById('mBtnAuto').classList.add('active');
   document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
     b.classList.toggle('active', b.dataset.tf === '1d')
   );
@@ -841,7 +846,7 @@ function initModalChart() {
     },
     localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
     width:  container.clientWidth || 900,
-    height: container.clientHeight || 460,
+    height: container.clientHeight || 500,
   });
 
   modalCandle = modalChart.addCandlestickSeries({
@@ -854,6 +859,9 @@ function initModalChart() {
     priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
   });
   modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+  // Apply auto scale default
+  modalChart.priceScale('right').applyOptions({ autoScale: true, scaleMargins: { top: 0.1, bottom: 0.2 } });
 
   // Hover tooltip
   modalChart.subscribeCrosshairMove(param => {
@@ -926,14 +934,29 @@ function setModalTF(tf) {
   );
   loadModalChart();
 }
-function modalFit() {
-  if (modalChart) modalChart.timeScale().fitContent();
-}
 function modalToggleLog() {
   if (!modalChart) return;
   modalIsLog = !modalIsLog;
   modalChart.priceScale('right').applyOptions({ mode: modalIsLog ? 1 : 0 });
   document.getElementById('mBtnLog').classList.toggle('active', modalIsLog);
+}
+
+function modalToggleAuto() {
+  if (!modalChart) return;
+  modalIsAuto = !modalIsAuto;
+  modalChart.priceScale('right').applyOptions({
+    autoScale: modalIsAuto,
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  });
+  modalChart.applyOptions({
+    handleScale: {
+      axisPressedMouseMove: {
+        price: !modalIsAuto,
+        time: true,
+      },
+    },
+  });
+  document.getElementById('mBtnAuto').classList.toggle('active', modalIsAuto);
 }
 
 // ── Escape tutup modal ────────────────────────────────────────────────
