@@ -261,9 +261,9 @@ def flow():
             "sm_val":      sm,
             "bm_val":      bm,
             "rsm":         rsm,
-            "mf_plus":     mfp,
-            "mf_minus":    mfm,
-            "net_mf":      net,
+            "mf_plus":     None,  # reserved untuk sub-channel MF
+            "mf_minus":    None,  # reserved untuk sub-channel MF
+            "net_mf":      None,  # reserved untuk sub-channel MF
             "gain_pct":    g.get("gain"),
             "price":       g.get("price"),
         })
