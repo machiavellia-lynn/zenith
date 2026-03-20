@@ -564,36 +564,36 @@ def upload_db():
     if request.method == "GET":
         return """
         <!DOCTYPE html><html><head>
-        <style>body{background:#080c10;color:#c8d8e8;font-family:monospace;
+        <style>
+        body{background:#080c10;color:#c8d8e8;font-family:monospace;
         display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
         .box{background:#0e1318;border:1px solid #1a2230;border-radius:8px;padding:32px;width:420px;}
         h3{color:#00e8a2;margin-bottom:20px;}
         input,button{width:100%;padding:10px;margin:8px 0;border-radius:5px;
         box-sizing:border-box;font-family:monospace;}
         input{background:#080c10;border:1px solid #1a2230;color:#c8d8e8;}
-        button{background:#00e8a2;border:none;color:#080c10;font-weight:700;cursor:pointer;}
-        #status{margin-top:12px;font-size:13px;color:#aac;}
-        #bar{width:0%;height:6px;background:#00e8a2;border-radius:3px;transition:width 0.3s;}
+        button{background:#00e8a2;border:none;color:#080c10;font-weight:700;cursor:pointer;font-size:14px;}
+        #status{margin-top:12px;font-size:13px;color:#aac;min-height:20px;}
+        #bar{width:0%;height:6px;background:#00e8a2;border-radius:3px;transition:width 0.2s;}
         #barwrap{width:100%;background:#1a2230;border-radius:3px;margin-top:8px;display:none;}
         </style></head><body><div class="box">
         <h3>⬆ Upload zenith.db</h3>
         <input type="file" id="f" accept=".db"/>
         <input type="password" id="s" placeholder="Upload secret key"/>
-        <button onclick="doUpload()">Upload ke /data/zenith.db</button>
+        <button onclick="doUpload()">Upload</button>
         <div id="barwrap"><div id="bar"></div></div>
         <div id="status"></div>
         </div>
         <script>
         function doUpload(){
-            var f=document.getElementById('f').files[0];
-            var s=document.getElementById('s').value;
-            if(!f||!s){document.getElementById('status').innerText='Isi semua field!';return;}
-            var fd=new FormData();
-            fd.append('dbfile',f);
-            fd.append('secret',s);
+            var fileEl=document.getElementById('f');
+            var s=document.getElementById('s').value.trim();
+            var file=fileEl.files[0];
+            if(!file){document.getElementById('status').innerText='Pilih file dulu!';return;}
+            if(!s){document.getElementById('status').innerText='Isi secret key!';return;}
             var xhr=new XMLHttpRequest();
             document.getElementById('barwrap').style.display='block';
-            document.getElementById('status').innerText='Uploading... ('+Math.round(f.size/1024/1024)+'MB)';
+            document.getElementById('status').innerText='Uploading '+Math.round(file.size/1024/1024)+'MB...';
             xhr.upload.onprogress=function(e){
                 if(e.lengthComputable){
                     var pct=Math.round(e.loaded/e.total*100);
@@ -602,24 +602,21 @@ def upload_db():
                 }
             };
             xhr.onload=function(){
-                document.getElementById('status').innerText=xhr.responseText;
+                document.getElementById('status').innerText=xhr.status===200?xhr.responseText:'Error: '+xhr.responseText;
             };
-            xhr.onerror=function(){
-                document.getElementById('status').innerText='Upload gagal (network error)';
-            };
-            xhr.open('POST','/admin/upload-db');
-            xhr.send(fd);
+            xhr.onerror=function(){document.getElementById('status').innerText='Network error!';};
+            // Secret lewat query param, file lewat raw body — hindari multipart parsing
+            xhr.open('POST','/admin/upload-db?secret='+encodeURIComponent(s));
+            xhr.setRequestHeader('Content-Type','application/octet-stream');
+            xhr.send(file);
         }
         </script>
         </body></html>
         """
-    # POST — baca stream chunk by chunk supaya tidak timeout
-    secret = request.form.get("secret", "")
+    # POST — secret dari query param, body = raw bytes file
+    secret = request.args.get("secret", "")
     if secret != SECRET:
         return "❌ Secret salah", 403
-    f = request.files.get("dbfile")
-    if not f:
-        return "❌ File tidak ditemukan", 400
     os.makedirs("/data", exist_ok=True)
     tmp_path = "/data/zenith.db.tmp"
     dst_path = "/data/zenith.db"
@@ -627,13 +624,13 @@ def upload_db():
         with open(tmp_path, "wb") as out:
             chunk_size = 1024 * 1024  # 1MB per chunk
             while True:
-                chunk = f.stream.read(chunk_size)
+                chunk = request.stream.read(chunk_size)
                 if not chunk:
                     break
                 out.write(chunk)
         os.replace(tmp_path, dst_path)
         size = os.path.getsize(dst_path)
-        return f"✅ Upload berhasil! zenith.db = {size:,} bytes ({round(size/1024/1024,1)} MB)"
+        return f"✅ Berhasil! {round(size/1024/1024,1)} MB tersimpan di /data/zenith.db"
     except Exception as e:
         return f"❌ Error: {e}", 500
 
