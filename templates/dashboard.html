@@ -470,6 +470,45 @@ td:first-child { text-align: left; }
 .trx-gain-neg { color: var(--down); }
 .trx-mf-sm { color: var(--accent2); }
 .trx-mf-bm { color: #ff8c42; }
+/* ── OVERLAY TOGGLES ─────────────────────────────── */
+.overlay-toggles { display: flex; gap: 4px; margin-left: 8px; }
+.ovl-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.ovl-btn .ovl-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  opacity: .4; transition: opacity .15s;
+}
+.ovl-btn:hover { border-color: var(--text); color: var(--text); }
+.ovl-btn.active { border-color: currentColor; }
+.ovl-btn.active .ovl-dot { opacity: 1; }
+.ovl-btn.active.cm { color: #00e8a2; }
+.ovl-btn.active.sm { color: #4d9fff; }
+.ovl-btn.active.bm { color: #ff8c42; }
+
+/* overlay value panel top-left */
+.m-overlay-vals {
+  position: absolute; top: 12px; left: 14px;
+  z-index: 10; display: flex; flex-direction: column; gap: 2px;
+  pointer-events: none;
+}
+.m-ovl-row {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  opacity: 0; transition: opacity .15s;
+}
+.m-ovl-row.visible { opacity: 1; }
+.m-ovl-row .m-ovl-label {
+  font-size: 9px; font-weight: 400;
+  letter-spacing: .08em; margin-right: 6px;
+}
+
 .trx-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
 .trx-loading { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
 /* ── PIKADAY DARK THEME ──────────────────────── */
@@ -610,6 +649,11 @@ td:first-child { text-align: left; }
         <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
         <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
       </div>
+      <div class="overlay-toggles">
+        <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
+        <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')" title="Smart Money"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
+        <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
+      </div>
       <div style="flex:1"></div>
       <div class="modal-scale-btns">
         <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
@@ -628,6 +672,11 @@ td:first-child { text-align: left; }
         <div class="mht-item"><span class="mht-lbl">C</span><span class="mht-v" id="mHtC">—</span></div>
         <div class="mht-sep"></div>
         <div class="mht-item"><span class="mht-lbl">Vol</span><span class="mht-v" id="mHtVol">—</span></div>
+      </div>
+      <div class="m-overlay-vals" id="mOverlayVals">
+        <div class="m-ovl-row" id="mOvlCM" style="color:#00e8a2"><span class="m-ovl-label">CM</span><span id="mOvlCMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlSM" style="color:#4d9fff"><span class="m-ovl-label">SM</span><span id="mOvlSMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlBM" style="color:#ff8c42"><span class="m-ovl-label">BM</span><span id="mOvlBMv">—</span></div>
       </div>
       <div id="modalChart"></div>
     </div>
@@ -683,6 +732,11 @@ let modalTicker  = '';
 let modalIsLog   = false;
 let modalIsAuto  = true;
 const INIT_CANDLES = 150;
+
+// Overlay state
+let ovlSeriesCM = null, ovlSeriesSM = null, ovlSeriesBM = null;
+let ovlShowCM = true, ovlShowSM = false, ovlShowBM = false;
+let overlayDataCache = []; // [{time, sm, bm, cm}]
 
 // ── Date helpers ──────────────────────────────────────────────────────
 // Input/display: DD/MM/YYYY
@@ -955,6 +1009,10 @@ function openModal(ticker) {
   );
   document.getElementById('mTicker').textContent = ticker;
   document.getElementById('mName').textContent   = '—';
+  // Sync overlay buttons
+  document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+  document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+  document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
   document.getElementById('modalBackdrop').classList.add('open');
   // Defer agar modal selesai render dulu, baru init chart
   requestAnimationFrame(() => {
@@ -969,6 +1027,8 @@ function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
   if (window._modalChartRO) { window._modalChartRO.disconnect(); window._modalChartRO = null; }
   if (modalChart) { modalChart.remove(); modalChart = null; modalCandle = null; modalVolume = null; }
+  ovlSeriesCM = null; ovlSeriesSM = null; ovlSeriesBM = null;
+  overlayDataCache = [];
 }
 function handleBackdropClick(e) {
   if (e.target === document.getElementById('modalBackdrop')) closeModal();
@@ -1018,6 +1078,37 @@ function initModalChart() {
   // Apply auto scale default
   modalChart.priceScale('right').applyOptions({ autoScale: true, scaleMargins: { top: 0.1, bottom: 0.2 } });
 
+  // ── Overlay line series (separate scale) ──
+  modalChart.priceScale('overlay').applyOptions({
+    scaleMargins: { top: 0.05, bottom: 0.2 },
+    visible: false,        // hide overlay Y axis
+    autoScale: true,
+  });
+
+  ovlSeriesCM = modalChart.addLineSeries({
+    color: '#00e8a2', lineWidth: 2, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 4,
+  });
+  ovlSeriesSM = modalChart.addLineSeries({
+    color: '#4d9fff', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+  ovlSeriesBM = modalChart.addLineSeries({
+    color: '#ff8c42', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+
+  // Apply initial visibility
+  ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+
+  // Update overlay value panel visibility
+  updateOvlValVisibility();
+
   // Hover tooltip
   modalChart.subscribeCrosshairMove(param => {
     const tt = document.getElementById('mHoverTooltip');
@@ -1048,6 +1139,21 @@ function initModalChart() {
     const vb = param.seriesData.get(modalVolume);
     document.getElementById('mHtVol').textContent = vb ? fmtV(vb.value) : '—';
     tt.classList.add('visible');
+
+    // Overlay values — find matching overlay point for this candle time
+    const fmtMf = v => {
+      if (v === null || v === undefined) return '—';
+      const sign = v > 0 ? '+' : '';
+      if (Math.abs(v) >= 1000) return sign + (v/1000).toFixed(1) + 'B';
+      return sign + v.toFixed(1) + 'M';
+    };
+    const ovlPoint = overlayDataCache.find(p => p.time === param.time);
+    document.getElementById('mOvlCMv').textContent = ovlPoint ? fmtMf(ovlPoint.cm) : '—';
+    document.getElementById('mOvlSMv').textContent = ovlPoint ? fmtMf(ovlPoint.sm) : '—';
+    document.getElementById('mOvlBMv').textContent = ovlPoint ? fmtMf(ovlPoint.bm) : '—';
+    document.getElementById('mOvlCM').classList.toggle('visible', ovlShowCM && !!ovlPoint);
+    document.getElementById('mOvlSM').classList.toggle('visible', ovlShowSM && !!ovlPoint);
+    document.getElementById('mOvlBM').classList.toggle('visible', ovlShowBM && !!ovlPoint);
   });
 
   // ResizeObserver — handle resize tanpa autoSize
@@ -1087,7 +1193,84 @@ async function loadModalChart() {
       modalChart.timeScale().fitContent();
     }
     if (data.name) document.getElementById('mName').textContent = data.name;
+    // Load overlay data after candles
+    loadOverlayData(candles);
   } catch (_) {}
+}
+
+async function loadOverlayData(candles) {
+  if (!modalChart || !ovlSeriesCM) return;
+  try {
+    const res  = await fetch(`/api/overlay?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error || !data.points || !data.points.length) {
+      overlayDataCache = [];
+      ovlSeriesCM.setData([]);
+      ovlSeriesSM.setData([]);
+      ovlSeriesBM.setData([]);
+      return;
+    }
+
+    // Build candle time set for snapping overlay points
+    const candleTimes = new Set(candles.map(c => c.time));
+    const candleArr   = candles.map(c => c.time).sort((a,b) => a - b);
+
+    // Snap overlay point to nearest candle time
+    function snapTime(t) {
+      if (candleTimes.has(t)) return t;
+      let best = null, bestDist = Infinity;
+      for (const ct of candleArr) {
+        const dist = Math.abs(ct - t);
+        if (dist < bestDist) { bestDist = dist; best = ct; }
+        if (ct > t) break; // sorted, no need to keep going
+      }
+      return best;
+    }
+
+    // Snap and deduplicate
+    const cmData = [], smData = [], bmData = [];
+    const seen = new Set();
+    overlayDataCache = [];
+
+    for (const p of data.points) {
+      const st = snapTime(p.time);
+      if (!st || seen.has(st)) continue;
+      seen.add(st);
+      cmData.push({ time: st, value: p.cm });
+      smData.push({ time: st, value: p.sm });
+      bmData.push({ time: st, value: p.bm });
+      overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
+    }
+
+    ovlSeriesCM.setData(cmData);
+    ovlSeriesSM.setData(smData);
+    ovlSeriesBM.setData(bmData);
+  } catch (_) {
+    overlayDataCache = [];
+  }
+}
+
+function toggleOverlay(which) {
+  if (which === 'cm') {
+    ovlShowCM = !ovlShowCM;
+    document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+    if (ovlSeriesCM) ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  } else if (which === 'sm') {
+    ovlShowSM = !ovlShowSM;
+    document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+    if (ovlSeriesSM) ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  } else if (which === 'bm') {
+    ovlShowBM = !ovlShowBM;
+    document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+    if (ovlSeriesBM) ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+  }
+  updateOvlValVisibility();
+}
+
+function updateOvlValVisibility() {
+  document.getElementById('mOvlCM').style.display = ovlShowCM ? '' : 'none';
+  document.getElementById('mOvlSM').style.display = ovlShowSM ? '' : 'none';
+  document.getElementById('mOvlBM').style.display = ovlShowBM ? '' : 'none';
 }
 
 

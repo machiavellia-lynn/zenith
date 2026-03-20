@@ -362,6 +362,84 @@ def transactions():
 
 
 
+# ── API: overlay data (CM/SM/BM per candle bucket) ──────────────────────
+@app.route("/api/overlay")
+def overlay():
+    ticker = request.args.get("ticker", "").upper().strip()
+    tf     = request.args.get("tf", "1d")
+
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+
+    try:
+        conn = get_db()
+        rows = conn.execute("""
+            SELECT date, time, channel, mf_delta_numeric
+            FROM raw_messages
+            WHERE ticker = ?
+            ORDER BY
+                substr(date,7,4)||substr(date,4,2)||substr(date,1,2),
+                time
+        """, [ticker]).fetchall()
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    if not rows:
+        return jsonify({"ticker": ticker, "tf": tf, "points": []})
+
+    tf_minutes = {"5m": 5, "15m": 15, "30m": 30, "1h": 60, "1d": None}
+    bucket_min = tf_minutes.get(tf)
+
+    buckets = {}
+    for r in rows:
+        date_str = r["date"]       # DD-MM-YYYY
+        time_str = r["time"] or "" # HH:MM or HH:MM:SS
+
+        try:
+            d = datetime.strptime(date_str, "%d-%m-%Y")
+        except Exception:
+            continue
+
+        if bucket_min is None:
+            # Daily: one bucket per date
+            # WIB timestamp: midnight UTC of that date + 7h
+            utc_ts = int(d.replace(tzinfo=timezone.utc).timestamp())
+            wib_ts = utc_ts + (7 * 3600)
+            key = wib_ts
+        else:
+            # Intraday: bucket by time interval
+            parts = time_str.replace(".", ":").split(":")
+            h = int(parts[0]) if len(parts) >= 1 and parts[0].isdigit() else 9
+            m = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
+            total_min = h * 60 + m
+            bstart = (total_min // bucket_min) * bucket_min
+            bh = bstart // 60
+            bm = bstart % 60
+            utc_ts = int(d.replace(tzinfo=timezone.utc).timestamp())
+            wib_ts = utc_ts + bh * 3600 + bm * 60 + (7 * 3600)
+            key = wib_ts
+
+        if key not in buckets:
+            buckets[key] = {"time": key, "sm": 0.0, "bm": 0.0}
+
+        mf = r["mf_delta_numeric"] or 0
+        if r["channel"] == "smart":
+            buckets[key]["sm"] += mf
+        else:
+            buckets[key]["bm"] += abs(mf)
+
+    points = []
+    for k in sorted(buckets.keys()):
+        v = buckets[k]
+        sm = round(v["sm"], 2)
+        bm = round(v["bm"], 2)
+        cm = round(sm - bm, 2)
+        points.append({"time": v["time"], "sm": sm, "bm": bm, "cm": cm})
+
+    return jsonify({"ticker": ticker, "tf": tf, "points": points})
+
+
 @app.route("/api/ohlcv")
 def ohlcv():
     ticker = request.args.get("ticker", "BBRI").upper().strip()
