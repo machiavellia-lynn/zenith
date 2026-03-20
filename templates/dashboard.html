@@ -285,9 +285,9 @@ td:first-child { text-align: left; }
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 10px;
-  width: min(88vw, 1080px);
-  height: 88vh;
-  max-height: 88vh;
+  width: min(88vw, 1100px);
+  height: min(88vh, 860px);
+  max-height: 90vh;
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
@@ -358,7 +358,7 @@ td:first-child { text-align: left; }
 
 .modal-chart-wrap {
   position: relative;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
   overflow: hidden;
 }
@@ -811,8 +811,13 @@ function openModal(ticker) {
   document.getElementById('mTicker').textContent = ticker;
   document.getElementById('mName').textContent   = '—';
   document.getElementById('modalBackdrop').classList.add('open');
-  initModalChart();
-  loadModalChart();
+  // Defer agar modal selesai render dulu, baru init chart
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      initModalChart();
+      loadModalChart();
+    });
+  });
 }
 function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
@@ -848,7 +853,7 @@ function initModalChart() {
     },
     localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
     width:  container.clientWidth  || 900,
-    height: container.offsetHeight || 560,
+    height: Math.max(container.getBoundingClientRect().height, 400),
   });
 
   modalCandle = modalChart.addCandlestickSeries({
@@ -897,10 +902,12 @@ function initModalChart() {
     tt.classList.add('visible');
   });
 
-  const ro = new ResizeObserver(() => {
-    if (modalChart) modalChart.applyOptions({
-      width:  container.clientWidth,
-      height: container.offsetHeight || 560,
+  const ro = new ResizeObserver(entries => {
+    if (!modalChart) return;
+    const rect = entries[0].contentRect;
+    modalChart.applyOptions({
+      width:  Math.max(rect.width,  400),
+      height: Math.max(rect.height, 400),
     });
   });
   ro.observe(container);
