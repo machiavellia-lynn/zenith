@@ -105,7 +105,10 @@ header {
 }
 .stat-item .s-val.up   { color: var(--up); }
 .stat-item .s-val.down { color: var(--down); }
+.stat-item .s-val.bm   { color: #ff8c42; }
 .stat-item .s-val.neutral { color: var(--accent2); }
+.stat-item[title] { cursor: help; }
+.stat-item[title]:hover .s-label { color: var(--text); }
 
 /* ── TOOLBAR ─────────────────────────────────────── */
 .toolbar {
@@ -418,31 +421,31 @@ td:first-child { text-align: left; }
 
 <!-- STATS BAR -->
 <div class="stats-bar" id="statsBar">
-  <div class="stat-item">
+  <div class="stat-item" title="Smart Money Value — total MF+ dari trigger smart money">
     <span class="s-label">SM</span>
     <span class="s-val neutral" id="sSM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Bad Money Value — total MF- dari trigger bad money">
     <span class="s-label">BM</span>
-    <span class="s-val neutral" id="sBM">—</span>
+    <span class="s-val bm" id="sBM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Positive Money Flow — dari sub-channel MF (belum tersedia)">
     <span class="s-label">MF+</span>
     <span class="s-val up" id="sMFP">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Negative Money Flow — dari sub-channel MF (belum tersedia)">
     <span class="s-label">MF−</span>
     <span class="s-val down" id="sMFM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Net Clean Money — SM dikurangi BM">
     <span class="s-label">NET CM</span>
     <span class="s-val" id="sNCM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Net Money Flow — dari sub-channel MF (belum tersedia)">
     <span class="s-label">NET MF</span>
     <span class="s-val" id="sNMF">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Jumlah ticker yang muncul di rentang tanggal ini">
     <span class="s-label">Tickers</span>
     <span class="s-val neutral" id="sCount">—</span>
   </div>
@@ -455,7 +458,6 @@ td:first-child { text-align: left; }
     <div class="date-arrow">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
   </div>
-  <button class="load-btn" onclick="loadFlow()">Load</button>
   <span class="row-count" id="rowCount"></span>
 </div>
 
@@ -464,15 +466,15 @@ td:first-child { text-align: left; }
   <table id="flowTable">
     <thead>
       <tr>
-        <th onclick="sortBy('ticker')"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
-        <th onclick="sortBy('clean_money')"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
-        <th onclick="sortBy('sm_val')"       data-col="sm_val">SM VAL <span class="sort-icon"></span></th>
-        <th onclick="sortBy('bm_val')"       data-col="bm_val">BM VAL <span class="sort-icon"></span></th>
-        <th onclick="sortBy('rsm')"          data-col="rsm">RSM <span class="sort-icon"></span></th>
-        <th onclick="sortBy('mf_plus')"      data-col="mf_plus">MF+ <span class="sort-icon"></span></th>
-        <th onclick="sortBy('mf_minus')"     data-col="mf_minus">MF− <span class="sort-icon"></span></th>
-        <th onclick="sortBy('net_mf')"       data-col="net_mf">NET MF <span class="sort-icon"></span></th>
-        <th onclick="sortBy('gain_pct')"     data-col="gain_pct">GAIN% <span class="sort-icon"></span></th>
+        <th onclick="sortBy('ticker',event)"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
+        <th onclick="sortBy('clean_money',event)"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
+        <th onclick="sortBy('sm_val',event)"       data-col="sm_val" title="Smart Money Value — total MF+ per ticker">SM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('bm_val',event)"       data-col="bm_val" title="Bad Money Value — total MF- per ticker">BM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('rsm',event)"          data-col="rsm" title="Rasio Smart Money — SM/(SM+BM) × 100%">RSM <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_plus',event)"      data-col="mf_plus" title="Positive Money Flow — dari sub-channel MF (belum tersedia)">MF+ <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_minus',event)"     data-col="mf_minus" title="Negative Money Flow — dari sub-channel MF (belum tersedia)">MF− <span class="sort-icon"></span></th>
+        <th onclick="sortBy('net_mf',event)"       data-col="net_mf" title="Net Money Flow — dari sub-channel MF (belum tersedia)">NET MF <span class="sort-icon"></span></th>
+        <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="Perubahan harga saham di rentang tanggal yang dipilih">GAIN% <span class="sort-icon"></span></th>
       </tr>
     </thead>
     <tbody id="flowBody">
@@ -522,8 +524,7 @@ td:first-child { text-align: left; }
 <script>
 // ── State ─────────────────────────────────────────────────────────────
 let allRows      = [];
-let sortCol      = 'clean_money';
-let sortAsc      = false;
+let sortCols     = [{ col: 'clean_money', asc: false }]; // multi-sort
 let filterText   = '';
 let modalChart   = null;
 let modalCandle  = null;
@@ -599,10 +600,10 @@ window.addEventListener('DOMContentLoaded', () => {
     defaultDate: todayDate,
     setDefaultDate: true,
     onSelect: date => {
-      // pastikan date_to tidak lebih awal dari date_from
       if (pickerTo && date > pickerTo.getDate()) {
         pickerTo.setDate(date);
       }
+      loadFlow();
     },
   });
 
@@ -611,6 +612,7 @@ window.addEventListener('DOMContentLoaded', () => {
     field:       document.getElementById('dateTo'),
     defaultDate: todayDate,
     setDefaultDate: true,
+    onSelect: () => loadFlow(),
   });
 
   loadFlow();
@@ -664,7 +666,7 @@ function updateStats(t) {
     el.className = 's-val ' + (cls || (v >= 0 ? 'up' : 'down'));
   };
   set('sSM',  t.sm,     'neutral');
-  set('sBM',  t.bm,     'neutral');
+  set('sBM',  t.bm,     'bm');
 
 
   set('sNCM', t.net_cm);
@@ -673,15 +675,44 @@ function updateStats(t) {
 }
 
 // ── Sort ──────────────────────────────────────────────────────────────
-function sortBy(col) {
-  if (sortCol === col) sortAsc = !sortAsc;
-  else { sortCol = col; sortAsc = col === 'ticker'; }
+// Klik biasa   → primary sort (reset semua sort lain)
+// Shift+klik   → tambah/toggle kolom sort sekunder
+function sortBy(col, event) {
+  const shift = event && event.shiftKey;
+  if (shift) {
+    const existing = sortCols.findIndex(s => s.col === col);
+    if (existing >= 0) {
+      if (sortCols[existing].asc === false) {
+        sortCols.splice(existing, 1); // sudah desc → hapus dari sort
+      } else {
+        sortCols[existing].asc = !sortCols[existing].asc;
+      }
+    } else {
+      sortCols.push({ col, asc: col === 'ticker' });
+    }
+  } else {
+    const existing = sortCols.find(s => s.col === col);
+    if (existing && sortCols.length === 1) {
+      existing.asc = !existing.asc;
+    } else {
+      sortCols = [{ col, asc: col === 'ticker' }];
+    }
+  }
+
+  // Update header icons
   document.querySelectorAll('thead th').forEach(th => {
-    const c  = th.dataset.col;
-    const si = th.querySelector('.sort-icon');
-    th.classList.toggle('sorted', c === sortCol);
-    si.textContent = c === sortCol ? (sortAsc ? '▲' : '▼') : '';
+    const c   = th.dataset.col;
+    const si  = th.querySelector('.sort-icon');
+    const idx = sortCols.findIndex(s => s.col === c);
+    th.classList.toggle('sorted', idx >= 0);
+    if (idx >= 0) {
+      const s = sortCols[idx];
+      si.textContent = (s.asc ? '▲' : '▼') + (sortCols.length > 1 ? `${idx+1}` : '');
+    } else {
+      si.textContent = '';
+    }
   });
+
   renderTable();
 }
 
@@ -691,17 +722,22 @@ function renderTable() {
     !filterText || r.ticker.includes(filterText)
   );
 
+  // Multi-sort
   rows.sort((a, b) => {
-    let av = a[sortCol], bv = b[sortCol];
-    if (av === null || av === undefined) av = sortAsc ? Infinity : -Infinity;
-    if (bv === null || bv === undefined) bv = sortAsc ? Infinity : -Infinity;
-    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-    return sortAsc ? av - bv : bv - av;
+    for (const { col, asc } of sortCols) {
+      let av = a[col], bv = b[col];
+      if (av === null || av === undefined) av = asc ? Infinity : -Infinity;
+      if (bv === null || bv === undefined) bv = asc ? Infinity : -Infinity;
+      let cmp;
+      if (typeof av === 'string') cmp = asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      else cmp = asc ? av - bv : bv - av;
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
   });
 
   document.getElementById('rowCount').textContent = `${rows.length} ticker`;
 
-  // Max CM for bar width
   const maxCM = Math.max(...rows.map(r => Math.abs(r.clean_money)), 1);
 
   const tbody = document.getElementById('flowBody');
@@ -900,10 +936,8 @@ function modalToggleLog() {
   document.getElementById('mBtnLog').classList.toggle('active', modalIsLog);
 }
 
-// ── Enter key on date ─────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.target.id === 'dateFrom' || e.target.id === 'dateTo')) loadFlow();
-});
+// ── Escape tutup modal ────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
 </body>
 </html>
