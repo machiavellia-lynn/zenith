@@ -661,5 +661,35 @@ def upload_db():
         return jsonify({"error": str(e)}), 500
 
 
+
+@app.route("/admin/pull-db")
+def pull_db():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
+
+    try:
+        os.makedirs("/data", exist_ok=True)
+        tmp_path = DB_PATH + ".tmp"
+
+        r = requests.get(DROPBOX_URL, stream=True, timeout=300)
+        total = 0
+        with open(tmp_path, "wb") as f:
+            for chunk in r.iter_content(chunk_size=1024 * 1024):
+                if chunk:
+                    f.write(chunk)
+                    total += len(chunk)
+
+        size = os.path.getsize(tmp_path)
+        if size < 1024 * 100:
+            return f"❌ File terlalu kecil ({size} bytes)", 500
+
+        os.replace(tmp_path, DB_PATH)
+        return f"✅ Done! {round(size/1024/1024, 1)} MB tersimpan di {DB_PATH}"
+    except Exception as e:
+        return f"❌ Error: {e}", 500
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
