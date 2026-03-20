@@ -271,13 +271,13 @@ def flow():
 
     # Totals untuk stats bar
     totals = {
-        "sm":     round(sum(x["sm_val"]   for x in tickers), 2),
-        "bm":     round(sum(x["bm_val"]   for x in tickers), 2),
-        "mf_plus":  round(sum(x["mf_plus"]  for x in tickers), 2),
-        "mf_minus": round(sum(x["mf_minus"] for x in tickers), 2),
-        "net_cm": round(sum(x["clean_money"] for x in tickers), 2),
-        "net_mf": round(sum(x["net_mf"]   for x in tickers), 2),
-        "count":  len(tickers),
+        "sm":       round(sum(x["sm_val"]      for x in tickers), 2),
+        "bm":       round(sum(x["bm_val"]      for x in tickers), 2),
+        "mf_plus":  round(sum(x["mf_plus"]  or 0 for x in tickers), 2),
+        "mf_minus": round(sum(x["mf_minus"] or 0 for x in tickers), 2),
+        "net_cm":   round(sum(x["clean_money"]  for x in tickers), 2),
+        "net_mf":   round(sum(x["net_mf"]   or 0 for x in tickers), 2),
+        "count":    len(tickers),
     }
 
     return jsonify({"tickers": tickers, "totals": totals, "date_from": date_from, "date_to": date_to})
