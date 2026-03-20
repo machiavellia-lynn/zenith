@@ -855,7 +855,7 @@ function initModalChart() {
     },
     localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
     width:  container.clientWidth  || 900,
-    height: Math.max(container.getBoundingClientRect().height, 400),
+    height: Math.max(container.getBoundingClientRect().height - 32, 380),
   });
 
   modalCandle = modalChart.addCandlestickSeries({
@@ -909,7 +909,7 @@ function initModalChart() {
     const rect = entries[0].contentRect;
     modalChart.applyOptions({
       width:  Math.max(rect.width,  400),
-      height: Math.max(rect.height, 400),
+      height: Math.max(rect.height - 32, 380),
     });
   });
   ro.observe(container);
