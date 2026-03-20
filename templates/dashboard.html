@@ -1,0 +1,795 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Flow Dashboard</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>if (typeof LightweightCharts === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080c10;
+  --surface:  #0e1318;
+  --surface2: #121920;
+  --border:   #1a2230;
+  --border2:  #243040;
+  --accent:   #00e8a2;
+  --accent2:  #4d9fff;
+  --danger:   #ff4d6a;
+  --text:     #c8d8e8;
+  --muted:    #4a6070;
+  --up:       #00e8a2;
+  --down:     #ff4d6a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+
+/* ── HEADER ─────────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 200;
+}
+.logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: .18em; color: var(--accent);
+  text-transform: uppercase; white-space: nowrap;
+}
+.logo span { color: var(--muted); }
+.nav-divider { width: 1px; height: 20px; background: var(--border); }
+.nav-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 5px;
+  padding: 5px 14px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .06em;
+  text-decoration: none; transition: all .15s;
+}
+.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nav-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* search */
+.ticker-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px;
+  margin-left: auto; transition: border-color .2s;
+}
+.ticker-search-wrap:focus-within { border-color: var(--accent); }
+.ticker-search-wrap input {
+  background: none; border: none; outline: none;
+  color: var(--text); font-family: 'DM Sans', sans-serif;
+  font-size: 12px; width: 160px;
+}
+.ticker-search-wrap input::placeholder { color: var(--muted); }
+
+/* ── STATS BAR ───────────────────────────────────── */
+.stats-bar {
+  display: flex; align-items: center; gap: 0;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.stat-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px 10px 0; margin-right: 20px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.stat-item:last-child { border-right: none; }
+.stat-item .s-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .12em;
+  color: var(--muted); text-transform: uppercase;
+}
+.stat-item .s-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px; font-weight: 700;
+  color: var(--text);
+}
+.stat-item .s-val.up   { color: var(--up); }
+.stat-item .s-val.down { color: var(--down); }
+.stat-item .s-val.neutral { color: var(--accent2); }
+
+/* ── TOOLBAR ─────────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+/* Date range picker */
+.date-range {
+  display: flex; align-items: center; gap: 8px;
+}
+.date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 6px 10px; font-family: 'Space Mono', monospace;
+  font-size: 11px; outline: none;
+  color-scheme: dark;
+  transition: border-color .2s; cursor: pointer;
+}
+.date-input:focus { border-color: var(--accent); }
+.date-arrow {
+  width: 28px; height: 28px;
+  background: var(--border); border: 1px solid var(--border2);
+  border-radius: 5px; display: flex; align-items: center;
+  justify-content: center; color: var(--muted); font-size: 13px;
+}
+.load-btn {
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: 5px;
+  padding: 6px 16px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .06em; transition: opacity .15s;
+}
+.load-btn:hover { opacity: .85; }
+
+.row-count {
+  margin-left: auto;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--muted);
+  letter-spacing: .06em;
+}
+
+/* ── TABLE ───────────────────────────────────────── */
+.table-wrap {
+  flex: 1; overflow: auto;
+  padding: 0 24px 24px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  margin-top: 12px;
+}
+thead th {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border2);
+  padding: 9px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: .12em; color: var(--muted);
+  text-align: right; text-transform: uppercase;
+  white-space: nowrap; cursor: pointer;
+  user-select: none;
+  transition: color .15s;
+}
+thead th:first-child { text-align: left; }
+thead th:hover { color: var(--text); }
+thead th.sorted { color: var(--accent); }
+thead th .sort-icon { margin-left: 4px; font-size: 8px; }
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+  animation: rowIn .3s ease both;
+}
+tbody tr:hover { background: rgba(255,255,255,.03); }
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+td {
+  padding: 9px 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+td:first-child { text-align: left; }
+
+/* Ticker cell */
+.td-ticker {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  color: var(--text); letter-spacing: .04em;
+}
+.td-ticker:hover { color: var(--accent); }
+
+/* Clean money cell with bar */
+.cm-cell {
+  position: relative;
+  min-width: 130px;
+}
+.cm-bar {
+  position: absolute; top: 0; bottom: 0;
+  left: 50%; width: 0;
+  transition: width .4s ease;
+  opacity: .18; border-radius: 2px;
+}
+.cm-bar.pos { background: var(--up);   transform-origin: left; margin-left: 0; }
+.cm-bar.neg { background: var(--down); transform-origin: right; }
+.cm-val {
+  position: relative; z-index: 1;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+}
+.cm-val.pos { color: var(--up); }
+.cm-val.neg { color: var(--down); }
+
+/* Numeric cells */
+.td-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; color: var(--text);
+}
+.td-num.sm  { color: var(--accent2); }
+.td-num.bm  { color: #ff8c42; }
+.td-num.mfp { color: var(--up); }
+.td-num.mfm { color: var(--down); }
+.td-num.net-pos { color: var(--up); font-weight: 700; }
+.td-num.net-neg { color: var(--down); font-weight: 700; }
+
+/* RSM cell */
+.rsm-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+}
+
+/* Gain cell */
+.gain-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+}
+.gain-val.pos { color: var(--up); }
+.gain-val.neg { color: var(--down); }
+.gain-val.zero { color: var(--muted); }
+
+/* Loading / empty */
+.state-row td {
+  text-align: center; padding: 60px;
+  color: var(--muted); font-size: 13px;
+}
+.spinner-inline {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── MODAL ───────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.75);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  width: min(95vw, 960px);
+  max-height: 90vh;
+  display: flex; flex-direction: column;
+  transform: scale(.97); transition: transform .2s;
+  overflow: hidden;
+}
+.modal-backdrop.open .modal { transform: scale(1); }
+
+.modal-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-ticker {
+  font-family: 'Space Mono', monospace;
+  font-size: 16px; font-weight: 700;
+  color: var(--text);
+}
+.modal-name { font-size: 12px; color: var(--muted); }
+.modal-price {
+  font-family: 'Space Mono', monospace;
+  font-size: 18px; font-weight: 700; color: var(--text);
+  margin-left: auto;
+}
+
+/* modal tf tabs */
+.modal-tfs { display: flex; gap: 6px; }
+.mtf-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+}
+.mtf-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mtf-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* fit/log buttons */
+.modal-scale-btns { display: flex; gap: 4px; }
+
+.close-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 20px; line-height: 1;
+  padding: 2px 6px; transition: color .15s;
+}
+.close-btn:hover { color: var(--danger); }
+
+/* modal hover tooltip */
+.m-hover-tooltip {
+  position: absolute; top: 12px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(14,19,24,.92);
+  border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px;
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  pointer-events: none; opacity: 0; transition: opacity .15s;
+  white-space: nowrap;
+}
+.m-hover-tooltip.visible { opacity: 1; }
+.mht-date { color: var(--muted); font-size: 9px; }
+.mht-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.mht-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.mht-v { font-size: 11px; font-weight: 700; color: var(--text); }
+.mht-v.up { color: var(--up); }
+.mht-v.down { color: var(--down); }
+.mht-sep { width: 1px; height: 26px; background: var(--border); }
+
+.modal-chart-wrap {
+  position: relative; flex: 1;
+  min-height: 420px; height: 480px;
+}
+#modalChart { width: 100%; height: 100%; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">ZENITH <span>/ dashboard</span></div>
+  <div class="nav-divider"></div>
+  <a href="/" class="nav-btn">⬡ Chart</a>
+  <a href="/dashboard" class="nav-btn active">⊞ Flow</a>
+  <div class="nav-divider"></div>
+  <div class="ticker-search-wrap">
+    <span style="color:var(--muted);font-size:12px">⌕</span>
+    <input type="text" id="tickerFilter" placeholder="Filter ticker..."/>
+  </div>
+</header>
+
+<!-- STATS BAR -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-item">
+    <span class="s-label">SM</span>
+    <span class="s-val neutral" id="sSM">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">BM</span>
+    <span class="s-val neutral" id="sBM">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">MF+</span>
+    <span class="s-val up" id="sMFP">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">MF−</span>
+    <span class="s-val down" id="sMFM">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">NET CM</span>
+    <span class="s-val" id="sNCM">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">NET MF</span>
+    <span class="s-val" id="sNMF">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">Tickers</span>
+    <span class="s-val neutral" id="sCount">—</span>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="date-range">
+    <input type="date" class="date-input" id="dateFrom"/>
+    <div class="date-arrow">→</div>
+    <input type="date" class="date-input" id="dateTo"/>
+  </div>
+  <button class="load-btn" onclick="loadFlow()">Load</button>
+  <span class="row-count" id="rowCount"></span>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+  <table id="flowTable">
+    <thead>
+      <tr>
+        <th onclick="sortBy('ticker')"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
+        <th onclick="sortBy('clean_money')"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
+        <th onclick="sortBy('sm_val')"       data-col="sm_val">SM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('bm_val')"       data-col="bm_val">BM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('rsm')"          data-col="rsm">RSM <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_plus')"      data-col="mf_plus">MF+ <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_minus')"     data-col="mf_minus">MF− <span class="sort-icon"></span></th>
+        <th onclick="sortBy('net_mf')"       data-col="net_mf">NET MF <span class="sort-icon"></span></th>
+        <th onclick="sortBy('gain_pct')"     data-col="gain_pct">GAIN% <span class="sort-icon"></span></th>
+      </tr>
+    </thead>
+    <tbody id="flowBody">
+      <tr class="state-row"><td colspan="9"><span class="spinner-inline"></span>Memuat data...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modalBox">
+    <div class="modal-header">
+      <div>
+        <div class="modal-ticker" id="mTicker">—</div>
+        <div class="modal-name" id="mName">—</div>
+      </div>
+      <div class="modal-tfs">
+        <button class="mtf-btn" data-tf="5m"  onclick="setModalTF('5m')">5m</button>
+        <button class="mtf-btn" data-tf="15m" onclick="setModalTF('15m')">15m</button>
+        <button class="mtf-btn" data-tf="30m" onclick="setModalTF('30m')">30m</button>
+        <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
+        <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
+      </div>
+      <div class="modal-scale-btns">
+        <button class="mtf-btn" onclick="modalFit()" title="Fit screen">⤢</button>
+        <button class="mtf-btn" id="mBtnLog" onclick="modalToggleLog()">Log</button>
+      </div>
+      <div class="modal-price" id="mPrice">—</div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-chart-wrap">
+      <div class="m-hover-tooltip" id="mHoverTooltip">
+        <span class="mht-date" id="mHtDate">—</span>
+        <div class="mht-sep"></div>
+        <div class="mht-item"><span class="mht-lbl">O</span><span class="mht-v" id="mHtO">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">H</span><span class="mht-v up" id="mHtH">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">L</span><span class="mht-v down" id="mHtL">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">C</span><span class="mht-v" id="mHtC">—</span></div>
+        <div class="mht-sep"></div>
+        <div class="mht-item"><span class="mht-lbl">Vol</span><span class="mht-v" id="mHtVol">—</span></div>
+      </div>
+      <div id="modalChart"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────
+let allRows      = [];
+let sortCol      = 'clean_money';
+let sortAsc      = false;
+let filterText   = '';
+let modalChart   = null;
+let modalCandle  = null;
+let modalVolume  = null;
+let modalTF      = '1d';
+let modalTicker  = '';
+let modalIsLog   = false;
+const INIT_CANDLES = 181;
+
+// ── Date helpers ──────────────────────────────────────────────────────
+function toInputDate(ddmmyyyy) {
+  const [d, m, y] = ddmmyyyy.split('-');
+  return `${y}-${m}-${d}`;
+}
+function fromInputDate(yyyymmdd) {
+  const [y, m, d] = yyyymmdd.split('-');
+  return `${d}-${m}-${y}`;
+}
+function todayWIB() {
+  const now = new Date(Date.now() + 7*3600*1000);
+  return now.toISOString().slice(0,10);
+}
+
+// ── Init dates ────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const t = todayWIB();
+  document.getElementById('dateFrom').value = t;
+  document.getElementById('dateTo').value   = t;
+  loadFlow();
+
+  document.getElementById('tickerFilter').addEventListener('input', e => {
+    filterText = e.target.value.trim().toUpperCase();
+    renderTable();
+  });
+});
+
+// ── Load flow data ────────────────────────────────────────────────────
+async function loadFlow() {
+  const df = document.getElementById('dateFrom').value;
+  const dt = document.getElementById('dateTo').value;
+  if (!df || !dt) return;
+
+  showLoading();
+  try {
+    const res  = await fetch(`/api/flow?date_from=${fromInputDate(df)}&date_to=${fromInputDate(dt)}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    allRows = data.tickers || [];
+    updateStats(data.totals || {});
+    renderTable();
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+// ── Stats bar ─────────────────────────────────────────────────────────
+function fmtM(v) {
+  if (v === null || v === undefined) return '—';
+  const abs = Math.abs(v);
+  const s   = v < 0 ? '-' : '';
+  if (abs >= 1000) return s + (abs/1000).toFixed(1) + 'B';
+  return s + abs.toFixed(1) + 'M';
+}
+function updateStats(t) {
+  const set = (id, v, cls) => {
+    const el = document.getElementById(id);
+    el.textContent = fmtM(v);
+    el.className = 's-val ' + (cls || (v >= 0 ? 'up' : 'down'));
+  };
+  set('sSM',   t.sm,       'neutral');
+  set('sBM',   t.bm,       'neutral');
+  set('sMFP',  t.mf_plus,  'up');
+  set('sMFM',  t.mf_minus, 'down');
+  set('sNCM',  t.net_cm);
+  set('sNMF',  t.net_mf);
+  document.getElementById('sCount').textContent = t.count || '—';
+}
+
+// ── Sort ──────────────────────────────────────────────────────────────
+function sortBy(col) {
+  if (sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = col === 'ticker'; }
+  document.querySelectorAll('thead th').forEach(th => {
+    const c  = th.dataset.col;
+    const si = th.querySelector('.sort-icon');
+    th.classList.toggle('sorted', c === sortCol);
+    si.textContent = c === sortCol ? (sortAsc ? '▲' : '▼') : '';
+  });
+  renderTable();
+}
+
+// ── Render table ──────────────────────────────────────────────────────
+function renderTable() {
+  let rows = allRows.filter(r =>
+    !filterText || r.ticker.includes(filterText)
+  );
+
+  rows.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (av === null || av === undefined) av = sortAsc ? Infinity : -Infinity;
+    if (bv === null || bv === undefined) bv = sortAsc ? Infinity : -Infinity;
+    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortAsc ? av - bv : bv - av;
+  });
+
+  document.getElementById('rowCount').textContent = `${rows.length} ticker`;
+
+  // Max CM for bar width
+  const maxCM = Math.max(...rows.map(r => Math.abs(r.clean_money)), 1);
+
+  const tbody = document.getElementById('flowBody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr class="state-row"><td colspan="9">Tidak ada data untuk tanggal ini</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const barPct  = Math.min(Math.abs(r.clean_money) / maxCM * 48, 48);
+    const barPos  = r.clean_money >= 0;
+    const barStyle = barPos
+      ? `left:50%; width:${barPct}%;`
+      : `right:50%; width:${barPct}%;`;
+
+    const rsmColor = rsmToColor(r.rsm);
+    const gainCls  = r.gain_pct === null ? 'zero' : r.gain_pct > 0 ? 'pos' : r.gain_pct < 0 ? 'neg' : 'zero';
+    const gainStr  = r.gain_pct === null ? '—' : (r.gain_pct > 0 ? '+' : '') + r.gain_pct.toFixed(2) + '%';
+
+    return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
+      <td><span class="td-ticker">${r.ticker}</span></td>
+      <td class="cm-cell">
+        <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
+        <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
+      </td>
+      <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
+      <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
+      <td><span class="rsm-val" style="color:${rsmColor}">${r.rsm.toFixed(1)}%</span></td>
+      <td><span class="td-num mfp">${fmtM(r.mf_plus)}</span></td>
+      <td><span class="td-num mfm">${fmtM(r.mf_minus)}</span></td>
+      <td><span class="td-num ${r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${fmtM(r.net_mf)}</span></td>
+      <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function rsmToColor(rsm) {
+  // 0% = merah, 50% = kuning, 100% = hijau
+  if (rsm >= 70) return '#00e8a2';
+  if (rsm >= 50) return `hsl(${(rsm - 50) * 3.6 + 50}, 80%, 55%)`;
+  if (rsm >= 30) return `hsl(${rsm * 1.2}, 80%, 55%)`;
+  return '#ff4d6a';
+}
+
+function showLoading() {
+  document.getElementById('flowBody').innerHTML =
+    `<tr class="state-row"><td colspan="9"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+}
+function showError(msg) {
+  document.getElementById('flowBody').innerHTML =
+    `<tr class="state-row"><td colspan="9">⚠ ${msg}</td></tr>`;
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────
+function openModal(ticker) {
+  modalTicker = ticker;
+  modalTF     = '1d';
+  modalIsLog  = false;
+  document.getElementById('mBtnLog').classList.remove('active');
+  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tf === '1d')
+  );
+  document.getElementById('mTicker').textContent = ticker;
+  document.getElementById('mName').textContent   = '—';
+  document.getElementById('mPrice').textContent  = '—';
+  document.getElementById('modalBackdrop').classList.add('open');
+  initModalChart();
+  loadModalChart();
+}
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('open');
+  if (modalChart) { modalChart.remove(); modalChart = null; modalCandle = null; modalVolume = null; }
+}
+function handleBackdropClick(e) {
+  if (e.target === document.getElementById('modalBackdrop')) closeModal();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function initModalChart() {
+  if (modalChart) { modalChart.remove(); modalChart = null; }
+  const container = document.getElementById('modalChart');
+  modalChart = LightweightCharts.createChart(container, {
+    layout: { background: { color: '#0e1318' }, textColor: '#4a6070' },
+    grid:   { vertLines: { color: '#1a2230' }, horzLines: { color: '#1a2230' } },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+      horzLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+    },
+    rightPriceScale: { borderColor: '#1a2230' },
+    timeScale: {
+      borderColor: '#1a2230', timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: t => {
+        const d = new Date(t * 1000);
+        const h = String(d.getUTCHours()).padStart(2,'0');
+        const m = String(d.getUTCMinutes()).padStart(2,'0');
+        const day = d.getUTCDate();
+        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+        return modalTF === '1d' ? `${day} ${mon}` : `${h}:${m}`;
+      },
+    },
+    localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
+    width:  container.clientWidth || 900,
+    height: container.clientHeight || 460,
+  });
+
+  modalCandle = modalChart.addCandlestickSeries({
+    upColor: '#00e8a2', downColor: '#ff4d6a',
+    borderUpColor: '#00e8a2', borderDownColor: '#ff4d6a',
+    wickUpColor:   '#00e8a2', wickDownColor:   '#ff4d6a',
+  });
+  modalVolume = modalChart.addHistogramSeries({
+    color: '#1a2230', priceFormat: { type: 'volume' },
+    priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
+  });
+  modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+  // Hover tooltip
+  modalChart.subscribeCrosshairMove(param => {
+    const tt = document.getElementById('mHoverTooltip');
+    if (!param.time || !param.seriesData) { tt.classList.remove('visible'); return; }
+    const bar = param.seriesData.get(modalCandle);
+    if (!bar) { tt.classList.remove('visible'); return; }
+    const fmt = v => Math.round(v).toLocaleString('id-ID');
+    const fmtV = v => {
+      if (!v) return '—';
+      if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+      if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+      if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+      return String(v);
+    };
+    const d = new Date(param.time * 1000);
+    const pad = n => String(n).padStart(2,'0');
+    const mons = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const ds = modalTF === '1d'
+      ? `${d.getUTCDate()} ${mons[d.getUTCMonth()]} ${d.getUTCFullYear()}`
+      : `${d.getUTCDate()} ${mons[d.getUTCMonth()]} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    document.getElementById('mHtDate').textContent = ds;
+    document.getElementById('mHtO').textContent    = fmt(bar.open);
+    document.getElementById('mHtH').textContent    = fmt(bar.high);
+    document.getElementById('mHtL').textContent    = fmt(bar.low);
+    const cEl = document.getElementById('mHtC');
+    cEl.textContent = fmt(bar.close);
+    cEl.className   = 'mht-v ' + (bar.close >= bar.open ? 'up' : 'down');
+    const vb = param.seriesData.get(modalVolume);
+    document.getElementById('mHtVol').textContent = vb ? fmtV(vb.value) : '—';
+    tt.classList.add('visible');
+  });
+
+  const ro = new ResizeObserver(() => {
+    if (modalChart) modalChart.applyOptions({ width: container.clientWidth });
+  });
+  ro.observe(container);
+}
+
+async function loadModalChart() {
+  if (!modalChart || !modalCandle) return;
+  try {
+    const res  = await fetch(`/api/ohlcv?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error) return;
+    const candles = data.candles || [];
+    if (!candles.length) return;
+    modalCandle.setData(candles);
+    modalVolume.setData(candles.map(c => ({
+      time: c.time, value: c.volume,
+      color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
+    })));
+    if (candles.length > INIT_CANDLES) {
+      modalChart.timeScale().setVisibleRange({
+        from: candles[candles.length - INIT_CANDLES].time,
+        to:   candles[candles.length - 1].time,
+      });
+    } else {
+      modalChart.timeScale().fitContent();
+    }
+    if (data.name)  document.getElementById('mName').textContent  = data.name;
+    if (data.price) document.getElementById('mPrice').textContent = data.price.toLocaleString('id-ID');
+  } catch (_) {}
+}
+
+function setModalTF(tf) {
+  modalTF = tf;
+  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tf === tf)
+  );
+  loadModalChart();
+}
+function modalFit() {
+  if (modalChart) modalChart.timeScale().fitContent();
+}
+function modalToggleLog() {
+  if (!modalChart) return;
+  modalIsLog = !modalIsLog;
+  modalChart.priceScale('right').applyOptions({ mode: modalIsLog ? 1 : 0 });
+  document.getElementById('mBtnLog').classList.toggle('active', modalIsLog);
+}
+
+// ── Enter key on date ─────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && e.target.classList.contains('date-input')) loadFlow();
+});
+</script>
+</body>
+</html>
