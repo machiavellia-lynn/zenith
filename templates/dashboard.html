@@ -8,6 +8,8 @@
 <script>if (typeof LightweightCharts === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
 <style>
 :root {
   --bg:       #080c10;
@@ -355,6 +357,48 @@ td:first-child { text-align: left; }
   min-height: 420px; height: 480px;
 }
 #modalChart { width: 100%; height: 100%; }
+
+/* ── PIKADAY DARK THEME ──────────────────────── */
+.pika-single {
+  background: var(--surface2) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 8px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  color: var(--text) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
+}
+.pika-title { padding: 8px 10px !important; }
+.pika-label {
+  background: transparent !important;
+  color: var(--text) !important;
+  font-family: 'Space Mono', monospace !important;
+  font-size: 12px !important;
+}
+.pika-prev, .pika-next { color: var(--muted) !important; opacity: 1 !important; }
+.pika-prev:hover, .pika-next:hover { color: var(--accent) !important; }
+.pika-table th {
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-family: 'Space Mono', monospace !important;
+}
+.pika-button {
+  background: transparent !important;
+  color: var(--text) !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+}
+.pika-button:hover, .is-selected .pika-button {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+}
+.is-today .pika-button { color: var(--accent) !important; font-weight: 700 !important; }
+.is-disabled .pika-button { color: var(--muted) !important; opacity: .4 !important; }
+.pika-select {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
 </style>
 </head>
 <body>
@@ -520,15 +564,53 @@ function autoFormatDate(input) {
   input.value = v.slice(0, 10);
 }
 
-// ── Init dates ────────────────────────────────────────────────────────
-window.addEventListener('DOMContentLoaded', () => {
-  const t = todayDDMMYYYY();
-  document.getElementById('dateFrom').value = t;
-  document.getElementById('dateTo').value   = t;
+// ── Init dates & Pikaday ─────────────────────────────────────────────
+let pickerFrom, pickerTo;
 
-  // Auto-format saat mengetik
-  ['dateFrom', 'dateTo'].forEach(id => {
-    document.getElementById(id).addEventListener('input', e => autoFormatDate(e.target));
+window.addEventListener('DOMContentLoaded', () => {
+  const todayStr = todayDDMMYYYY();
+  const [dd, mm, yyyy] = todayStr.split('/').map(Number);
+  const todayDate = new Date(yyyy, mm - 1, dd);
+
+  const pikadayOpts = {
+    format:     'DD/MM/YYYY',
+    toString:   date => {
+      const d = String(date.getDate()).padStart(2,'0');
+      const m = String(date.getMonth()+1).padStart(2,'0');
+      return `${d}/${m}/${date.getFullYear()}`;
+    },
+    parse: str => {
+      const [d,m,y] = str.split('/').map(Number);
+      return new Date(y, m-1, d);
+    },
+    i18n: {
+      previousMonth: '‹', nextMonth: '›',
+      months: ['Januari','Februari','Maret','April','Mei','Juni',
+               'Juli','Agustus','September','Oktober','November','Desember'],
+      weekdays: ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],
+      weekdaysShort: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'],
+    },
+    maxDate: new Date(),
+  };
+
+  pickerFrom = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('dateFrom'),
+    defaultDate: todayDate,
+    setDefaultDate: true,
+    onSelect: date => {
+      // pastikan date_to tidak lebih awal dari date_from
+      if (pickerTo && date > pickerTo.getDate()) {
+        pickerTo.setDate(date);
+      }
+    },
+  });
+
+  pickerTo = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('dateTo'),
+    defaultDate: todayDate,
+    setDefaultDate: true,
   });
 
   loadFlow();

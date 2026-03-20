@@ -231,13 +231,13 @@ def flow():
     for row in rows:
         t = row["ticker"]
         if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "total_val": 0}
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": 0, "mf_minus": 0}
         if row["channel"] == "smart":
-            data[t]["sm_val"]    += row["mf"]  or 0   # MF+ = SM murni
-            data[t]["total_val"] += row["val"] or 0
+            data[t]["sm_val"]  += row["mf"] or 0   # MF+ = SM murni
+            data[t]["mf_plus"] += row["mf"] or 0
         else:
-            data[t]["bm_val"]    += abs(row["mf"] or 0)  # MF- = BM murni (absolut)
-            data[t]["total_val"] += row["val"] or 0
+            data[t]["bm_val"]   += abs(row["mf"] or 0)  # MF- = BM murni
+            data[t]["mf_minus"] += abs(row["mf"] or 0)
 
     if not data:
         return jsonify({"tickers": [], "totals": {}})
@@ -246,11 +246,13 @@ def flow():
 
     tickers = []
     for t, d in data.items():
-        sm  = round(d["sm_val"], 2)   # MF+ dari trigger smart
-        bm  = round(d["bm_val"], 2)   # MF- dari trigger bad (absolut)
-        cm  = round(sm - bm, 2)       # Clean Money = SM - BM
+        sm  = round(d["sm_val"],  2)
+        bm  = round(d["bm_val"],  2)
+        cm  = round(sm - bm, 2)
         rsm = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
-        tv  = round(d["total_val"], 2) # Total volume (informasi tambahan)
+        mfp = round(d["mf_plus"],  2) if d["mf_plus"]  else None
+        mfm = round(d["mf_minus"], 2) if d["mf_minus"] else None
+        net = round(sm - bm, 2) if (d["mf_plus"] or d["mf_minus"]) else None
 
         g = gains.get(t, {})
         tickers.append({
@@ -259,10 +261,9 @@ def flow():
             "sm_val":      sm,
             "bm_val":      bm,
             "rsm":         rsm,
-            "total_val":   tv,
-            "mf_plus":     None,   # dari sub-channel MF nanti
-            "mf_minus":    None,   # dari sub-channel MF nanti
-            "net_mf":      None,   # dari sub-channel MF nanti
+            "mf_plus":     mfp,
+            "mf_minus":    mfm,
+            "net_mf":      net,
             "gain_pct":    g.get("gain"),
             "price":       g.get("price"),
         })
