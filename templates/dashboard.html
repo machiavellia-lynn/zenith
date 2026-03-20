@@ -288,7 +288,7 @@ td:first-child { text-align: left; }
   border-radius: 10px;
   width: 100%;
   max-width: 1100px;
-  height: min(92vh, 920px);
+  max-height: 92vh;
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
@@ -360,11 +360,78 @@ td:first-child { text-align: left; }
 
 .modal-chart-wrap {
   position: relative;
-  flex: 1 1 0;
-  min-height: 0;
+  height: 460px;
+  flex-shrink: 0;
 }
 #modalChart { width: 100%; height: 100%; display: block; position: relative; }
 
+
+/* ── MODAL TRANSACTIONS ──────────────────────────────── */
+.modal-body {
+  flex: 1 1 0;
+  overflow-y: auto;
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.trx-section-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .14em;
+  color: var(--muted); text-transform: uppercase;
+  margin-bottom: 8px;
+}
+.trx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.trx-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.trx-box-header {
+  padding: 6px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+}
+.trx-box-header.sm { color: var(--accent2); }
+.trx-box-header.bm { color: #ff8c42; }
+.trx-box-header .trx-count {
+  color: var(--muted); font-size: 8px;
+}
+.trx-table { width: 100%; border-collapse: collapse; }
+.trx-table th {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+  text-align: right; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.trx-table th:first-child { text-align: left; }
+.trx-table td {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--text);
+  text-align: right;
+  border-bottom: 1px solid rgba(26,34,48,.5);
+  white-space: nowrap;
+}
+.trx-table td:first-child { text-align: left; color: var(--muted); }
+.trx-table tbody tr:last-child td { border-bottom: none; }
+.trx-table tbody tr:hover { background: rgba(255,255,255,.02); }
+.trx-gain-pos { color: var(--up); }
+.trx-gain-neg { color: var(--down); }
+.trx-mf-sm { color: var(--accent2); }
+.trx-mf-bm { color: #ff8c42; }
+.trx-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
+.trx-loading { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
 /* ── PIKADAY DARK THEME ──────────────────────── */
 .pika-single {
   background: var(--surface2) !important;
@@ -522,6 +589,37 @@ td:first-child { text-align: left; }
         <div class="mht-item"><span class="mht-lbl">Vol</span><span class="mht-v" id="mHtVol">—</span></div>
       </div>
       <div id="modalChart"></div>
+    </div>
+
+    <!-- TRANSAKSI SECTION -->
+    <div class="modal-body" id="modalBody">
+      <div>
+        <div class="trx-section-title">Transaksi SM &amp; BM</div>
+        <div class="trx-grid">
+          <div class="trx-box">
+            <div class="trx-box-header sm">
+              Smart Money <span class="trx-count" id="smCount"></span>
+            </div>
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="smBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+          </div>
+          <div class="trx-box">
+            <div class="trx-box-header bm">
+              Bad Money <span class="trx-count" id="bmCount"></span>
+            </div>
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="bmBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -817,6 +915,7 @@ function openModal(ticker) {
     requestAnimationFrame(() => {
       initModalChart();
       loadModalChart();
+      loadTransactions();
     });
   });
 }
@@ -928,6 +1027,45 @@ async function loadModalChart() {
     }
     if (data.name) document.getElementById('mName').textContent = data.name;
   } catch (_) {}
+}
+
+
+async function loadTransactions() {
+  const df = document.getElementById('dateFrom').value.trim();
+  const dt = document.getElementById('dateTo').value.trim();
+  const url = `/api/transactions?ticker=${modalTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+
+  const fmtGain = g => {
+    if (g === null || g === undefined) return '—';
+    const cls = g > 0 ? 'trx-gain-pos' : g < 0 ? 'trx-gain-neg' : '';
+    return `<span class="${cls}">${g > 0 ? '+' : ''}${g.toFixed(2)}%</span>`;
+  };
+
+  const buildRows = (rows, mfCls) => {
+    if (!rows.length) return `<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;
+    return rows.map(r => `<tr>
+      <td>${r.time}</td>
+      <td>${r.price ? r.price.toLocaleString('id-ID') : '—'}</td>
+      <td>${fmtGain(r.gain_pct)}</td>
+      <td><span class="${mfCls}">${r.mf || '—'}</span></td>
+      <td>${r.vol_x ? r.vol_x.toFixed(1) + 'x' : '—'}</td>
+    </tr>`).join('');
+  };
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('smCount').textContent = `(${data.sm_count}TX)`;
+    document.getElementById('bmCount').textContent = `(${data.bm_count}TX)`;
+    document.getElementById('smBody').innerHTML = buildRows(data.sm, 'trx-mf-sm');
+    document.getElementById('bmBody').innerHTML = buildRows(data.bm, 'trx-mf-bm');
+  } catch (e) {
+    const err = `<tr><td colspan="5" class="trx-empty">⚠ ${e.message}</td></tr>`;
+    document.getElementById('smBody').innerHTML = err;
+    document.getElementById('bmBody').innerHTML = err;
+  }
 }
 
 function setModalTF(tf) {

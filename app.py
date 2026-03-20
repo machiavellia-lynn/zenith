@@ -291,7 +291,77 @@ def flow():
     return jsonify({"tickers": tickers, "totals": totals, "date_from": date_from, "date_to": date_to})
 
 
-# ── API: OHLCV (chart) ────────────────────────────────────────────────────
+# ── API: transactions per ticker ─────────────────────────────────────────
+@app.route("/api/transactions")
+def transactions():
+    ticker    = request.args.get("ticker", "").upper().strip()
+    today_wib = datetime.now(WIB).strftime("%d-%m-%Y")
+    date_from = request.args.get("date_from", today_wib)
+    date_to   = request.args.get("date_to",   today_wib)
+
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+
+    try:
+        parse_date(date_from)
+        parse_date(date_to)
+    except ValueError:
+        return jsonify({"error": "Format tanggal salah"}), 400
+
+    d0 = parse_date(date_from)
+    d1 = parse_date(date_to)
+    if d0 > d1: d0, d1 = d1, d0
+    dates = []
+    cur = d0
+    while cur <= d1:
+        dates.append(cur.strftime("%d-%m-%Y"))
+        cur += timedelta(days=1)
+
+    placeholders = ",".join("?" for _ in dates)
+    params = [ticker] + dates
+
+    try:
+        conn = get_db()
+        rows = conn.execute(f"""
+            SELECT channel, date, time, price, gain_pct,
+                   mf_delta_raw, mf_delta_numeric, vol_x, signal
+            FROM raw_messages
+            WHERE ticker = ? AND date IN ({placeholders})
+            ORDER BY
+                substr(date,7,4)||substr(date,4,2)||substr(date,1,2),
+                time
+        """, params).fetchall()
+        conn.close()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    sm_rows, bm_rows = [], []
+    for r in rows:
+        row = {
+            "date":     r["date"],
+            "time":     r["time"],
+            "price":    int(round(r["price"])) if r["price"] else None,
+            "gain_pct": r["gain_pct"],
+            "mf":       r["mf_delta_raw"],
+            "mf_num":   r["mf_delta_numeric"],
+            "vol_x":    r["vol_x"],
+            "signal":   r["signal"],
+        }
+        if r["channel"] == "smart":
+            sm_rows.append(row)
+        else:
+            bm_rows.append(row)
+
+    return jsonify({
+        "ticker":  ticker,
+        "sm":      sm_rows,
+        "bm":      bm_rows,
+        "sm_count": len(sm_rows),
+        "bm_count": len(bm_rows),
+    })
+
+
+
 @app.route("/api/ohlcv")
 def ohlcv():
     ticker = request.args.get("ticker", "BBRI").upper().strip()
