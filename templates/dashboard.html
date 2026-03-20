@@ -396,9 +396,33 @@ td:first-child { text-align: left; }
 }
 .trx-section-title {
   font-family: 'Space Mono', monospace;
-  font-size: 9px; letter-spacing: .14em;
+  font-size: 11px; letter-spacing: .14em; font-weight: 700;
   color: var(--muted); text-transform: uppercase;
-  margin-bottom: 8px;
+  display: flex; align-items: center; gap: 12px;
+  white-space: nowrap;
+}
+.trx-section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+.trx-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.trx-date-range {
+  display: flex; align-items: center; gap: 6px;
+}
+.trx-date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 5px 8px; font-family: 'Space Mono', monospace;
+  font-size: 10px; outline: none; width: 96px;
+  letter-spacing: .04em; transition: border-color .2s;
+}
+.trx-date-input:focus { border-color: var(--accent); }
+.trx-date-input::placeholder { color: var(--muted); }
+.trx-date-arrow {
+  color: var(--muted); font-size: 11px; padding: 0 2px;
 }
 .trx-grid {
   display: grid;
@@ -547,6 +571,7 @@ td:first-child { text-align: left; }
 }
 .is-today .pika-button { color: var(--accent) !important; font-weight: 700 !important; }
 .is-disabled .pika-button { color: var(--muted) !important; opacity: .4 !important; }
+.modal .pika-single { z-index: 600 !important; }
 .pika-select {
   background: var(--surface) !important;
   color: var(--text) !important;
@@ -684,7 +709,14 @@ td:first-child { text-align: left; }
     <!-- TRANSAKSI SECTION -->
     <div class="modal-body" id="modalBody">
       <div>
-        <div class="trx-section-title">Transaksi SM &amp; BM</div>
+        <div class="trx-toolbar">
+          <div class="trx-section-title">Transaksi SM &amp; BM</div>
+          <div class="trx-date-range">
+            <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+            <span class="trx-date-arrow">→</span>
+            <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+          </div>
+        </div>
         <div class="trx-grid">
           <div class="trx-box">
             <div class="trx-box-header sm">
@@ -771,6 +803,7 @@ function autoFormatDate(input) {
 
 // ── Init dates & Pikaday ─────────────────────────────────────────────
 let pickerFrom, pickerTo;
+let trxPickerFrom, trxPickerTo;
 
 window.addEventListener('DOMContentLoaded', () => {
   const todayStr = todayDDMMYYYY();
@@ -817,6 +850,35 @@ window.addEventListener('DOMContentLoaded', () => {
     defaultDate: todayDate,
     setDefaultDate: true,
     onSelect: () => loadFlow(),
+  });
+
+  // ── Modal transaction date pickers ──
+  trxPickerFrom = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('trxDateFrom'),
+    defaultDate: todayDate,
+    setDefaultDate: true,
+    container:   document.getElementById('modalBox'),
+    onSelect: date => {
+      if (trxPickerTo && date > trxPickerTo.getDate()) {
+        trxPickerTo.setDate(date);
+      }
+      loadTransactions();
+    },
+  });
+
+  trxPickerTo = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('trxDateTo'),
+    defaultDate: todayDate,
+    setDefaultDate: true,
+    container:   document.getElementById('modalBox'),
+    onSelect: () => loadTransactions(),
+  });
+
+  // date mask for trx inputs
+  document.querySelectorAll('.trx-date-input').forEach(el => {
+    el.addEventListener('input', () => autoFormatDate(el));
   });
 
   loadFlow();
@@ -1013,6 +1075,19 @@ function openModal(ticker) {
   document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
   document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
   document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+  // Sync trx date pickers from main toolbar
+  const mainFrom = document.getElementById('dateFrom').value;
+  const mainTo   = document.getElementById('dateTo').value;
+  document.getElementById('trxDateFrom').value = mainFrom;
+  document.getElementById('trxDateTo').value   = mainTo;
+  if (trxPickerFrom && mainFrom) {
+    const [d,m,y] = mainFrom.split('/').map(Number);
+    trxPickerFrom.setDate(new Date(y, m-1, d), true);
+  }
+  if (trxPickerTo && mainTo) {
+    const [d,m,y] = mainTo.split('/').map(Number);
+    trxPickerTo.setDate(new Date(y, m-1, d), true);
+  }
   document.getElementById('modalBackdrop').classList.add('open');
   // Defer agar modal selesai render dulu, baru init chart
   requestAnimationFrame(() => {
@@ -1275,8 +1350,9 @@ function updateOvlValVisibility() {
 
 
 async function loadTransactions() {
-  const df = document.getElementById('dateFrom').value.trim();
-  const dt = document.getElementById('dateTo').value.trim();
+  const df = document.getElementById('trxDateFrom').value.trim();
+  const dt = document.getElementById('trxDateTo').value.trim();
+  if (!df || !dt) return;
   const url = `/api/transactions?ticker=${modalTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
 
   const fmtGain = g => {
