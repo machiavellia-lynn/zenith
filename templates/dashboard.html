@@ -430,26 +430,21 @@ td:first-child { text-align: left; }
 .trx-box-header .trx-count {
   color: var(--muted); font-size: 8px;
 }
-.trx-table {
-  width: 100%; border-collapse: collapse;
-  display: block;
-  overflow-y: auto;
+.trx-table-wrap {
   flex: 1 1 0;
   min-height: 0;
+  overflow-y: auto;
   scrollbar-width: thin;
   scrollbar-color: var(--border2) transparent;
 }
-.trx-table::-webkit-scrollbar { width: 5px; }
-.trx-table::-webkit-scrollbar-track { background: transparent; }
-.trx-table::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
-.trx-table::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-.trx-table thead {
-  display: table; width: 100%; table-layout: fixed;
+.trx-table-wrap::-webkit-scrollbar { width: 5px; }
+.trx-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.trx-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.trx-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.trx-table { width: 100%; border-collapse: collapse; }
+.trx-table thead th {
   position: sticky; top: 0; z-index: 1;
   background: var(--bg);
-}
-.trx-table tbody {
-  display: table; width: 100%; table-layout: fixed;
 }
 .trx-table th {
   padding: 5px 10px;
@@ -646,23 +641,27 @@ td:first-child { text-align: left; }
             <div class="trx-box-header sm">
               Smart Money <span class="trx-count" id="smCount"></span>
             </div>
+            <div class="trx-table-wrap">
             <table class="trx-table">
               <thead><tr>
                 <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
               </tr></thead>
               <tbody id="smBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
             </table>
+            </div>
           </div>
           <div class="trx-box">
             <div class="trx-box-header bm">
               Bad Money <span class="trx-count" id="bmCount"></span>
             </div>
+            <div class="trx-table-wrap">
             <table class="trx-table">
               <thead><tr>
                 <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
               </tr></thead>
               <tbody id="bmBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
             </table>
+            </div>
           </div>
         </div>
       </div>
