@@ -215,62 +215,32 @@ def flow():
 
     try:
         conn = get_db()
-
-        # Query SM/BM dari raw_messages
-        rows_sm_bm = conn.execute(f"""
+        rows = conn.execute(f"""
             SELECT
                 ticker,
                 channel,
+                SUM(value_numeric)    AS val,
                 SUM(mf_delta_numeric) AS mf
             FROM raw_messages
             WHERE date IN ({placeholders})
             GROUP BY ticker, channel
         """, dates).fetchall()
-
-        # Query MF+/MF- dari raw_mf_messages
-        rows_mf = conn.execute(f"""
-            SELECT
-                ticker,
-                channel,
-                SUM(mf_numeric)       AS mf,
-                SUM(mft_numeric)      AS mft,
-                SUM(cm_delta_numeric) AS cm_delta
-            FROM raw_mf_messages
-            WHERE date IN ({placeholders})
-            GROUP BY ticker, channel
-        """, dates).fetchall()
-
         conn.close()
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
 
-    # Agregasi SM/BM per ticker
+    # Agregasi per ticker
     data = {}
-    for row in rows_sm_bm:
+    for row in rows:
         t = row["ticker"]
         if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None}
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": 0, "mf_minus": 0}
         if row["channel"] == "smart":
-            data[t]["sm_val"] += row["mf"] or 0
+            data[t]["sm_val"]  += row["mf"] or 0   # MF+ = SM murni
+            data[t]["mf_plus"] += row["mf"] or 0
         else:
-            data[t]["bm_val"] += abs(row["mf"] or 0)
-
-    # Agregasi MF+/MF- per ticker dari raw_mf_messages
-    for row in rows_mf:
-        t = row["ticker"]
-        if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None}
-        if row["channel"] == "mf_plus":
-            data[t]["mf_plus"] = (data[t]["mf_plus"] or 0) + (row["mf"] or 0)
-        elif row["channel"] == "mf_minus":
-            data[t]["mf_minus"] = (data[t]["mf_minus"] or 0) + abs(row["mf"] or 0)
-
-    # Hitung net_mf per ticker
-    for t, d in data.items():
-        if d["mf_plus"] is not None or d["mf_minus"] is not None:
-            mfp = d["mf_plus"]  or 0
-            mfm = d["mf_minus"] or 0
-            data[t]["net_mf"] = round(mfp - mfm, 2)
+            data[t]["bm_val"]   += abs(row["mf"] or 0)  # MF- = BM murni
+            data[t]["mf_minus"] += abs(row["mf"] or 0)
 
     if not data:
         return jsonify({"tickers": [], "totals": {}})
@@ -279,13 +249,13 @@ def flow():
 
     tickers = []
     for t, d in data.items():
-        sm  = round(d["sm_val"], 2)
-        bm  = round(d["bm_val"], 2)
+        sm  = round(d["sm_val"],  2)
+        bm  = round(d["bm_val"],  2)
         cm  = round(sm - bm, 2)
         rsm = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
-        mfp = round(d["mf_plus"],  2) if d["mf_plus"]  is not None else None
-        mfm = round(d["mf_minus"], 2) if d["mf_minus"] is not None else None
-        net = round(d["net_mf"],   2) if d["net_mf"]   is not None else None
+        mfp = round(d["mf_plus"],  2) if d["mf_plus"]  else None
+        mfm = round(d["mf_minus"], 2) if d["mf_minus"] else None
+        net = round(sm - bm, 2) if (d["mf_plus"] or d["mf_minus"]) else None
 
         g = gains.get(t, {})
         tickers.append({
@@ -294,9 +264,9 @@ def flow():
             "sm_val":      sm,
             "bm_val":      bm,
             "rsm":         rsm,
-            "mf_plus":     mfp,
-            "mf_minus":    mfm,
-            "net_mf":      net,
+            "mf_plus":     None,  # reserved untuk sub-channel MF
+            "mf_minus":    None,  # reserved untuk sub-channel MF
+            "net_mf":      None,  # reserved untuk sub-channel MF
             "gain_pct":    g.get("gain"),
             "price":       g.get("price"),
         })
@@ -560,79 +530,38 @@ def ohlcv():
 
 @app.route("/admin/upload-db", methods=["GET", "POST"])
 def upload_db():
+    # HAPUS ROUTE INI setelah zenith.db berhasil diupload!
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.method == "GET":
-        return """
+        return f"""
         <!DOCTYPE html><html><head>
-        <style>
-        body{background:#080c10;color:#c8d8e8;font-family:monospace;
-        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
-        .box{background:#0e1318;border:1px solid #1a2230;border-radius:8px;padding:32px;width:420px;}
-        h3{color:#00e8a2;margin-bottom:20px;}
-        input,button{width:100%;padding:10px;margin:8px 0;border-radius:5px;
-        box-sizing:border-box;font-family:monospace;}
-        input{background:#080c10;border:1px solid #1a2230;color:#c8d8e8;}
-        button{background:#00e8a2;border:none;color:#080c10;font-weight:700;cursor:pointer;font-size:14px;}
-        #status{margin-top:12px;font-size:13px;color:#aac;min-height:20px;}
-        #bar{width:0%;height:6px;background:#00e8a2;border-radius:3px;transition:width 0.2s;}
-        #barwrap{width:100%;background:#1a2230;border-radius:3px;margin-top:8px;display:none;}
+        <style>body{{background:#080c10;color:#c8d8e8;font-family:monospace;
+        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}}
+        .box{{background:#0e1318;border:1px solid #1a2230;border-radius:8px;padding:32px;width:400px;}}
+        h3{{color:#00e8a2;margin-bottom:20px;}}
+        input,button{{width:100%;padding:10px;margin:8px 0;border-radius:5px;
+        box-sizing:border-box;font-family:monospace;}}
+        input{{background:#080c10;border:1px solid #1a2230;color:#c8d8e8;}}
+        button{{background:#00e8a2;border:none;color:#080c10;font-weight:700;cursor:pointer;}}
         </style></head><body><div class="box">
         <h3>⬆ Upload zenith.db</h3>
-        <input type="file" id="f" accept=".db"/>
-        <input type="password" id="s" placeholder="Upload secret key"/>
-        <button onclick="doUpload()">Upload</button>
-        <div id="barwrap"><div id="bar"></div></div>
-        <div id="status"></div>
-        </div>
-        <script>
-        function doUpload(){
-            var fileEl=document.getElementById('f');
-            var s=document.getElementById('s').value.trim();
-            var file=fileEl.files[0];
-            if(!file){document.getElementById('status').innerText='Pilih file dulu!';return;}
-            if(!s){document.getElementById('status').innerText='Isi secret key!';return;}
-            var xhr=new XMLHttpRequest();
-            document.getElementById('barwrap').style.display='block';
-            document.getElementById('status').innerText='Uploading '+Math.round(file.size/1024/1024)+'MB...';
-            xhr.upload.onprogress=function(e){
-                if(e.lengthComputable){
-                    var pct=Math.round(e.loaded/e.total*100);
-                    document.getElementById('bar').style.width=pct+'%';
-                    document.getElementById('status').innerText='Uploading... '+pct+'%';
-                }
-            };
-            xhr.onload=function(){
-                document.getElementById('status').innerText=xhr.status===200?xhr.responseText:'Error: '+xhr.responseText;
-            };
-            xhr.onerror=function(){document.getElementById('status').innerText='Network error!';};
-            // Secret lewat query param, file lewat raw body — hindari multipart parsing
-            xhr.open('POST','/admin/upload-db?secret='+encodeURIComponent(s));
-            xhr.setRequestHeader('Content-Type','application/octet-stream');
-            xhr.send(file);
-        }
-        </script>
-        </body></html>
+        <form method="POST" enctype="multipart/form-data">
+          <input type="file" name="dbfile" accept=".db" required/>
+          <input type="password" name="secret" placeholder="Upload secret key" required/>
+          <button type="submit">Upload ke /data/zenith.db</button>
+        </form></div></body></html>
         """
-    # POST — secret dari query param, body = raw bytes file
-    secret = request.args.get("secret", "")
+    # POST
+    secret = request.form.get("secret", "")
     if secret != SECRET:
         return "❌ Secret salah", 403
+    f = request.files.get("dbfile")
+    if not f:
+        return "❌ File tidak ditemukan", 400
     os.makedirs("/data", exist_ok=True)
-    tmp_path = "/data/zenith.db.tmp"
-    dst_path = "/data/zenith.db"
-    try:
-        with open(tmp_path, "wb") as out:
-            chunk_size = 1024 * 1024  # 1MB per chunk
-            while True:
-                chunk = request.stream.read(chunk_size)
-                if not chunk:
-                    break
-                out.write(chunk)
-        os.replace(tmp_path, dst_path)
-        size = os.path.getsize(dst_path)
-        return f"✅ Berhasil! {round(size/1024/1024,1)} MB tersimpan di /data/zenith.db"
-    except Exception as e:
-        return f"❌ Error: {e}", 500
+    f.save("/data/zenith.db")
+    size = os.path.getsize("/data/zenith.db")
+    return f"✅ Upload berhasil! zenith.db tersimpan di /data/zenith.db ({size:,} bytes). Sekarang hapus route ini dari app.py"
 
 
 
