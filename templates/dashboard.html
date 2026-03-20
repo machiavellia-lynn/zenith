@@ -105,7 +105,10 @@ header {
 }
 .stat-item .s-val.up   { color: var(--up); }
 .stat-item .s-val.down { color: var(--down); }
+.stat-item .s-val.bm   { color: #ff8c42; }
 .stat-item .s-val.neutral { color: var(--accent2); }
+.stat-item[title] { cursor: help; }
+.stat-item[title]:hover .s-label { color: var(--text); }
 
 /* ── TOOLBAR ─────────────────────────────────────── */
 .toolbar {
@@ -271,8 +274,9 @@ td:first-child { text-align: left; }
 /* ── MODAL ───────────────────────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 500;
-  background: rgba(0,0,0,.75);
+  background: rgba(0,0,0,.82);
   display: flex; align-items: center; justify-content: center;
+  padding: 24px;
   opacity: 0; pointer-events: none;
   transition: opacity .2s;
 }
@@ -282,11 +286,14 @@ td:first-child { text-align: left; }
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 10px;
-  width: min(95vw, 960px);
-  max-height: 90vh;
+  width: 100%;
+  max-width: 1100px;
+  height: 92vh;
+  max-height: 92vh;
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .modal-backdrop.open .modal { transform: scale(1); }
 
@@ -352,12 +359,182 @@ td:first-child { text-align: left; }
 .mht-v.down { color: var(--down); }
 .mht-sep { width: 1px; height: 26px; background: var(--border); }
 
-.modal-chart-wrap {
-  position: relative; flex: 1;
-  min-height: 420px; height: 480px;
+.modal-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  /* custom scrollbar — tipis & nempel di ujung kanan */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
 }
-#modalChart { width: 100%; height: 100%; }
+.modal-scroll::-webkit-scrollbar { width: 6px; }
+.modal-scroll::-webkit-scrollbar-track { background: transparent; }
+.modal-scroll::-webkit-scrollbar-thumb {
+  background: var(--border2); border-radius: 3px;
+}
+.modal-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
+.modal-chart-wrap {
+  position: relative;
+  height: 480px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+#modalChart { width: 100%; height: 100%; display: block; position: relative; overflow: visible; }
+/* Paksa LWC internal div tidak clip time axis */
+#modalChart > div { overflow: visible !important; }
+
+
+/* ── MODAL TRANSACTIONS ──────────────────────────────── */
+.modal-body {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.trx-section-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .14em; font-weight: 700;
+  color: var(--muted); text-transform: uppercase;
+  display: flex; align-items: center; gap: 12px;
+  white-space: nowrap;
+}
+.trx-section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+.trx-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.trx-date-range {
+  display: flex; align-items: center; gap: 6px;
+}
+.trx-date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 5px 8px; font-family: 'Space Mono', monospace;
+  font-size: 10px; outline: none; width: 96px;
+  letter-spacing: .04em; transition: border-color .2s;
+}
+.trx-date-input:focus { border-color: var(--accent); }
+.trx-date-input::placeholder { color: var(--muted); }
+.trx-date-arrow {
+  color: var(--muted); font-size: 11px; padding: 0 2px;
+}
+.trx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.trx-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.trx-box-header {
+  padding: 6px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+  flex-shrink: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.trx-box-header.sm { color: var(--accent2); }
+.trx-box-header.bm { color: #ff8c42; }
+.trx-box-header .trx-count {
+  color: var(--muted); font-size: 8px;
+}
+.trx-table-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.trx-table-wrap::-webkit-scrollbar { width: 5px; }
+.trx-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.trx-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.trx-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.trx-table { width: 100%; border-collapse: collapse; }
+.trx-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg);
+}
+.trx-table th {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+  text-align: right; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.trx-table th:first-child { text-align: left; }
+.trx-table td {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--text);
+  text-align: right;
+  border-bottom: 1px solid rgba(26,34,48,.5);
+  white-space: nowrap;
+}
+.trx-table td:first-child { text-align: left; color: var(--muted); }
+.trx-table tbody tr:last-child td { border-bottom: none; }
+.trx-table tbody tr:hover { background: rgba(255,255,255,.02); }
+.trx-gain-pos { color: var(--up); }
+.trx-gain-neg { color: var(--down); }
+.trx-mf-sm { color: var(--accent2); }
+.trx-mf-bm { color: #ff8c42; }
+/* ── OVERLAY TOGGLES ─────────────────────────────── */
+.overlay-toggles { display: flex; gap: 4px; margin-left: 8px; }
+.ovl-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.ovl-btn .ovl-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  opacity: .4; transition: opacity .15s;
+}
+.ovl-btn:hover { border-color: var(--text); color: var(--text); }
+.ovl-btn.active { border-color: currentColor; }
+.ovl-btn.active .ovl-dot { opacity: 1; }
+.ovl-btn.active.cm { color: #00e8a2; }
+.ovl-btn.active.sm { color: #4d9fff; }
+.ovl-btn.active.bm { color: #ff8c42; }
+
+/* overlay value panel top-left */
+.m-overlay-vals {
+  position: absolute; top: 12px; left: 14px;
+  z-index: 10; display: flex; flex-direction: column; gap: 2px;
+  pointer-events: none;
+}
+.m-ovl-row {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  opacity: 0; transition: opacity .15s;
+}
+.m-ovl-row.visible { opacity: 1; }
+.m-ovl-row .m-ovl-label {
+  font-size: 9px; font-weight: 400;
+  letter-spacing: .08em; margin-right: 6px;
+}
+
+.trx-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
+.trx-loading { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
 /* ── PIKADAY DARK THEME ──────────────────────── */
 .pika-single {
   background: var(--surface2) !important;
@@ -394,6 +571,7 @@ td:first-child { text-align: left; }
 }
 .is-today .pika-button { color: var(--accent) !important; font-weight: 700 !important; }
 .is-disabled .pika-button { color: var(--muted) !important; opacity: .4 !important; }
+.modal .pika-single { z-index: 600 !important; }
 .pika-select {
   background: var(--surface) !important;
   color: var(--text) !important;
@@ -418,27 +596,27 @@ td:first-child { text-align: left; }
 
 <!-- STATS BAR -->
 <div class="stats-bar" id="statsBar">
-  <div class="stat-item">
+  <div class="stat-item" title="Smart Money">
     <span class="s-label">SM</span>
     <span class="s-val neutral" id="sSM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Bad Money">
     <span class="s-label">BM</span>
-    <span class="s-val neutral" id="sBM">—</span>
+    <span class="s-val bm" id="sBM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Positive Money Flow">
     <span class="s-label">MF+</span>
     <span class="s-val up" id="sMFP">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Negative Money Flow">
     <span class="s-label">MF−</span>
     <span class="s-val down" id="sMFM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Net Clean Money">
     <span class="s-label">NET CM</span>
     <span class="s-val" id="sNCM">—</span>
   </div>
-  <div class="stat-item">
+  <div class="stat-item" title="Net Money Flow">
     <span class="s-label">NET MF</span>
     <span class="s-val" id="sNMF">—</span>
   </div>
@@ -455,7 +633,6 @@ td:first-child { text-align: left; }
     <div class="date-arrow">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
   </div>
-  <button class="load-btn" onclick="loadFlow()">Load</button>
   <span class="row-count" id="rowCount"></span>
 </div>
 
@@ -464,19 +641,20 @@ td:first-child { text-align: left; }
   <table id="flowTable">
     <thead>
       <tr>
-        <th onclick="sortBy('ticker')"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
-        <th onclick="sortBy('clean_money')"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
-        <th onclick="sortBy('sm_val')"       data-col="sm_val">SM VAL <span class="sort-icon"></span></th>
-        <th onclick="sortBy('bm_val')"       data-col="bm_val">BM VAL <span class="sort-icon"></span></th>
-        <th onclick="sortBy('rsm')"          data-col="rsm">RSM <span class="sort-icon"></span></th>
-        <th onclick="sortBy('mf_plus')"      data-col="mf_plus">MF+ <span class="sort-icon"></span></th>
-        <th onclick="sortBy('mf_minus')"     data-col="mf_minus">MF− <span class="sort-icon"></span></th>
-        <th onclick="sortBy('net_mf')"       data-col="net_mf">NET MF <span class="sort-icon"></span></th>
-        <th onclick="sortBy('gain_pct')"     data-col="gain_pct">GAIN% <span class="sort-icon"></span></th>
+        <th onclick="sortBy('ticker',event)"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
+        <th onclick="sortBy('price',event)"         data-col="price" title="Harga terakhir">PRICE <span class="sort-icon"></span></th>
+        <th onclick="sortBy('clean_money',event)"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
+        <th onclick="sortBy('sm_val',event)"       data-col="sm_val" title="Smart Money">SM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('bm_val',event)"       data-col="bm_val" title="Bad Money">BM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('rsm',event)"          data-col="rsm" title="Smart Money Ratio">RSM <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_plus',event)"      data-col="mf_plus" title="Positive Money Flow">MF+ <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_minus',event)"     data-col="mf_minus" title="Negative Money Flow">MF− <span class="sort-icon"></span></th>
+        <th onclick="sortBy('net_mf',event)"       data-col="net_mf" title="Net Money Flow">NET MF <span class="sort-icon"></span></th>
+        <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="% perubahan harga">GAIN% <span class="sort-icon"></span></th>
       </tr>
     </thead>
     <tbody id="flowBody">
-      <tr class="state-row"><td colspan="9"><span class="spinner-inline"></span>Memuat data...</td></tr>
+      <tr class="state-row"><td colspan="10"><span class="spinner-inline"></span>Memuat data...</td></tr>
     </tbody>
   </table>
 </div>
@@ -496,13 +674,19 @@ td:first-child { text-align: left; }
         <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
         <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
       </div>
-      <div class="modal-scale-btns">
-        <button class="mtf-btn" onclick="modalFit()" title="Fit screen">⤢</button>
-        <button class="mtf-btn" id="mBtnLog" onclick="modalToggleLog()">Log</button>
+      <div class="overlay-toggles">
+        <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
+        <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')" title="Smart Money"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
+        <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
       </div>
-      <div class="modal-price" id="mPrice">—</div>
+      <div style="flex:1"></div>
+      <div class="modal-scale-btns">
+        <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
+        <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
+      </div>
       <button class="close-btn" onclick="closeModal()">✕</button>
     </div>
+    <div class="modal-scroll">
     <div class="modal-chart-wrap">
       <div class="m-hover-tooltip" id="mHoverTooltip">
         <span class="mht-date" id="mHtDate">—</span>
@@ -514,16 +698,63 @@ td:first-child { text-align: left; }
         <div class="mht-sep"></div>
         <div class="mht-item"><span class="mht-lbl">Vol</span><span class="mht-v" id="mHtVol">—</span></div>
       </div>
+      <div class="m-overlay-vals" id="mOverlayVals">
+        <div class="m-ovl-row" id="mOvlCM" style="color:#00e8a2"><span class="m-ovl-label">CM</span><span id="mOvlCMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlSM" style="color:#4d9fff"><span class="m-ovl-label">SM</span><span id="mOvlSMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlBM" style="color:#ff8c42"><span class="m-ovl-label">BM</span><span id="mOvlBMv">—</span></div>
+      </div>
       <div id="modalChart"></div>
     </div>
+
+    <!-- TRANSAKSI SECTION -->
+    <div class="modal-body" id="modalBody">
+      <div>
+        <div class="trx-toolbar">
+          <div class="trx-section-title">Transaksi SM &amp; BM</div>
+          <div class="trx-date-range">
+            <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+            <span class="trx-date-arrow">→</span>
+            <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+          </div>
+        </div>
+        <div class="trx-grid">
+          <div class="trx-box">
+            <div class="trx-box-header sm">
+              Smart Money <span class="trx-count" id="smCount"></span>
+            </div>
+            <div class="trx-table-wrap">
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="smBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+          <div class="trx-box">
+            <div class="trx-box-header bm">
+              Bad Money <span class="trx-count" id="bmCount"></span>
+            </div>
+            <div class="trx-table-wrap">
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="bmBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div><!-- end modal-scroll -->
   </div>
 </div>
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────
 let allRows      = [];
-let sortCol      = 'clean_money';
-let sortAsc      = false;
+let sortCols     = [{ col: 'clean_money', asc: false }]; // multi-sort
 let filterText   = '';
 let modalChart   = null;
 let modalCandle  = null;
@@ -531,7 +762,13 @@ let modalVolume  = null;
 let modalTF      = '1d';
 let modalTicker  = '';
 let modalIsLog   = false;
-const INIT_CANDLES = 181;
+let modalIsAuto  = true;
+const INIT_CANDLES = 150;
+
+// Overlay state
+let ovlSeriesCM = null, ovlSeriesSM = null, ovlSeriesBM = null;
+let ovlShowCM = true, ovlShowSM = false, ovlShowBM = false;
+let overlayDataCache = []; // [{time, sm, bm, cm}]
 
 // ── Date helpers ──────────────────────────────────────────────────────
 // Input/display: DD/MM/YYYY
@@ -566,6 +803,7 @@ function autoFormatDate(input) {
 
 // ── Init dates & Pikaday ─────────────────────────────────────────────
 let pickerFrom, pickerTo;
+let trxPickerFrom, trxPickerTo;
 
 window.addEventListener('DOMContentLoaded', () => {
   const todayStr = todayDDMMYYYY();
@@ -599,10 +837,10 @@ window.addEventListener('DOMContentLoaded', () => {
     defaultDate: todayDate,
     setDefaultDate: true,
     onSelect: date => {
-      // pastikan date_to tidak lebih awal dari date_from
       if (pickerTo && date > pickerTo.getDate()) {
         pickerTo.setDate(date);
       }
+      loadFlow();
     },
   });
 
@@ -611,6 +849,36 @@ window.addEventListener('DOMContentLoaded', () => {
     field:       document.getElementById('dateTo'),
     defaultDate: todayDate,
     setDefaultDate: true,
+    onSelect: () => loadFlow(),
+  });
+
+  // ── Modal transaction date pickers ──
+  trxPickerFrom = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('trxDateFrom'),
+    defaultDate: todayDate,
+    setDefaultDate: true,
+    container:   document.getElementById('modalBox'),
+    onSelect: date => {
+      if (trxPickerTo && date > trxPickerTo.getDate()) {
+        trxPickerTo.setDate(date);
+      }
+      loadTransactions();
+    },
+  });
+
+  trxPickerTo = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('trxDateTo'),
+    defaultDate: todayDate,
+    setDefaultDate: true,
+    container:   document.getElementById('modalBox'),
+    onSelect: () => loadTransactions(),
+  });
+
+  // date mask for trx inputs
+  document.querySelectorAll('.trx-date-input').forEach(el => {
+    el.addEventListener('input', () => autoFormatDate(el));
   });
 
   loadFlow();
@@ -664,7 +932,7 @@ function updateStats(t) {
     el.className = 's-val ' + (cls || (v >= 0 ? 'up' : 'down'));
   };
   set('sSM',  t.sm,     'neutral');
-  set('sBM',  t.bm,     'neutral');
+  set('sBM',  t.bm,     'bm');
 
 
   set('sNCM', t.net_cm);
@@ -673,15 +941,44 @@ function updateStats(t) {
 }
 
 // ── Sort ──────────────────────────────────────────────────────────────
-function sortBy(col) {
-  if (sortCol === col) sortAsc = !sortAsc;
-  else { sortCol = col; sortAsc = col === 'ticker'; }
-  document.querySelectorAll('thead th').forEach(th => {
+// Klik biasa   → primary sort (reset semua sort lain)
+// Shift+klik   → tambah/toggle kolom sort sekunder
+function sortBy(col, event) {
+  if (event) event.stopPropagation();
+  const shift = event && event.shiftKey;
+
+  if (shift) {
+    // Shift+klik: tambah/toggle kolom sort sekunder
+    const idx = sortCols.findIndex(s => s.col === col);
+    if (idx >= 0) {
+      sortCols[idx].asc = !sortCols[idx].asc;
+    } else {
+      sortCols.push({ col, asc: col === 'ticker' });
+    }
+  } else {
+    // Klik biasa: primary sort
+    const idx = sortCols.findIndex(s => s.col === col);
+    if (idx === 0 && sortCols.length === 1) {
+      sortCols[0].asc = !sortCols[0].asc;
+    } else {
+      sortCols.length = 0;
+      sortCols.push({ col, asc: col === 'ticker' });
+    }
+  }
+
+  // Update header icons
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
     const c  = th.dataset.col;
     const si = th.querySelector('.sort-icon');
-    th.classList.toggle('sorted', c === sortCol);
-    si.textContent = c === sortCol ? (sortAsc ? '▲' : '▼') : '';
+    const i  = sortCols.findIndex(s => s.col === c);
+    th.classList.toggle('sorted', i >= 0);
+    if (i >= 0) {
+      si.textContent = (sortCols[i].asc ? '▲' : '▼') + (sortCols.length > 1 ? (i+1) : '');
+    } else {
+      si.textContent = '';
+    }
   });
+
   renderTable();
 }
 
@@ -691,22 +988,27 @@ function renderTable() {
     !filterText || r.ticker.includes(filterText)
   );
 
+  // Multi-sort
   rows.sort((a, b) => {
-    let av = a[sortCol], bv = b[sortCol];
-    if (av === null || av === undefined) av = sortAsc ? Infinity : -Infinity;
-    if (bv === null || bv === undefined) bv = sortAsc ? Infinity : -Infinity;
-    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
-    return sortAsc ? av - bv : bv - av;
+    for (const { col, asc } of sortCols) {
+      let av = a[col], bv = b[col];
+      if (av === null || av === undefined) av = asc ? Infinity : -Infinity;
+      if (bv === null || bv === undefined) bv = asc ? Infinity : -Infinity;
+      let cmp;
+      if (typeof av === 'string') cmp = asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      else cmp = asc ? av - bv : bv - av;
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
   });
 
   document.getElementById('rowCount').textContent = `${rows.length} ticker`;
 
-  // Max CM for bar width
   const maxCM = Math.max(...rows.map(r => Math.abs(r.clean_money)), 1);
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="9">Tidak ada data untuk tanggal ini</td></tr>`;
+    tbody.innerHTML = `<tr class="state-row"><td colspan="10">Tidak ada data untuk tanggal ini</td></tr>`;
     return;
   }
 
@@ -723,6 +1025,7 @@ function renderTable() {
 
     return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
+      <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
       <td class="cm-cell">
         <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
         <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
@@ -748,11 +1051,11 @@ function rsmToColor(rsm) {
 
 function showLoading() {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="9"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+    `<tr class="state-row"><td colspan="10"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="9">⚠ ${msg}</td></tr>`;
+    `<tr class="state-row"><td colspan="10">⚠ ${msg}</td></tr>`;
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────
@@ -760,20 +1063,47 @@ function openModal(ticker) {
   modalTicker = ticker;
   modalTF     = '1d';
   modalIsLog  = false;
+  modalIsAuto = true;
   document.getElementById('mBtnLog').classList.remove('active');
+  document.getElementById('mBtnAuto').classList.add('active');
   document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
     b.classList.toggle('active', b.dataset.tf === '1d')
   );
   document.getElementById('mTicker').textContent = ticker;
   document.getElementById('mName').textContent   = '—';
-  document.getElementById('mPrice').textContent  = '—';
+  // Sync overlay buttons
+  document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+  document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+  document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+  // Sync trx date pickers from main toolbar
+  const mainFrom = document.getElementById('dateFrom').value;
+  const mainTo   = document.getElementById('dateTo').value;
+  document.getElementById('trxDateFrom').value = mainFrom;
+  document.getElementById('trxDateTo').value   = mainTo;
+  if (trxPickerFrom && mainFrom) {
+    const [d,m,y] = mainFrom.split('/').map(Number);
+    trxPickerFrom.setDate(new Date(y, m-1, d), true);
+  }
+  if (trxPickerTo && mainTo) {
+    const [d,m,y] = mainTo.split('/').map(Number);
+    trxPickerTo.setDate(new Date(y, m-1, d), true);
+  }
   document.getElementById('modalBackdrop').classList.add('open');
-  initModalChart();
-  loadModalChart();
+  // Defer agar modal selesai render dulu, baru init chart
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      initModalChart();
+      loadModalChart();
+      loadTransactions();
+    });
+  });
 }
 function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
+  if (window._modalChartRO) { window._modalChartRO.disconnect(); window._modalChartRO = null; }
   if (modalChart) { modalChart.remove(); modalChart = null; modalCandle = null; modalVolume = null; }
+  ovlSeriesCM = null; ovlSeriesSM = null; ovlSeriesBM = null;
+  overlayDataCache = [];
 }
 function handleBackdropClick(e) {
   if (e.target === document.getElementById('modalBackdrop')) closeModal();
@@ -783,7 +1113,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 function initModalChart() {
   if (modalChart) { modalChart.remove(); modalChart = null; }
   const container = document.getElementById('modalChart');
+  const rect = container.getBoundingClientRect();
   modalChart = LightweightCharts.createChart(container, {
+    width: Math.floor(rect.width),
+    height: Math.floor(rect.height),
     layout: { background: { color: '#0e1318' }, textColor: '#4a6070' },
     grid:   { vertLines: { color: '#1a2230' }, horzLines: { color: '#1a2230' } },
     crosshair: {
@@ -804,8 +1137,6 @@ function initModalChart() {
       },
     },
     localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
-    width:  container.clientWidth || 900,
-    height: container.clientHeight || 460,
   });
 
   modalCandle = modalChart.addCandlestickSeries({
@@ -818,6 +1149,40 @@ function initModalChart() {
     priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
   });
   modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+  // Apply auto scale default
+  modalChart.priceScale('right').applyOptions({ autoScale: true, scaleMargins: { top: 0.1, bottom: 0.2 } });
+
+  // ── Overlay line series (separate scale) ──
+  modalChart.priceScale('overlay').applyOptions({
+    scaleMargins: { top: 0.05, bottom: 0.2 },
+    visible: false,        // hide overlay Y axis
+    autoScale: true,
+  });
+
+  ovlSeriesCM = modalChart.addLineSeries({
+    color: '#00e8a2', lineWidth: 2, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 4,
+  });
+  ovlSeriesSM = modalChart.addLineSeries({
+    color: '#4d9fff', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+  ovlSeriesBM = modalChart.addLineSeries({
+    color: '#ff8c42', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+
+  // Apply initial visibility
+  ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+
+  // Update overlay value panel visibility
+  updateOvlValVisibility();
 
   // Hover tooltip
   modalChart.subscribeCrosshairMove(param => {
@@ -849,12 +1214,36 @@ function initModalChart() {
     const vb = param.seriesData.get(modalVolume);
     document.getElementById('mHtVol').textContent = vb ? fmtV(vb.value) : '—';
     tt.classList.add('visible');
+
+    // Overlay values — find matching overlay point for this candle time
+    const fmtMf = v => {
+      if (v === null || v === undefined) return '—';
+      const sign = v > 0 ? '+' : '';
+      if (Math.abs(v) >= 1000) return sign + (v/1000).toFixed(1) + 'B';
+      return sign + v.toFixed(1) + 'M';
+    };
+    const ovlPoint = overlayDataCache.find(p => p.time === param.time);
+    document.getElementById('mOvlCMv').textContent = ovlPoint ? fmtMf(ovlPoint.cm) : '—';
+    document.getElementById('mOvlSMv').textContent = ovlPoint ? fmtMf(ovlPoint.sm) : '—';
+    document.getElementById('mOvlBMv').textContent = ovlPoint ? fmtMf(ovlPoint.bm) : '—';
+    document.getElementById('mOvlCM').classList.toggle('visible', ovlShowCM && !!ovlPoint);
+    document.getElementById('mOvlSM').classList.toggle('visible', ovlShowSM && !!ovlPoint);
+    document.getElementById('mOvlBM').classList.toggle('visible', ovlShowBM && !!ovlPoint);
   });
 
-  const ro = new ResizeObserver(() => {
-    if (modalChart) modalChart.applyOptions({ width: container.clientWidth });
+  // ResizeObserver — handle resize tanpa autoSize
+  if (window._modalChartRO) window._modalChartRO.disconnect();
+  window._modalChartRO = new ResizeObserver(entries => {
+    for (const e of entries) {
+      if (modalChart) {
+        modalChart.applyOptions({
+          width: Math.floor(e.contentRect.width),
+          height: Math.floor(e.contentRect.height),
+        });
+      }
+    }
   });
-  ro.observe(container);
+  window._modalChartRO.observe(container);
 }
 
 async function loadModalChart() {
@@ -878,9 +1267,125 @@ async function loadModalChart() {
     } else {
       modalChart.timeScale().fitContent();
     }
-    if (data.name)  document.getElementById('mName').textContent  = data.name;
-    if (data.price) document.getElementById('mPrice').textContent = data.price.toLocaleString('id-ID');
+    if (data.name) document.getElementById('mName').textContent = data.name;
+    // Load overlay data after candles
+    loadOverlayData(candles);
   } catch (_) {}
+}
+
+async function loadOverlayData(candles) {
+  if (!modalChart || !ovlSeriesCM) return;
+  try {
+    const res  = await fetch(`/api/overlay?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error || !data.points || !data.points.length) {
+      overlayDataCache = [];
+      ovlSeriesCM.setData([]);
+      ovlSeriesSM.setData([]);
+      ovlSeriesBM.setData([]);
+      return;
+    }
+
+    // Build candle time set for snapping overlay points
+    const candleTimes = new Set(candles.map(c => c.time));
+    const candleArr   = candles.map(c => c.time).sort((a,b) => a - b);
+
+    // Snap overlay point to nearest candle time
+    function snapTime(t) {
+      if (candleTimes.has(t)) return t;
+      let best = null, bestDist = Infinity;
+      for (const ct of candleArr) {
+        const dist = Math.abs(ct - t);
+        if (dist < bestDist) { bestDist = dist; best = ct; }
+        if (ct > t) break; // sorted, no need to keep going
+      }
+      return best;
+    }
+
+    // Snap and deduplicate
+    const cmData = [], smData = [], bmData = [];
+    const seen = new Set();
+    overlayDataCache = [];
+
+    for (const p of data.points) {
+      const st = snapTime(p.time);
+      if (!st || seen.has(st)) continue;
+      seen.add(st);
+      cmData.push({ time: st, value: p.cm });
+      smData.push({ time: st, value: p.sm });
+      bmData.push({ time: st, value: p.bm });
+      overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
+    }
+
+    ovlSeriesCM.setData(cmData);
+    ovlSeriesSM.setData(smData);
+    ovlSeriesBM.setData(bmData);
+  } catch (_) {
+    overlayDataCache = [];
+  }
+}
+
+function toggleOverlay(which) {
+  if (which === 'cm') {
+    ovlShowCM = !ovlShowCM;
+    document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+    if (ovlSeriesCM) ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  } else if (which === 'sm') {
+    ovlShowSM = !ovlShowSM;
+    document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+    if (ovlSeriesSM) ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  } else if (which === 'bm') {
+    ovlShowBM = !ovlShowBM;
+    document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+    if (ovlSeriesBM) ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+  }
+  updateOvlValVisibility();
+}
+
+function updateOvlValVisibility() {
+  document.getElementById('mOvlCM').style.display = ovlShowCM ? '' : 'none';
+  document.getElementById('mOvlSM').style.display = ovlShowSM ? '' : 'none';
+  document.getElementById('mOvlBM').style.display = ovlShowBM ? '' : 'none';
+}
+
+
+async function loadTransactions() {
+  const df = document.getElementById('trxDateFrom').value.trim();
+  const dt = document.getElementById('trxDateTo').value.trim();
+  if (!df || !dt) return;
+  const url = `/api/transactions?ticker=${modalTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+
+  const fmtGain = g => {
+    if (g === null || g === undefined) return '—';
+    const cls = g > 0 ? 'trx-gain-pos' : g < 0 ? 'trx-gain-neg' : '';
+    return `<span class="${cls}">${g > 0 ? '+' : ''}${g.toFixed(2)}%</span>`;
+  };
+
+  const buildRows = (rows, mfCls) => {
+    if (!rows.length) return `<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;
+    return rows.map(r => `<tr>
+      <td>${r.time}</td>
+      <td>${r.price ? r.price.toLocaleString('id-ID') : '—'}</td>
+      <td>${fmtGain(r.gain_pct)}</td>
+      <td><span class="${mfCls}">${r.mf || '—'}</span></td>
+      <td>${r.vol_x ? r.vol_x.toFixed(1) + 'x' : '—'}</td>
+    </tr>`).join('');
+  };
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('smCount').textContent = `(${data.sm_count}TX)`;
+    document.getElementById('bmCount').textContent = `(${data.bm_count}TX)`;
+    document.getElementById('smBody').innerHTML = buildRows(data.sm, 'trx-mf-sm');
+    document.getElementById('bmBody').innerHTML = buildRows(data.bm, 'trx-mf-bm');
+  } catch (e) {
+    const err = `<tr><td colspan="5" class="trx-empty">⚠ ${e.message}</td></tr>`;
+    document.getElementById('smBody').innerHTML = err;
+    document.getElementById('bmBody').innerHTML = err;
+  }
 }
 
 function setModalTF(tf) {
@@ -890,9 +1395,6 @@ function setModalTF(tf) {
   );
   loadModalChart();
 }
-function modalFit() {
-  if (modalChart) modalChart.timeScale().fitContent();
-}
 function modalToggleLog() {
   if (!modalChart) return;
   modalIsLog = !modalIsLog;
@@ -900,10 +1402,26 @@ function modalToggleLog() {
   document.getElementById('mBtnLog').classList.toggle('active', modalIsLog);
 }
 
-// ── Enter key on date ─────────────────────────────────────────────────
-document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && (e.target.id === 'dateFrom' || e.target.id === 'dateTo')) loadFlow();
-});
+function modalToggleAuto() {
+  if (!modalChart) return;
+  modalIsAuto = !modalIsAuto;
+  modalChart.priceScale('right').applyOptions({
+    autoScale: modalIsAuto,
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  });
+  modalChart.applyOptions({
+    handleScale: {
+      axisPressedMouseMove: {
+        price: !modalIsAuto,
+        time: true,
+      },
+    },
+  });
+  document.getElementById('mBtnAuto').classList.toggle('active', modalIsAuto);
+}
+
+// ── Escape tutup modal ────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 </script>
 </body>
 </html>
