@@ -362,15 +362,29 @@ td:first-child { text-align: left; }
 .modal-scroll {
   flex: 1 1 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  /* custom scrollbar — tipis & nempel di ujung kanan */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
 }
+.modal-scroll::-webkit-scrollbar { width: 6px; }
+.modal-scroll::-webkit-scrollbar-track { background: transparent; }
+.modal-scroll::-webkit-scrollbar-thumb {
+  background: var(--border2); border-radius: 3px;
+}
+.modal-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
 .modal-chart-wrap {
   position: relative;
-  height: 420px;
+  height: 480px;
   flex-shrink: 0;
+  overflow: visible;
 }
-#modalChart { width: 100%; height: 100%; display: block; position: relative; }
+#modalChart { width: 100%; height: 100%; display: block; position: relative; overflow: visible; }
+/* Paksa LWC internal div tidak clip time axis */
+#modalChart > div { overflow: visible !important; }
 
 
 /* ── MODAL TRANSACTIONS ──────────────────────────────── */
@@ -395,6 +409,9 @@ td:first-child { text-align: left; }
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 .trx-box-header {
@@ -404,13 +421,36 @@ td:first-child { text-align: left; }
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
   display: flex; gap: 8px; align-items: center;
+  flex-shrink: 0;
+  background: var(--bg);
+  z-index: 1;
 }
 .trx-box-header.sm { color: var(--accent2); }
 .trx-box-header.bm { color: #ff8c42; }
 .trx-box-header .trx-count {
   color: var(--muted); font-size: 8px;
 }
-.trx-table { width: 100%; border-collapse: collapse; }
+.trx-table {
+  width: 100%; border-collapse: collapse;
+  display: block;
+  overflow-y: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.trx-table::-webkit-scrollbar { width: 5px; }
+.trx-table::-webkit-scrollbar-track { background: transparent; }
+.trx-table::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.trx-table::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.trx-table thead {
+  display: table; width: 100%; table-layout: fixed;
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg);
+}
+.trx-table tbody {
+  display: table; width: 100%; table-layout: fixed;
+}
 .trx-table th {
   padding: 5px 10px;
   font-family: 'Space Mono', monospace;
@@ -928,6 +968,7 @@ function openModal(ticker) {
 }
 function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
+  if (window._modalChartRO) { window._modalChartRO.disconnect(); window._modalChartRO = null; }
   if (modalChart) { modalChart.remove(); modalChart = null; modalCandle = null; modalVolume = null; }
 }
 function handleBackdropClick(e) {
@@ -938,8 +979,10 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal()
 function initModalChart() {
   if (modalChart) { modalChart.remove(); modalChart = null; }
   const container = document.getElementById('modalChart');
+  const rect = container.getBoundingClientRect();
   modalChart = LightweightCharts.createChart(container, {
-    autoSize: true,
+    width: Math.floor(rect.width),
+    height: Math.floor(rect.height),
     layout: { background: { color: '#0e1318' }, textColor: '#4a6070' },
     grid:   { vertLines: { color: '#1a2230' }, horzLines: { color: '#1a2230' } },
     crosshair: {
@@ -1008,7 +1051,19 @@ function initModalChart() {
     tt.classList.add('visible');
   });
 
-  // autoSize:true sudah handle resize otomatis
+  // ResizeObserver — handle resize tanpa autoSize
+  if (window._modalChartRO) window._modalChartRO.disconnect();
+  window._modalChartRO = new ResizeObserver(entries => {
+    for (const e of entries) {
+      if (modalChart) {
+        modalChart.applyOptions({
+          width: Math.floor(e.contentRect.width),
+          height: Math.floor(e.contentRect.height),
+        });
+      }
+    }
+  });
+  window._modalChartRO.observe(container);
 }
 
 async function loadModalChart() {
