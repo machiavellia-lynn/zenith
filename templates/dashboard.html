@@ -274,8 +274,9 @@ td:first-child { text-align: left; }
 /* ── MODAL ───────────────────────────────────────── */
 .modal-backdrop {
   position: fixed; inset: 0; z-index: 500;
-  background: rgba(0,0,0,.75);
+  background: rgba(0,0,0,.82);
   display: flex; align-items: center; justify-content: center;
+  padding: 24px;
   opacity: 0; pointer-events: none;
   transition: opacity .2s;
 }
@@ -285,12 +286,13 @@ td:first-child { text-align: left; }
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 10px;
-  width: min(88vw, 1100px);
-  height: min(88vh, 860px);
-  max-height: 90vh;
+  width: 100%;
+  max-width: 1100px;
+  height: min(84vh, 840px);
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .modal-backdrop.open .modal { transform: scale(1); }
 
