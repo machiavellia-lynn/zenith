@@ -36,15 +36,15 @@ CACHE_TTL        = 300  # detik
 def fetch_gain_range(ticker: str, date_from: str, date_to: str):
     """
     Hitung % change harga saham dari date_from ke date_to.
-    date_from & date_to format: DD-MM-YYYY
-    Return (gain_pct, close_price_at_date_to)
+    Single day  → close hari itu vs close hari sebelumnya (dari candle array)
+    Multi day   → close date_to vs close date_from
     """
     symbol = f"{ticker}.JK"
     try:
         d0 = parse_date(date_from)
         d1 = parse_date(date_to)
-        # Ambil sedikit lebih lebar agar dapat candle di kedua ujung
-        p1 = int((datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc) - timedelta(days=5)).timestamp())
+        # Ambil +7 hari sebelum date_from agar ada prev candle
+        p1 = int((datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc) - timedelta(days=7)).timestamp())
         p2 = int((datetime(d1.year, d1.month, d1.day, tzinfo=timezone.utc) + timedelta(days=2)).timestamp())
 
         resp = requests.get(
@@ -68,45 +68,52 @@ def fetch_gain_range(ticker: str, date_from: str, date_to: str):
         quote      = r.get("indicators", {}).get("quote", [{}])[0]
         closes     = quote.get("close", [])
 
-        # Pasangkan timestamp → close, filter None
+        # Build list (date_str YYYY-MM-DD, close) — filter None/0
         candles = []
         for i, ts in enumerate(timestamps):
             c = closes[i] if i < len(closes) else None
-            if c is None or float(c) <= 0:
+            if not c or float(c) <= 0:
                 continue
-            candles.append((ts, float(c)))
+            dt   = datetime.fromtimestamp(ts, tz=timezone.utc)
+            candles.append((dt.strftime("%Y-%m-%d"), float(c)))
 
-        if len(candles) < 1:
+        if not candles:
             return None, None
 
-        # Kalau single day: pakai prev close dari meta vs close hari itu
+        d0_str = d0.strftime("%Y-%m-%d")
+        d1_str = d1.strftime("%Y-%m-%d")
+
+        # Cari close yang paling dekat dengan d0 dan d1 (≤ target date)
+        def find_close_on_or_before(target_str):
+            best = None
+            for date_str, close in candles:
+                if date_str <= target_str:
+                    best = (date_str, close)
+            return best
+
+        result_d1 = find_close_on_or_before(d1_str)
+        if not result_d1:
+            return None, None
+
+        close_d1 = result_d1[1]
+        price    = int(round(close_d1))
+
         if d0 == d1:
-            meta     = r.get("meta", {})
-            prev_raw = meta.get("chartPreviousClose") or meta.get("previousClose")
-            price_raw = meta.get("regularMarketPrice")
-            if prev_raw and price_raw and float(prev_raw) > 0:
-                gain = round((float(price_raw) - float(prev_raw)) / float(prev_raw) * 100, 2)
-                return gain, int(round(float(price_raw)))
-            # fallback: pakai candle pertama open vs terakhir close
-            if len(candles) >= 1:
-                close_last = candles[-1][1]
-                quote_open = quote.get("open", [])
-                open_first = None
-                for i, ts in enumerate(timestamps):
-                    o = quote_open[i] if i < len(quote_open) else None
-                    if o and float(o) > 0:
-                        open_first = float(o)
-                        break
-                if open_first:
-                    gain = round((close_last - open_first) / open_first * 100, 2)
-                    return gain, int(round(close_last))
-            return None, None
-
-        # Multi-day: close hari terakhir vs close hari pertama
-        close_first = candles[0][1]
-        close_last  = candles[-1][1]
-        gain = round((close_last - close_first) / close_first * 100, 2)
-        return gain, int(round(close_last))
+            # Single day: bandingkan close d1 vs candle sebelumnya
+            idx = next((i for i, (ds, _) in enumerate(candles) if ds == result_d1[0]), None)
+            if idx is not None and idx > 0:
+                close_prev = candles[idx - 1][1]
+                gain = round((close_d1 - close_prev) / close_prev * 100, 2)
+                return gain, price
+            return None, price
+        else:
+            # Multi day: close d1 vs close d0
+            result_d0 = find_close_on_or_before(d0_str)
+            if not result_d0 or result_d0[1] <= 0:
+                return None, price
+            close_d0 = result_d0[1]
+            gain = round((close_d1 - close_d0) / close_d0 * 100, 2)
+            return gain, price
 
     except Exception:
         return None, None
@@ -226,8 +233,8 @@ def flow():
         if t not in data:
             data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": 0, "mf_minus": 0}
         if row["channel"] == "smart":
-            data[t]["sm_val"]  += row["val"]  or 0
-            data[t]["mf_plus"] += row["mf"]   or 0
+            data[t]["sm_val"]  += row["val"] or 0
+            data[t]["mf_plus"] += row["mf"]  or 0
         else:
             data[t]["bm_val"]   += row["val"] or 0
             data[t]["mf_minus"] += row["mf"]  or 0
@@ -235,7 +242,6 @@ def flow():
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Fetch gain% berdasarkan rentang tanggal yang dipilih user
     gains = get_gains_batch(list(data.keys()), date_from, date_to)
 
     tickers = []
@@ -245,12 +251,10 @@ def flow():
         cm  = round(sm - bm, 2)
         rsm = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
 
-        # MF: hanya tampilkan kalau ada data (tidak semua 0)
-        mfp_raw = d["mf_plus"]
-        mfm_raw = abs(d["mf_minus"])
-        mfp  = round(mfp_raw, 2) if mfp_raw else None
-        mfm  = round(mfm_raw, 2) if mfm_raw else None
-        net  = round((mfp_raw - abs(d["mf_minus"])), 2) if (mfp_raw or d["mf_minus"]) else None
+        # MF: None kalau semua 0 (belum ada data dari sub-channel MF)
+        mfp = round(d["mf_plus"],         2) if d["mf_plus"]  else None
+        mfm = round(abs(d["mf_minus"]),   2) if d["mf_minus"] else None
+        net = round(d["mf_plus"] - abs(d["mf_minus"]), 2) if (d["mf_plus"] or d["mf_minus"]) else None
 
         g = gains.get(t, {})
         tickers.append({
@@ -269,14 +273,17 @@ def flow():
     # Sort default: clean_money desc
     tickers.sort(key=lambda x: x["clean_money"], reverse=True)
 
-    # Totals untuk stats bar
+    def safe_sum(key):
+        total = round(sum(x[key] or 0 for x in tickers), 2)
+        return total if total != 0 else None
+
     totals = {
         "sm":       round(sum(x["sm_val"]      for x in tickers), 2),
         "bm":       round(sum(x["bm_val"]      for x in tickers), 2),
-        "mf_plus":  round(sum(x["mf_plus"]  or 0 for x in tickers), 2),
-        "mf_minus": round(sum(x["mf_minus"] or 0 for x in tickers), 2),
-        "net_cm":   round(sum(x["clean_money"]  for x in tickers), 2),
-        "net_mf":   round(sum(x["net_mf"]   or 0 for x in tickers), 2),
+        "mf_plus":  safe_sum("mf_plus"),
+        "mf_minus": safe_sum("mf_minus"),
+        "net_cm":   round(sum(x["clean_money"] for x in tickers), 2),
+        "net_mf":   safe_sum("net_mf"),
         "count":    len(tickers),
     }
 

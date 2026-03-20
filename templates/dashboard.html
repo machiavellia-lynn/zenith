@@ -121,11 +121,12 @@ header {
   background: var(--bg); border: 1px solid var(--border);
   color: var(--text); border-radius: 5px;
   padding: 6px 10px; font-family: 'Space Mono', monospace;
-  font-size: 11px; outline: none;
-  color-scheme: dark;
-  transition: border-color .2s; cursor: pointer;
+  font-size: 11px; outline: none; width: 108px;
+  letter-spacing: .04em;
+  transition: border-color .2s;
 }
 .date-input:focus { border-color: var(--accent); }
+.date-input::placeholder { color: var(--muted); }
 .date-arrow {
   width: 28px; height: 28px;
   background: var(--border); border: 1px solid var(--border2);
@@ -406,9 +407,9 @@ td:first-child { text-align: left; }
 <!-- TOOLBAR -->
 <div class="toolbar">
   <div class="date-range">
-    <input type="date" class="date-input" id="dateFrom"/>
+    <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
     <div class="date-arrow">→</div>
-    <input type="date" class="date-input" id="dateTo"/>
+    <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
   </div>
   <button class="load-btn" onclick="loadFlow()">Load</button>
   <span class="row-count" id="rowCount"></span>
@@ -489,24 +490,47 @@ let modalIsLog   = false;
 const INIT_CANDLES = 181;
 
 // ── Date helpers ──────────────────────────────────────────────────────
-function toInputDate(ddmmyyyy) {
-  const [d, m, y] = ddmmyyyy.split('-');
-  return `${y}-${m}-${d}`;
+// Input/display: DD/MM/YYYY
+// API: DD-MM-YYYY
+
+function displayToApi(ddslashmmslashyyyy) {
+  // DD/MM/YYYY → DD-MM-YYYY
+  return ddslashmmslashyyyy.replace(/\//g, '-');
 }
-function fromInputDate(yyyymmdd) {
-  const [y, m, d] = yyyymmdd.split('-');
-  return `${d}-${m}-${y}`;
+function todayDDMMYYYY() {
+  // Pakai WIB (UTC+7)
+  const now = new Date(Date.now() + 7 * 3600 * 1000);
+  const d   = String(now.getUTCDate()).padStart(2, '0');
+  const m   = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const y   = now.getUTCFullYear();
+  return `${d}/${m}/${y}`;
 }
-function todayWIB() {
-  const now = new Date(Date.now() + 7*3600*1000);
-  return now.toISOString().slice(0,10);
+function isValidDate(s) {
+  // Validasi DD/MM/YYYY
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+  const [d, m, y] = s.split('/').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+function autoFormatDate(input) {
+  // Auto-insert slash saat mengetik
+  let v = input.value.replace(/\D/g, '');
+  if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  if (v.length >= 6) v = v.slice(0,5) + '/' + v.slice(5);
+  input.value = v.slice(0, 10);
 }
 
 // ── Init dates ────────────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded', () => {
-  const t = todayWIB();
+  const t = todayDDMMYYYY();
   document.getElementById('dateFrom').value = t;
   document.getElementById('dateTo').value   = t;
+
+  // Auto-format saat mengetik
+  ['dateFrom', 'dateTo'].forEach(id => {
+    document.getElementById(id).addEventListener('input', e => autoFormatDate(e.target));
+  });
+
   loadFlow();
 
   document.getElementById('tickerFilter').addEventListener('input', e => {
@@ -517,16 +541,19 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // ── Load flow data ────────────────────────────────────────────────────
 async function loadFlow() {
-  const df = document.getElementById('dateFrom').value;
-  const dt = document.getElementById('dateTo').value;
-  if (!df || !dt) return;
+  const df = document.getElementById('dateFrom').value.trim();
+  const dt = document.getElementById('dateTo').value.trim();
+
+  if (!isValidDate(df) || !isValidDate(dt)) {
+    showError('Format tanggal salah. Gunakan DD/MM/YYYY');
+    return;
+  }
 
   showLoading();
   try {
-    const res  = await fetch(`/api/flow?date_from=${fromInputDate(df)}&date_to=${fromInputDate(dt)}`);
+    const res  = await fetch(`/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-
     allRows = data.tickers || [];
     updateStats(data.totals || {});
     renderTable();
@@ -544,17 +571,22 @@ function fmtM(v) {
   return s + abs.toFixed(1) + 'M';
 }
 function updateStats(t) {
+  const setV = (id, v, cls) => {
+    const el = document.getElementById(id);
+    el.textContent = (v !== null && v !== undefined) ? fmtM(v) : '—';
+    el.className = 's-val ' + (cls || (v !== null && v >= 0 ? 'up' : 'down'));
+  };
   const set = (id, v, cls) => {
     const el = document.getElementById(id);
     el.textContent = fmtM(v);
     el.className = 's-val ' + (cls || (v >= 0 ? 'up' : 'down'));
   };
-  set('sSM',   t.sm,       'neutral');
-  set('sBM',   t.bm,       'neutral');
-  set('sMFP',  t.mf_plus,  'up');
-  set('sMFM',  t.mf_minus, 'down');
-  set('sNCM',  t.net_cm);
-  set('sNMF',  t.net_mf);
+  set('sSM',  t.sm,     'neutral');
+  set('sBM',  t.bm,     'neutral');
+
+
+  set('sNCM', t.net_cm);
+
   document.getElementById('sCount').textContent = t.count || '—';
 }
 
@@ -616,9 +648,9 @@ function renderTable() {
       <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
       <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
       <td><span class="rsm-val" style="color:${rsmColor}">${r.rsm.toFixed(1)}%</span></td>
-      <td><span class="td-num mfp">${fmtM(r.mf_plus)}</span></td>
-      <td><span class="td-num mfm">${fmtM(r.mf_minus)}</span></td>
-      <td><span class="td-num ${r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${fmtM(r.net_mf)}</span></td>
+      <td><span class="td-num mfp">${r.mf_plus  !== null ? fmtM(r.mf_plus)  : '—'}</span></td>
+      <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
+      <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? fmtM(r.net_mf) : '—'}</span></td>
       <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
     </tr>`;
   }).join('');
@@ -788,7 +820,7 @@ function modalToggleLog() {
 
 // ── Enter key on date ─────────────────────────────────────────────────
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && e.target.classList.contains('date-input')) loadFlow();
+  if (e.key === 'Enter' && (e.target.id === 'dateFrom' || e.target.id === 'dateTo')) loadFlow();
 });
 </script>
 </body>
