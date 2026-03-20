@@ -285,8 +285,8 @@ td:first-child { text-align: left; }
   background: var(--surface);
   border: 1px solid var(--border2);
   border-radius: 10px;
-  width: min(90vw, 1400px);
-  max-height: 85vh;
+  width: min(88vw, 1080px);
+  max-height: 82vh;
   display: flex; flex-direction: column;
   transform: scale(.97); transition: transform .2s;
   overflow: hidden;
@@ -499,11 +499,11 @@ td:first-child { text-align: left; }
         <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
         <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
       </div>
+      <div style="flex:1"></div>
       <div class="modal-scale-btns">
         <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
         <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
       </div>
-      <div class="modal-price" id="mPrice">—</div>
       <button class="close-btn" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-chart-wrap">
@@ -534,7 +534,7 @@ let modalTF      = '1d';
 let modalTicker  = '';
 let modalIsLog   = false;
 let modalIsAuto  = true;
-const INIT_CANDLES = 180;
+const INIT_CANDLES = 150;
 
 // ── Date helpers ──────────────────────────────────────────────────────
 // Input/display: DD/MM/YYYY
@@ -807,7 +807,6 @@ function openModal(ticker) {
   );
   document.getElementById('mTicker').textContent = ticker;
   document.getElementById('mName').textContent   = '—';
-  document.getElementById('mPrice').textContent  = '—';
   document.getElementById('modalBackdrop').classList.add('open');
   initModalChart();
   loadModalChart();
@@ -922,8 +921,7 @@ async function loadModalChart() {
     } else {
       modalChart.timeScale().fitContent();
     }
-    if (data.name)  document.getElementById('mName').textContent  = data.name;
-    if (data.price) document.getElementById('mPrice').textContent = data.price.toLocaleString('id-ID');
+    if (data.name) document.getElementById('mName').textContent = data.name;
   } catch (_) {}
 }
 

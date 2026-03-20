@@ -36,16 +36,17 @@ CACHE_TTL        = 300  # detik
 def fetch_gain_range(ticker: str, date_from: str, date_to: str):
     """
     Hitung % change harga saham dari date_from ke date_to.
-    Single day  → close hari itu vs close hari sebelumnya (dari candle array)
+    Single day  → close hari itu vs close hari sebelumnya
     Multi day   → close date_to vs close date_from
     """
     symbol = f"{ticker}.JK"
     try:
         d0 = parse_date(date_from)
         d1 = parse_date(date_to)
-        # Ambil +7 hari sebelum date_from agar ada prev candle
-        p1 = int((datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc) - timedelta(days=7)).timestamp())
-        p2 = int((datetime(d1.year, d1.month, d1.day, tzinfo=timezone.utc) + timedelta(days=2)).timestamp())
+        # Ambil 10 hari sebelum date_from agar ada prev candle
+        # +3 hari setelah date_to agar candle hari itu pasti masuk
+        p1 = int((datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc) - timedelta(days=10)).timestamp())
+        p2 = int((datetime(d1.year, d1.month, d1.day, tzinfo=timezone.utc) + timedelta(days=3)).timestamp())
 
         resp = requests.get(
             f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
@@ -56,7 +57,7 @@ def fetch_gain_range(ticker: str, date_from: str, date_to: str):
                 "period2":              p2,
                 "includeAdjustedClose": "false",
             },
-            timeout=8,
+            timeout=10,
         )
         data   = resp.json()
         result = data.get("chart", {}).get("result")
@@ -68,14 +69,17 @@ def fetch_gain_range(ticker: str, date_from: str, date_to: str):
         quote      = r.get("indicators", {}).get("quote", [{}])[0]
         closes     = quote.get("close", [])
 
-        # Build list (date_str YYYY-MM-DD, close) — filter None/0
+        # Build list (date_str WIB YYYY-MM-DD, close)
+        # IDX candle timestamps dari Yahoo bisa UTC midnight atau UTC+7
+        # Pakai WIB (UTC+7) untuk date matching yang benar
         candles = []
         for i, ts in enumerate(timestamps):
             c = closes[i] if i < len(closes) else None
             if not c or float(c) <= 0:
                 continue
-            dt   = datetime.fromtimestamp(ts, tz=timezone.utc)
-            candles.append((dt.strftime("%Y-%m-%d"), float(c)))
+            # Konversi ke WIB untuk dapat tanggal trading yang benar
+            dt_wib = datetime.fromtimestamp(ts, tz=WIB)
+            candles.append((dt_wib.strftime("%Y-%m-%d"), float(c)))
 
         if not candles:
             return None, None
@@ -83,7 +87,7 @@ def fetch_gain_range(ticker: str, date_from: str, date_to: str):
         d0_str = d0.strftime("%Y-%m-%d")
         d1_str = d1.strftime("%Y-%m-%d")
 
-        # Cari close yang paling dekat dengan d0 dan d1 (≤ target date)
+        # Cari candle dengan tanggal paling dekat ≤ target
         def find_close_on_or_before(target_str):
             best = None
             for date_str, close in candles:
@@ -107,7 +111,6 @@ def fetch_gain_range(ticker: str, date_from: str, date_to: str):
                 return gain, price
             return None, price
         else:
-            # Multi day: close d1 vs close d0
             result_d0 = find_close_on_or_before(d0_str)
             if not result_d0 or result_d0[1] <= 0:
                 return None, price
