@@ -215,32 +215,62 @@ def flow():
 
     try:
         conn = get_db()
-        rows = conn.execute(f"""
+
+        # Query SM/BM dari raw_messages
+        rows_sm_bm = conn.execute(f"""
             SELECT
                 ticker,
                 channel,
-                SUM(value_numeric)    AS val,
                 SUM(mf_delta_numeric) AS mf
             FROM raw_messages
             WHERE date IN ({placeholders})
             GROUP BY ticker, channel
         """, dates).fetchall()
+
+        # Query MF+/MF- dari raw_mf_messages
+        rows_mf = conn.execute(f"""
+            SELECT
+                ticker,
+                channel,
+                SUM(mf_numeric)       AS mf,
+                SUM(mft_numeric)      AS mft,
+                SUM(cm_delta_numeric) AS cm_delta
+            FROM raw_mf_messages
+            WHERE date IN ({placeholders})
+            GROUP BY ticker, channel
+        """, dates).fetchall()
+
         conn.close()
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
 
-    # Agregasi per ticker
+    # Agregasi SM/BM per ticker
     data = {}
-    for row in rows:
+    for row in rows_sm_bm:
         t = row["ticker"]
         if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": 0, "mf_minus": 0}
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None}
         if row["channel"] == "smart":
-            data[t]["sm_val"]  += row["mf"] or 0   # MF+ = SM murni
-            data[t]["mf_plus"] += row["mf"] or 0
+            data[t]["sm_val"] += row["mf"] or 0
         else:
-            data[t]["bm_val"]   += abs(row["mf"] or 0)  # MF- = BM murni
-            data[t]["mf_minus"] += abs(row["mf"] or 0)
+            data[t]["bm_val"] += abs(row["mf"] or 0)
+
+    # Agregasi MF+/MF- per ticker dari raw_mf_messages
+    for row in rows_mf:
+        t = row["ticker"]
+        if t not in data:
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None}
+        if row["channel"] == "mf_plus":
+            data[t]["mf_plus"] = (data[t]["mf_plus"] or 0) + (row["mf"] or 0)
+        elif row["channel"] == "mf_minus":
+            data[t]["mf_minus"] = (data[t]["mf_minus"] or 0) + abs(row["mf"] or 0)
+
+    # Hitung net_mf per ticker
+    for t, d in data.items():
+        if d["mf_plus"] is not None or d["mf_minus"] is not None:
+            mfp = d["mf_plus"]  or 0
+            mfm = d["mf_minus"] or 0
+            data[t]["net_mf"] = round(mfp - mfm, 2)
 
     if not data:
         return jsonify({"tickers": [], "totals": {}})
@@ -249,13 +279,13 @@ def flow():
 
     tickers = []
     for t, d in data.items():
-        sm  = round(d["sm_val"],  2)
-        bm  = round(d["bm_val"],  2)
+        sm  = round(d["sm_val"], 2)
+        bm  = round(d["bm_val"], 2)
         cm  = round(sm - bm, 2)
         rsm = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
-        mfp = round(d["mf_plus"],  2) if d["mf_plus"]  else None
-        mfm = round(d["mf_minus"], 2) if d["mf_minus"] else None
-        net = round(sm - bm, 2) if (d["mf_plus"] or d["mf_minus"]) else None
+        mfp = round(d["mf_plus"],  2) if d["mf_plus"]  is not None else None
+        mfm = round(d["mf_minus"], 2) if d["mf_minus"] is not None else None
+        net = round(d["net_mf"],   2) if d["net_mf"]   is not None else None
 
         g = gains.get(t, {})
         tickers.append({
@@ -264,9 +294,9 @@ def flow():
             "sm_val":      sm,
             "bm_val":      bm,
             "rsm":         rsm,
-            "mf_plus":     None,  # reserved untuk sub-channel MF
-            "mf_minus":    None,  # reserved untuk sub-channel MF
-            "net_mf":      None,  # reserved untuk sub-channel MF
+            "mf_plus":     mfp,
+            "mf_minus":    mfm,
+            "net_mf":      net,
             "gain_pct":    g.get("gain"),
             "price":       g.get("price"),
         })
