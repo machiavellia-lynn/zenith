@@ -313,8 +313,43 @@ def ohlcv():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/info")
-def info():
+@app.route("/admin/upload-db", methods=["GET", "POST"])
+def upload_db():
+    # HAPUS ROUTE INI setelah zenith.db berhasil diupload!
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.method == "GET":
+        return f"""
+        <!DOCTYPE html><html><head>
+        <style>body{{background:#080c10;color:#c8d8e8;font-family:monospace;
+        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}}
+        .box{{background:#0e1318;border:1px solid #1a2230;border-radius:8px;padding:32px;width:400px;}}
+        h3{{color:#00e8a2;margin-bottom:20px;}}
+        input,button{{width:100%;padding:10px;margin:8px 0;border-radius:5px;
+        box-sizing:border-box;font-family:monospace;}}
+        input{{background:#080c10;border:1px solid #1a2230;color:#c8d8e8;}}
+        button{{background:#00e8a2;border:none;color:#080c10;font-weight:700;cursor:pointer;}}
+        </style></head><body><div class="box">
+        <h3>⬆ Upload zenith.db</h3>
+        <form method="POST" enctype="multipart/form-data">
+          <input type="file" name="dbfile" accept=".db" required/>
+          <input type="password" name="secret" placeholder="Upload secret key" required/>
+          <button type="submit">Upload ke /data/zenith.db</button>
+        </form></div></body></html>
+        """
+    # POST
+    secret = request.form.get("secret", "")
+    if secret != SECRET:
+        return "❌ Secret salah", 403
+    f = request.files.get("dbfile")
+    if not f:
+        return "❌ File tidak ditemukan", 400
+    os.makedirs("/data", exist_ok=True)
+    f.save("/data/zenith.db")
+    size = os.path.getsize("/data/zenith.db")
+    return f"✅ Upload berhasil! zenith.db tersimpan di /data/zenith.db ({size:,} bytes). Sekarang hapus route ini dari app.py"
+
+
+
     ticker = request.args.get("ticker", "BBRI").upper().strip()
     symbol = f"{ticker}.JK"
     try:
