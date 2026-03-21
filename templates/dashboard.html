@@ -1311,9 +1311,9 @@ async function loadOverlayData(candles) {
       const st = snapTime(p.time);
       if (!st || seen.has(st)) continue;
       seen.add(st);
-      cmData.push({ time: st, value: p.cm });
-      smData.push({ time: st, value: p.sm });
-      bmData.push({ time: st, value: p.bm });
+      cmData.push({ time: st, value: p.cum_cm });
+      smData.push({ time: st, value: p.cum_sm });
+      bmData.push({ time: st, value: p.cum_bm });
       overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
     }
 

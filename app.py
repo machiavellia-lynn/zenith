@@ -467,6 +467,16 @@ def overlay():
         cm = round(sm - bm, 2)
         points.append({"time": v["time"], "sm": sm, "bm": bm, "cm": cm})
 
+    # Hitung cumulative untuk line series (terpisah dari per-bucket value)
+    cum_sm, cum_bm, cum_cm = 0.0, 0.0, 0.0
+    for p in points:
+        cum_sm = round(cum_sm + p["sm"], 2)
+        cum_bm = round(cum_bm + p["bm"], 2)
+        cum_cm = round(cum_cm + p["cm"], 2)
+        p["cum_sm"] = cum_sm
+        p["cum_bm"] = cum_bm
+        p["cum_cm"] = cum_cm
+
     return jsonify({"ticker": ticker, "tf": tf, "points": points})
 
 
