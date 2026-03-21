@@ -439,6 +439,9 @@ def overlay():
             key = wib_ts
         else:
             # Intraday: bucket by time interval
+            # bh/bm sudah WIB, utc_ts = midnight UTC
+            # OHLCV pakai: actual_utc_ts + 7h = midnight_utc + real_hour_utc + 7h
+            # Agar match: midnight_utc + bh_wib*3600 + bm*60 (TANPA +7h lagi)
             parts = time_str.replace(".", ":").split(":")
             h = int(parts[0]) if len(parts) >= 1 and parts[0].isdigit() else 9
             m = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
@@ -447,7 +450,7 @@ def overlay():
             bh = bstart // 60
             bm = bstart % 60
             utc_ts = int(d.replace(tzinfo=timezone.utc).timestamp())
-            wib_ts = utc_ts + bh * 3600 + bm * 60 + (7 * 3600)
+            wib_ts = utc_ts + bh * 3600 + bm * 60
             key = wib_ts
 
         if key not in buckets:
