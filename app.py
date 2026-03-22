@@ -1,5 +1,6 @@
 from flask import Flask, jsonify, render_template, request
 from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import sqlite3
 import os
@@ -10,6 +11,8 @@ app = Flask(__name__)
 
 # ── Config ──────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("DB_PATH", r"C:\Users\rabim\Downloads\zenith_project\zenith.db")
+WIB     = timezone(timedelta(hours=7))
+GAIN_EXECUTOR = ThreadPoolExecutor(max_workers=10)  # parallel Yahoo fetches
 WIB     = timezone(timedelta(hours=7))
 
 YF_HEADERS = {
@@ -142,12 +145,25 @@ def get_gains_batch(tickers: list, date_from: str, date_to: str):
             else:
                 to_fetch.append(t)
 
-    for t in to_fetch:
+    if not to_fetch:
+        return result
+
+    # Parallel fetch — max 10 concurrent
+    def _fetch_one(t):
         gain, price = fetch_gain_range(t, date_from, date_to)
-        key = f"{t}|{date_from}|{date_to}"
-        with _gain_cache_lock:
-            _gain_cache[key] = {"gain": gain, "price": price, "ts": time.time()}
-        result[t] = {"gain": gain, "price": price}
+        return t, gain, price
+
+    futures = {GAIN_EXECUTOR.submit(_fetch_one, t): t for t in to_fetch}
+    for future in as_completed(futures, timeout=30):
+        try:
+            t, gain, price = future.result()
+            key = f"{t}|{date_from}|{date_to}"
+            with _gain_cache_lock:
+                _gain_cache[key] = {"gain": gain, "price": price, "ts": time.time()}
+            result[t] = {"gain": gain, "price": price}
+        except Exception:
+            t = futures[future]
+            result[t] = {"gain": None, "price": None}
 
     return result
 
@@ -182,6 +198,25 @@ def index():
 @app.route("/dashboard")
 def dashboard():
     return render_template("dashboard.html")
+
+
+# ── API: last date with data in DB ──────────────────────────────────────
+@app.route("/api/last-date")
+def last_date():
+    try:
+        conn = get_db()
+        row = conn.execute("""
+            SELECT date FROM raw_messages
+            ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2) DESC
+            LIMIT 1
+        """).fetchone()
+        conn.close()
+        if row:
+            # DD-MM-YYYY → DD/MM/YYYY for frontend
+            return jsonify({"date": row["date"].replace("-", "/")})
+        return jsonify({"date": None})
+    except Exception as e:
+        return jsonify({"date": None, "error": str(e)})
 
 
 # ── API: flow data ────────────────────────────────────────────────────────
@@ -712,6 +747,21 @@ def pull_db():
         return f"✅ Done! {round(size/1024/1024, 1)} MB tersimpan di {DB_PATH}"
     except Exception as e:
         return f"❌ Error: {e}", 500
+
+# ── Create indexes on startup ────────────────────────────────────────────
+def ensure_indexes():
+    try:
+        conn = get_db()
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_date ON raw_messages(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_raw_ticker_date ON raw_messages(ticker, date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mf_date ON raw_mf_messages(date)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_mf_ticker_date ON raw_mf_messages(ticker, date)")
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass  # DB mungkin belum ada saat deploy pertama
+
+ensure_indexes()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

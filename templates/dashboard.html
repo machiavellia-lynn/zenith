@@ -805,10 +805,17 @@ function autoFormatDate(input) {
 let pickerFrom, pickerTo;
 let trxPickerFrom, trxPickerTo;
 
-window.addEventListener('DOMContentLoaded', () => {
-  const todayStr = todayDDMMYYYY();
-  const [dd, mm, yyyy] = todayStr.split('/').map(Number);
-  const todayDate = new Date(yyyy, mm - 1, dd);
+window.addEventListener('DOMContentLoaded', async () => {
+  // Ambil tanggal terakhir yang ada data di DB
+  let initDateStr = todayDDMMYYYY();
+  try {
+    const res = await fetch('/api/last-date');
+    const d   = await res.json();
+    if (d.date) initDateStr = d.date; // DD/MM/YYYY
+  } catch (_) {}
+
+  const [dd, mm, yyyy] = initDateStr.split('/').map(Number);
+  const initDate = new Date(yyyy, mm - 1, dd);
 
   const pikadayOpts = {
     format:     'DD/MM/YYYY',
@@ -834,7 +841,7 @@ window.addEventListener('DOMContentLoaded', () => {
   pickerFrom = new Pikaday({
     ...pikadayOpts,
     field:       document.getElementById('dateFrom'),
-    defaultDate: todayDate,
+    defaultDate: initDate,
     setDefaultDate: true,
     onSelect: date => {
       if (pickerTo && date > pickerTo.getDate()) {
@@ -847,7 +854,7 @@ window.addEventListener('DOMContentLoaded', () => {
   pickerTo = new Pikaday({
     ...pikadayOpts,
     field:       document.getElementById('dateTo'),
-    defaultDate: todayDate,
+    defaultDate: initDate,
     setDefaultDate: true,
     onSelect: () => loadFlow(),
   });
@@ -856,7 +863,7 @@ window.addEventListener('DOMContentLoaded', () => {
   trxPickerFrom = new Pikaday({
     ...pikadayOpts,
     field:       document.getElementById('trxDateFrom'),
-    defaultDate: todayDate,
+    defaultDate: initDate,
     setDefaultDate: true,
     container:   document.getElementById('modalBox'),
     onSelect: date => {
@@ -870,7 +877,7 @@ window.addEventListener('DOMContentLoaded', () => {
   trxPickerTo = new Pikaday({
     ...pikadayOpts,
     field:       document.getElementById('trxDateTo'),
-    defaultDate: todayDate,
+    defaultDate: initDate,
     setDefaultDate: true,
     container:   document.getElementById('modalBox'),
     onSelect: () => loadTransactions(),
@@ -933,10 +940,10 @@ function updateStats(t) {
   };
   set('sSM',  t.sm,     'neutral');
   set('sBM',  t.bm,     'bm');
-
-
+  setV('sMFP', t.mf_plus,  'up');
+  setV('sMFM', t.mf_minus, 'down');
   set('sNCM', t.net_cm);
-
+  setV('sNMF', t.net_mf);
   document.getElementById('sCount').textContent = t.count || '—';
 }
 
