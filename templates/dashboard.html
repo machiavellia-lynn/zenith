@@ -373,7 +373,6 @@ td:first-child { text-align: left; }
   white-space: nowrap;
 }
 .m-hover-tooltip.visible { opacity: 1; }
-.mht-date { color: var(--muted); font-size: 9px; }
 .mht-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
 .mht-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
 .mht-v { font-size: 11px; font-weight: 700; color: var(--text); }
@@ -723,7 +722,7 @@ td:first-child { text-align: left; }
     <div class="modal-scroll">
     <div class="modal-chart-wrap">
       <div class="m-hover-tooltip" id="mHoverTooltip">
-        <span class="mht-date" id="mHtDate">—</span>
+        <div class="mht-item"><span class="mht-lbl">GAIN</span><span class="mht-v" id="mHtGain">—</span></div>
         <div class="mht-sep"></div>
         <div class="mht-item"><span class="mht-lbl">O</span><span class="mht-v" id="mHtO">—</span></div>
         <div class="mht-item"><span class="mht-lbl">H</span><span class="mht-v up" id="mHtH">—</span></div>
@@ -1287,12 +1286,11 @@ function initModalChart() {
       return String(v);
     };
     const d = new Date(param.time * 1000);
-    const pad = n => String(n).padStart(2,'0');
-    const mons = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const ds = modalTF === '1d'
-      ? `${d.getUTCDate()} ${mons[d.getUTCMonth()]} ${d.getUTCFullYear()}`
-      : `${d.getUTCDate()} ${mons[d.getUTCMonth()]} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-    document.getElementById('mHtDate').textContent = ds;
+    // Gain% = (close - open) / open * 100
+    const gainPct = bar.open > 0 ? ((bar.close - bar.open) / bar.open * 100) : 0;
+    const gainEl = document.getElementById('mHtGain');
+    gainEl.textContent = (gainPct > 0 ? '+' : '') + gainPct.toFixed(2) + '%';
+    gainEl.className = 'mht-v ' + (gainPct >= 0 ? 'up' : 'down');
     document.getElementById('mHtO').textContent    = fmt(bar.open);
     document.getElementById('mHtH').textContent    = fmt(bar.high);
     document.getElementById('mHtL').textContent    = fmt(bar.low);
@@ -1342,19 +1340,22 @@ async function loadModalChart() {
     if (data.error) return;
     const candles = data.candles || [];
     if (!candles.length) return;
+    modalChart.timeScale().resetTimeScale();
     modalCandle.setData(candles);
     modalVolume.setData(candles.map(c => ({
       time: c.time, value: c.volume,
       color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
     })));
-    if (candles.length > INIT_CANDLES) {
-      modalChart.timeScale().setVisibleRange({
-        from: candles[candles.length - INIT_CANDLES].time,
-        to:   candles[candles.length - 1].time,
-      });
-    } else {
-      modalChart.timeScale().fitContent();
-    }
+    requestAnimationFrame(() => {
+      if (candles.length > INIT_CANDLES) {
+        modalChart.timeScale().setVisibleRange({
+          from: candles[candles.length - INIT_CANDLES].time,
+          to:   candles[candles.length - 1].time,
+        });
+      } else {
+        modalChart.timeScale().fitContent();
+      }
+    });
     if (data.name) document.getElementById('mName').textContent = data.name;
     // Load overlay data after candles
     loadOverlayData(candles);

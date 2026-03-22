@@ -6,6 +6,7 @@
 <title>Zenith — Sector Overview</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
 <style>
@@ -80,6 +81,271 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 .spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:10px}
 @keyframes spin{to{transform:rotate(360deg)}}
 @keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+/* ── MODAL ───────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.82);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 1100px;
+  height: 92vh;
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+  transform: scale(.97); transition: transform .2s;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.modal-backdrop.open .modal { transform: scale(1); }
+
+.modal-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-ticker {
+  font-family: 'Space Mono', monospace;
+  font-size: 16px; font-weight: 700;
+  color: var(--text);
+}
+.modal-name { font-size: 12px; color: var(--muted); }
+.modal-price {
+  font-family: 'Space Mono', monospace;
+  font-size: 18px; font-weight: 700; color: var(--text);
+  margin-left: auto;
+}
+
+/* modal tf tabs */
+.modal-tfs { display: flex; gap: 6px; }
+.mtf-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+}
+.mtf-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mtf-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* fit/log buttons */
+.modal-scale-btns { display: flex; gap: 4px; }
+
+.close-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 20px; line-height: 1;
+  padding: 2px 6px; transition: color .15s;
+}
+.close-btn:hover { color: var(--danger); }
+
+/* modal hover tooltip */
+.m-hover-tooltip {
+  position: absolute; top: 12px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(14,19,24,.92);
+  border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px;
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  pointer-events: none; opacity: 0; transition: opacity .15s;
+  white-space: nowrap;
+}
+.m-hover-tooltip.visible { opacity: 1; }
+.mht-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.mht-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.mht-v { font-size: 11px; font-weight: 700; color: var(--text); }
+.mht-v.up { color: var(--up); }
+.mht-v.down { color: var(--down); }
+.mht-sep { width: 1px; height: 26px; background: var(--border); }
+
+.modal-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  /* custom scrollbar — tipis & nempel di ujung kanan */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.modal-scroll::-webkit-scrollbar { width: 6px; }
+.modal-scroll::-webkit-scrollbar-track { background: transparent; }
+.modal-scroll::-webkit-scrollbar-thumb {
+  background: var(--border2); border-radius: 3px;
+}
+.modal-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.modal-chart-wrap {
+  position: relative;
+  height: 480px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+#modalChart { width: 100%; height: 100%; display: block; position: relative; overflow: visible; }
+/* Paksa LWC internal div tidak clip time axis */
+#modalChart > div { overflow: visible !important; }
+
+
+/* ── MODAL TRANSACTIONS ──────────────────────────────── */
+.modal-body {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.trx-section-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .14em; font-weight: 700;
+  color: var(--muted); text-transform: uppercase;
+  display: flex; align-items: center; gap: 12px;
+  white-space: nowrap;
+}
+.trx-section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+.trx-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.trx-date-range {
+  display: flex; align-items: center; gap: 6px;
+}
+.trx-date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 5px 8px; font-family: 'Space Mono', monospace;
+  font-size: 10px; outline: none; width: 96px;
+  letter-spacing: .04em; transition: border-color .2s;
+}
+.trx-date-input:focus { border-color: var(--accent); }
+.trx-date-input::placeholder { color: var(--muted); }
+.trx-date-arrow {
+  color: var(--muted); font-size: 11px; padding: 0 2px;
+}
+.trx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.trx-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.trx-box-header {
+  padding: 6px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+  flex-shrink: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.trx-box-header.sm { color: var(--accent2); }
+.trx-box-header.bm { color: #ff8c42; }
+.trx-box-header .trx-count {
+  color: var(--muted); font-size: 8px;
+}
+.trx-table-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.trx-table-wrap::-webkit-scrollbar { width: 5px; }
+.trx-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.trx-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.trx-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.trx-table { width: 100%; border-collapse: collapse; }
+.trx-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg);
+}
+.trx-table th {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+  text-align: right; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.trx-table th:first-child { text-align: left; }
+.trx-table td {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--text);
+  text-align: right;
+  border-bottom: 1px solid rgba(26,34,48,.5);
+  white-space: nowrap;
+}
+.trx-table td:first-child { text-align: left; color: var(--muted); }
+.trx-table tbody tr:last-child td { border-bottom: none; }
+.trx-table tbody tr:hover { background: rgba(255,255,255,.02); }
+.trx-gain-pos { color: var(--up); }
+.trx-gain-neg { color: var(--down); }
+.trx-mf-sm { color: var(--accent2); }
+.trx-mf-bm { color: #ff8c42; }
+/* ── OVERLAY TOGGLES ─────────────────────────────── */
+.overlay-toggles { display: flex; gap: 4px; margin-left: 8px; }
+.ovl-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.ovl-btn .ovl-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  opacity: .4; transition: opacity .15s;
+}
+.ovl-btn:hover { border-color: var(--text); color: var(--text); }
+.ovl-btn.active { border-color: currentColor; }
+.ovl-btn.active .ovl-dot { opacity: 1; }
+.ovl-btn.active.cm { color: #00e8a2; }
+.ovl-btn.active.sm { color: #4d9fff; }
+.ovl-btn.active.bm { color: #ff8c42; }
+
+/* overlay value panel top-left */
+.m-overlay-vals {
+  position: absolute; top: 12px; left: 14px;
+  z-index: 10; display: flex; flex-direction: column; gap: 2px;
+  pointer-events: none;
+}
+.m-ovl-row {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  opacity: 0; transition: opacity .15s;
+}
+.m-ovl-row.visible { opacity: 1; }
+.m-ovl-row .m-ovl-label {
+  font-size: 9px; font-weight: 400;
+  letter-spacing: .08em; margin-right: 6px;
+}
+
+.trx-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
+.trx-loading { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
+
+.modal .pika-single{z-index:600!important}
 .pika-single{background:var(--surface2)!important;border:1px solid var(--border2)!important;border-radius:8px!important;font-family:'DM Sans',sans-serif!important;color:var(--text)!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important}
 .pika-title{padding:8px 10px!important}
 .pika-label{background:transparent!important;color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:12px!important}
@@ -114,11 +380,478 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
   </div>
   <span class="row-count" id="rowCount"></span>
 </div>
+<!-- MODAL -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modalBox">
+    <div class="modal-header">
+      <div>
+        <div class="modal-ticker" id="mTicker">—</div>
+        <div class="modal-name" id="mName">—</div>
+      </div>
+      <div class="modal-tfs">
+        <button class="mtf-btn" data-tf="5m"  onclick="setModalTF('5m')">5m</button>
+        <button class="mtf-btn" data-tf="15m" onclick="setModalTF('15m')">15m</button>
+        <button class="mtf-btn" data-tf="30m" onclick="setModalTF('30m')">30m</button>
+        <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
+        <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
+      </div>
+      <div class="overlay-toggles">
+        <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
+        <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')" title="Smart Money"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
+        <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
+      </div>
+      <div style="flex:1"></div>
+      <div class="modal-scale-btns">
+        <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
+        <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
+      </div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-scroll">
+    <div class="modal-chart-wrap">
+      <div class="m-hover-tooltip" id="mHoverTooltip">
+        <div class="mht-item"><span class="mht-lbl">GAIN</span><span class="mht-v" id="mHtGain">—</span></div>
+        <div class="mht-sep"></div>
+        <div class="mht-item"><span class="mht-lbl">O</span><span class="mht-v" id="mHtO">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">H</span><span class="mht-v up" id="mHtH">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">L</span><span class="mht-v down" id="mHtL">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">C</span><span class="mht-v" id="mHtC">—</span></div>
+        <div class="mht-sep"></div>
+        <div class="mht-item"><span class="mht-lbl">Vol</span><span class="mht-v" id="mHtVol">—</span></div>
+      </div>
+      <div class="m-overlay-vals" id="mOverlayVals">
+        <div class="m-ovl-row" id="mOvlCM" style="color:#00e8a2"><span class="m-ovl-label">CM</span><span id="mOvlCMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlSM" style="color:#4d9fff"><span class="m-ovl-label">SM</span><span id="mOvlSMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlBM" style="color:#ff8c42"><span class="m-ovl-label">BM</span><span id="mOvlBMv">—</span></div>
+      </div>
+      <div id="modalChart"></div>
+    </div>
+
+    <!-- TRANSAKSI SECTION -->
+    <div class="modal-body" id="modalBody">
+      <div>
+        <div class="trx-toolbar">
+          <div class="trx-section-title">Transaksi SM &amp; BM</div>
+          <div class="trx-date-range">
+            <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+            <span class="trx-date-arrow">→</span>
+            <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+          </div>
+        </div>
+        <div class="trx-grid">
+          <div class="trx-box">
+            <div class="trx-box-header sm">
+              Smart Money <span class="trx-count" id="smCount"></span>
+            </div>
+            <div class="trx-table-wrap">
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="smBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+          <div class="trx-box">
+            <div class="trx-box-header bm">
+              Bad Money <span class="trx-count" id="bmCount"></span>
+            </div>
+            <div class="trx-table-wrap">
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="bmBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div><!-- end modal-scroll -->
+  </div>
+</div>
+
 <div id="sectorContainer"><div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div></div>
 <script>
 let activeSector = null;
+
+let modalChart = null, modalCandle = null, modalVolume = null;
+let modalTF = '1d', modalTicker = '', modalIsLog = false, modalIsAuto = true;
+const INIT_CANDLES = 150;
+let ovlSeriesCM = null, ovlSeriesSM = null, ovlSeriesBM = null;
+let ovlShowCM = true, ovlShowSM = false, ovlShowBM = false;
+let overlayDataCache = [];
+let trxPickerFrom = null, trxPickerTo = null;
+
+function openModal(ticker) {
+  modalTicker = ticker;
+  modalTF     = '1d';
+  modalIsLog  = false;
+  modalIsAuto = true;
+  document.getElementById('mBtnLog').classList.remove('active');
+  document.getElementById('mBtnAuto').classList.add('active');
+  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tf === '1d')
+  );
+  document.getElementById('mTicker').textContent = ticker;
+  document.getElementById('mName').textContent   = '—';
+  // Sync overlay buttons
+  document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+  document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+  document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+  // Sync trx date pickers from main toolbar
+  const mainFrom = document.getElementById('dateFrom').value;
+  const mainTo   = document.getElementById('dateTo').value;
+  document.getElementById('trxDateFrom').value = mainFrom;
+  document.getElementById('trxDateTo').value   = mainTo;
+  if (trxPickerFrom && mainFrom) {
+    const [d,m,y] = mainFrom.split('/').map(Number);
+    trxPickerFrom.setDate(new Date(y, m-1, d), true);
+  }
+  if (trxPickerTo && mainTo) {
+    const [d,m,y] = mainTo.split('/').map(Number);
+    trxPickerTo.setDate(new Date(y, m-1, d), true);
+  }
+  document.getElementById('modalBackdrop').classList.add('open');
+  // Defer agar modal selesai render dulu, baru init chart
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      initModalChart();
+      loadModalChart();
+      loadTransactions();
+    });
+  });
+}
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('open');
+  if (window._modalChartRO) { window._modalChartRO.disconnect(); window._modalChartRO = null; }
+  if (modalChart) { modalChart.remove(); modalChart = null; modalCandle = null; modalVolume = null; }
+  ovlSeriesCM = null; ovlSeriesSM = null; ovlSeriesBM = null;
+  overlayDataCache = [];
+}
+function handleBackdropClick(e) {
+  if (e.target === document.getElementById('modalBackdrop')) closeModal();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function initModalChart() {
+  if (modalChart) { modalChart.remove(); modalChart = null; }
+  const container = document.getElementById('modalChart');
+  const rect = container.getBoundingClientRect();
+  modalChart = LightweightCharts.createChart(container, {
+    width: Math.floor(rect.width),
+    height: Math.floor(rect.height),
+    layout: { background: { color: '#0e1318' }, textColor: '#4a6070' },
+    grid:   { vertLines: { color: '#1a2230' }, horzLines: { color: '#1a2230' } },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+      horzLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+    },
+    rightPriceScale: { borderColor: '#1a2230' },
+    timeScale: {
+      borderColor: '#1a2230', timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: t => {
+        const d = new Date(t * 1000);
+        const h = String(d.getUTCHours()).padStart(2,'0');
+        const m = String(d.getUTCMinutes()).padStart(2,'0');
+        const day = d.getUTCDate();
+        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+        return modalTF === '1d' ? `${day} ${mon}` : `${h}:${m}`;
+      },
+    },
+    localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
+  });
+
+  modalCandle = modalChart.addCandlestickSeries({
+    upColor: '#00e8a2', downColor: '#ff4d6a',
+    borderUpColor: '#00e8a2', borderDownColor: '#ff4d6a',
+    wickUpColor:   '#00e8a2', wickDownColor:   '#ff4d6a',
+  });
+  modalVolume = modalChart.addHistogramSeries({
+    color: '#1a2230', priceFormat: { type: 'volume' },
+    priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
+  });
+  modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+  // Apply auto scale default
+  modalChart.priceScale('right').applyOptions({ autoScale: true, scaleMargins: { top: 0.1, bottom: 0.2 } });
+
+  // ── Overlay line series (separate scale) ──
+  modalChart.priceScale('overlay').applyOptions({
+    scaleMargins: { top: 0.05, bottom: 0.2 },
+    visible: false,        // hide overlay Y axis
+    autoScale: true,
+  });
+
+  ovlSeriesCM = modalChart.addLineSeries({
+    color: '#00e8a2', lineWidth: 2, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 4,
+  });
+  ovlSeriesSM = modalChart.addLineSeries({
+    color: '#4d9fff', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+  ovlSeriesBM = modalChart.addLineSeries({
+    color: '#ff8c42', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+
+  // Apply initial visibility
+  ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+
+  // Update overlay value panel visibility
+  updateOvlValVisibility();
+
+  // Hover tooltip
+  modalChart.subscribeCrosshairMove(param => {
+    const tt = document.getElementById('mHoverTooltip');
+    if (!param.time || !param.seriesData) { tt.classList.remove('visible'); return; }
+    const bar = param.seriesData.get(modalCandle);
+    if (!bar) { tt.classList.remove('visible'); return; }
+    const fmt = v => Math.round(v).toLocaleString('id-ID');
+    const fmtV = v => {
+      if (!v) return '—';
+      if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+      if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+      if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+      return String(v);
+    };
+    const d = new Date(param.time * 1000);
+    // Gain% = (close - open) / open * 100
+    const gainPct = bar.open > 0 ? ((bar.close - bar.open) / bar.open * 100) : 0;
+    const gainEl = document.getElementById('mHtGain');
+    gainEl.textContent = (gainPct > 0 ? '+' : '') + gainPct.toFixed(2) + '%';
+    gainEl.className = 'mht-v ' + (gainPct >= 0 ? 'up' : 'down');
+    document.getElementById('mHtO').textContent    = fmt(bar.open);
+    document.getElementById('mHtH').textContent    = fmt(bar.high);
+    document.getElementById('mHtL').textContent    = fmt(bar.low);
+    const cEl = document.getElementById('mHtC');
+    cEl.textContent = fmt(bar.close);
+    cEl.className   = 'mht-v ' + (bar.close >= bar.open ? 'up' : 'down');
+    const vb = param.seriesData.get(modalVolume);
+    document.getElementById('mHtVol').textContent = vb ? fmtV(vb.value) : '—';
+    tt.classList.add('visible');
+
+    // Overlay values — find matching overlay point for this candle time
+    const fmtMf = v => {
+      if (v === null || v === undefined) return '—';
+      const sign = v > 0 ? '+' : '';
+      if (Math.abs(v) >= 1000) return sign + (v/1000).toFixed(1) + 'B';
+      return sign + v.toFixed(1) + 'M';
+    };
+    const ovlPoint = overlayDataCache.find(p => p.time === param.time);
+    document.getElementById('mOvlCMv').textContent = ovlPoint ? fmtMf(ovlPoint.cm) : '—';
+    document.getElementById('mOvlSMv').textContent = ovlPoint ? fmtMf(ovlPoint.sm) : '—';
+    document.getElementById('mOvlBMv').textContent = ovlPoint ? fmtMf(ovlPoint.bm) : '—';
+    document.getElementById('mOvlCM').classList.toggle('visible', ovlShowCM && !!ovlPoint);
+    document.getElementById('mOvlSM').classList.toggle('visible', ovlShowSM && !!ovlPoint);
+    document.getElementById('mOvlBM').classList.toggle('visible', ovlShowBM && !!ovlPoint);
+  });
+
+  // ResizeObserver — handle resize tanpa autoSize
+  if (window._modalChartRO) window._modalChartRO.disconnect();
+  window._modalChartRO = new ResizeObserver(entries => {
+    for (const e of entries) {
+      if (modalChart) {
+        modalChart.applyOptions({
+          width: Math.floor(e.contentRect.width),
+          height: Math.floor(e.contentRect.height),
+        });
+      }
+    }
+  });
+  window._modalChartRO.observe(container);
+}
+
+async function loadModalChart() {
+  if (!modalChart || !modalCandle) return;
+  try {
+    const res  = await fetch(`/api/ohlcv?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error) return;
+    const candles = data.candles || [];
+    if (!candles.length) return;
+    modalChart.timeScale().resetTimeScale();
+    modalCandle.setData(candles);
+    modalVolume.setData(candles.map(c => ({
+      time: c.time, value: c.volume,
+      color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
+    })));
+    requestAnimationFrame(() => {
+      if (candles.length > INIT_CANDLES) {
+        modalChart.timeScale().setVisibleRange({
+          from: candles[candles.length - INIT_CANDLES].time,
+          to:   candles[candles.length - 1].time,
+        });
+      } else {
+        modalChart.timeScale().fitContent();
+      }
+    });
+    if (data.name) document.getElementById('mName').textContent = data.name;
+    // Load overlay data after candles
+    loadOverlayData(candles);
+  } catch (_) {}
+}
+
+async function loadOverlayData(candles) {
+  if (!modalChart || !ovlSeriesCM) return;
+  try {
+    const res  = await fetch(`/api/overlay?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error || !data.points || !data.points.length) {
+      overlayDataCache = [];
+      ovlSeriesCM.setData([]);
+      ovlSeriesSM.setData([]);
+      ovlSeriesBM.setData([]);
+      return;
+    }
+
+    // Build candle time set for snapping overlay points
+    const candleTimes = new Set(candles.map(c => c.time));
+    const candleArr   = candles.map(c => c.time).sort((a,b) => a - b);
+
+    // Snap overlay point to nearest candle time
+    function snapTime(t) {
+      if (candleTimes.has(t)) return t;
+      let best = null, bestDist = Infinity;
+      for (const ct of candleArr) {
+        const dist = Math.abs(ct - t);
+        if (dist < bestDist) { bestDist = dist; best = ct; }
+        if (ct > t) break; // sorted, no need to keep going
+      }
+      return best;
+    }
+
+    // Snap and deduplicate
+    const cmData = [], smData = [], bmData = [];
+    const seen = new Set();
+    overlayDataCache = [];
+
+    for (const p of data.points) {
+      const st = snapTime(p.time);
+      if (!st || seen.has(st)) continue;
+      seen.add(st);
+      cmData.push({ time: st, value: p.cum_cm });
+      smData.push({ time: st, value: p.cum_sm });
+      bmData.push({ time: st, value: p.cum_bm });
+      overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
+    }
+
+    ovlSeriesCM.setData(cmData);
+    ovlSeriesSM.setData(smData);
+    ovlSeriesBM.setData(bmData);
+  } catch (_) {
+    overlayDataCache = [];
+  }
+}
+
+function toggleOverlay(which) {
+  if (which === 'cm') {
+    ovlShowCM = !ovlShowCM;
+    document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+    if (ovlSeriesCM) ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  } else if (which === 'sm') {
+    ovlShowSM = !ovlShowSM;
+    document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+    if (ovlSeriesSM) ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  } else if (which === 'bm') {
+    ovlShowBM = !ovlShowBM;
+    document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+    if (ovlSeriesBM) ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+  }
+  updateOvlValVisibility();
+}
+
+function updateOvlValVisibility() {
+  document.getElementById('mOvlCM').style.display = ovlShowCM ? '' : 'none';
+  document.getElementById('mOvlSM').style.display = ovlShowSM ? '' : 'none';
+  document.getElementById('mOvlBM').style.display = ovlShowBM ? '' : 'none';
+}
+
+
+async function loadTransactions() {
+  const df = document.getElementById('trxDateFrom').value.trim();
+  const dt = document.getElementById('trxDateTo').value.trim();
+  if (!df || !dt) return;
+  const url = `/api/transactions?ticker=${modalTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+
+  const fmtGain = g => {
+    if (g === null || g === undefined) return '—';
+    const cls = g > 0 ? 'trx-gain-pos' : g < 0 ? 'trx-gain-neg' : '';
+    return `<span class="${cls}">${g > 0 ? '+' : ''}${g.toFixed(2)}%</span>`;
+  };
+
+  const buildRows = (rows, mfCls) => {
+    if (!rows.length) return `<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;
+    return rows.map(r => `<tr>
+      <td>${r.time}</td>
+      <td>${r.price ? r.price.toLocaleString('id-ID') : '—'}</td>
+      <td>${fmtGain(r.gain_pct)}</td>
+      <td><span class="${mfCls}">${r.mf || '—'}</span></td>
+      <td>${r.vol_x ? r.vol_x.toFixed(1) + 'x' : '—'}</td>
+    </tr>`).join('');
+  };
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('smCount').textContent = `(${data.sm_count}TX)`;
+    document.getElementById('bmCount').textContent = `(${data.bm_count}TX)`;
+    document.getElementById('smBody').innerHTML = buildRows(data.sm, 'trx-mf-sm');
+    document.getElementById('bmBody').innerHTML = buildRows(data.bm, 'trx-mf-bm');
+  } catch (e) {
+    const err = `<tr><td colspan="5" class="trx-empty">⚠ ${e.message}</td></tr>`;
+    document.getElementById('smBody').innerHTML = err;
+    document.getElementById('bmBody').innerHTML = err;
+  }
+}
+
+function setModalTF(tf) {
+  modalTF = tf;
+  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tf === tf)
+  );
+  loadModalChart();
+}
+function modalToggleLog() {
+  if (!modalChart) return;
+  modalIsLog = !modalIsLog;
+  modalChart.priceScale('right').applyOptions({ mode: modalIsLog ? 1 : 0 });
+  document.getElementById('mBtnLog').classList.toggle('active', modalIsLog);
+}
+
+function modalToggleAuto() {
+  if (!modalChart) return;
+  modalIsAuto = !modalIsAuto;
+  modalChart.priceScale('right').applyOptions({
+    autoScale: modalIsAuto,
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  });
+  modalChart.applyOptions({
+    handleScale: {
+      axisPressedMouseMove: {
+        price: !modalIsAuto,
+        time: true,
+      },
+    },
+  });
+  document.getElementById('mBtnAuto').classList.toggle('active', modalIsAuto);
+}
+
+// ── Escape tutup modal ────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 function fmtM(v){if(v===null||v===undefined)return'—';const abs=Math.abs(v),s=v<0?'-':'';if(abs>=1000)return s+(abs/1000).toFixed(1)+'B';return s+abs.toFixed(1)+'M'}
 function todayDDMMYYYY(){const now=new Date(Date.now()+7*3600*1000);return`${String(now.getUTCDate()).padStart(2,'0')}/${String(now.getUTCMonth()+1).padStart(2,'0')}/${now.getUTCFullYear()}`}
+function autoFormatDate(input){let v=input.value.replace(/\D/g,'');if(v.length>=3)v=v.slice(0,2)+'/'+v.slice(2);if(v.length>=6)v=v.slice(0,5)+'/'+v.slice(5);input.value=v.slice(0,10)}
 function displayToApi(s){return s.replace(/\//g,'-')}
 function rsmToColor(rsm){if(!rsm)return'var(--muted)';if(rsm>=70)return'#00e8a2';if(rsm>=50)return`hsl(${(rsm-50)*3.6+50},80%,55%)`;if(rsm>=30)return`hsl(${rsm*1.2},80%,55%)`;return'#ff4d6a'}
 
@@ -184,14 +917,14 @@ function renderDetailTable(rows){
   let h=`<div class="table-wrap"><table class="flow-table"><thead><tr>
     <th>TICKER</th><th>PRICE</th><th>CLEAN MONEY</th><th>SM VAL</th><th>BM VAL</th><th>RSM</th><th>MF+</th><th>MF−</th><th>NET MF</th><th>GAIN%</th>
   </tr></thead><tbody>`;
-  if(!rows.length)h+=`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
+  if(!rows.length)h+=`<tr onclick="openModal('${r.ticker}')" style="cursor:pointer"><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
   else rows.forEach(r=>{
     const gC=r.gain_pct===null?'zero':r.gain_pct>0?'pos':r.gain_pct<0?'neg':'zero';
     const gS=r.gain_pct===null?'—':(r.gain_pct>0?'+':'')+r.gain_pct.toFixed(2)+'%';
     const cmC=r.clean_money===null?'':r.clean_money>=0?'pos':'neg';
     const rS=r.rsm!==null&&r.rsm!==undefined?r.rsm.toFixed(1)+'%':'—';
     const nC=r.net_mf===null?'':r.net_mf>=0?'net-pos':'net-neg';
-    h+=`<tr>
+    h+=`<tr onclick="openModal('${r.ticker}')" style="cursor:pointer">
       <td><span class="td-ticker">${r.ticker}</span></td>
       <td><span class="td-num">${r.price!==null&&r.price!==undefined?r.price.toLocaleString('id-ID'):'—'}</span></td>
       <td><span class="cm-val ${cmC}">${fmtM(r.clean_money)}</span></td>
@@ -220,6 +953,10 @@ window.addEventListener('DOMContentLoaded',async()=>{
     maxDate:new Date()};
   pickerFrom=new Pikaday({...opts,field:document.getElementById('dateFrom'),defaultDate:initDate,setDefaultDate:true,onSelect:date=>{if(pickerTo&&date>pickerTo.getDate())pickerTo.setDate(date);onDateChange()}});
   pickerTo=new Pikaday({...opts,field:document.getElementById('dateTo'),defaultDate:initDate,setDefaultDate:true,onSelect:()=>onDateChange()});
+  // Init trx date pickers for modal
+  trxPickerFrom = new Pikaday({...opts, field:document.getElementById('trxDateFrom'), defaultDate:initDate, setDefaultDate:true, container:document.getElementById('modalBox'), onSelect:date=>{if(trxPickerTo&&date>trxPickerTo.getDate())trxPickerTo.setDate(date);loadTransactions()}});
+  trxPickerTo = new Pikaday({...opts, field:document.getElementById('trxDateTo'), defaultDate:initDate, setDefaultDate:true, container:document.getElementById('modalBox'), onSelect:()=>loadTransactions()});
+  document.querySelectorAll('.trx-date-input').forEach(el=>{el.addEventListener('input',()=>autoFormatDate(el))});
   loadIHSG();loadSectors();
 });
 </script>
