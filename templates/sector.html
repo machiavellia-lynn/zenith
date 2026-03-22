@@ -739,6 +739,9 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 <div id="sectorContainer"><div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div></div>
 <script>
 let activeSector = null;
+let sectorDetailRows = [];
+let sectorSortCol = 'clean_money';
+let sectorSortAsc = false;
 
 let modalChart = null, modalCandle = null, modalVolume = null;
 let modalTF = '1d', modalTicker = '', modalIsLog = false, modalIsAuto = true;
@@ -957,9 +960,9 @@ async function loadModalChart() {
     })));
     requestAnimationFrame(() => {
       if (candles.length > INIT_CANDLES) {
-        modalChart.timeScale().setVisibleRange({
-          from: candles[candles.length - INIT_CANDLES].time,
-          to:   candles[candles.length - 1].time,
+        modalChart.timeScale().setVisibleLogicalRange({
+          from: candles.length - INIT_CANDLES,
+          to:   candles.length - 1,
         });
       } else {
         modalChart.timeScale().fitContent();
@@ -1273,9 +1276,9 @@ async function loadModalChart() {
     })));
     requestAnimationFrame(() => {
       if (candles.length > INIT_CANDLES) {
-        modalChart.timeScale().setVisibleRange({
-          from: candles[candles.length - INIT_CANDLES].time,
-          to:   candles[candles.length - 1].time,
+        modalChart.timeScale().setVisibleLogicalRange({
+          from: candles.length - INIT_CANDLES,
+          to:   candles.length - 1,
         });
       } else {
         modalChart.timeScale().fitContent();
@@ -1483,7 +1486,7 @@ async function openSectorDetail(name){
   try{
     const res=await fetch(`/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&sector=${encodeURIComponent(name)}`);
     const data=await res.json();if(data.error)throw new Error(data.error);
-    renderDetailStats(data.totals||{});renderDetailTable(data.tickers||[]);
+    renderDetailStats(data.totals||{});sectorDetailRows=data.tickers||[];sectorSortCol='clean_money';sectorSortAsc=false;renderDetailTable();
   }catch(e){document.getElementById('sectorContainer').innerHTML+=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
 }
 function renderDetailStats(t){
@@ -1498,13 +1501,30 @@ function renderDetailStats(t){
     <div class="dst-item"><span class="dst-label">NET MF</span>${sv(t.net_mf,(t.net_mf||0)>=0?'up':'down')}</div>
     <div class="dst-item"><span class="dst-label">Tickers</span><span class="dst-val">${t.count||'—'}</span></div>`;
 }
-function renderDetailTable(rows){
-  rows.sort((a,b)=>{const av=a.clean_money!==null?a.clean_money:-999999;const bv=b.clean_money!==null?b.clean_money:-999999;return bv-av});
+function sortSectorDetail(col){
+  if(sectorSortCol===col)sectorSortAsc=!sectorSortAsc;
+  else{sectorSortCol=col;sectorSortAsc=col==='ticker'}
+  renderDetailTable();
+}
+function renderDetailTable(){
+  const rows=[...sectorDetailRows];
+  rows.sort((a,b)=>{
+    let av=a[sectorSortCol],bv=b[sectorSortCol];
+    if(av===null||av===undefined)av=sectorSortAsc?Infinity:-Infinity;
+    if(bv===null||bv===undefined)bv=sectorSortAsc?Infinity:-Infinity;
+    if(typeof av==='string')return sectorSortAsc?av.localeCompare(bv):bv.localeCompare(av);
+    return sectorSortAsc?av-bv:bv-av;
+  });
   document.getElementById('rowCount').textContent=`${rows.length} ticker`;
-  let h=`<div class="table-wrap"><table class="flow-table"><thead><tr>
-    <th>TICKER</th><th>PRICE</th><th>CLEAN MONEY</th><th>SM VAL</th><th>BM VAL</th><th>RSM</th><th>MF+</th><th>MF−</th><th>NET MF</th><th>GAIN%</th>
-  </tr></thead><tbody>`;
-  if(!rows.length)h+=`<tr onclick="openModal('${r.ticker}')" style="cursor:pointer"><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
+  const cols=[['ticker','TICKER'],['price','PRICE'],['clean_money','CLEAN MONEY'],['sm_val','SM VAL'],['bm_val','BM VAL'],['rsm','RSM'],['mf_plus','MF+'],['mf_minus','MF−'],['net_mf','NET MF'],['gain_pct','GAIN%']];
+  let h=`<div class="table-wrap"><table class="flow-table"><thead><tr>`;
+  cols.forEach(([k,label])=>{
+    const icon=sectorSortCol===k?(sectorSortAsc?'▲':'▼'):'';
+    const cls=sectorSortCol===k?' style="color:var(--accent)"':'';
+    h+=`<th onclick="sortSectorDetail('${k}')" style="cursor:pointer${sectorSortCol===k?';color:var(--accent)':''}">${label} ${icon}</th>`;
+  });
+  h+=`</tr></thead><tbody>`;
+  if(!rows.length)h+=`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
   else rows.forEach(r=>{
     const gC=r.gain_pct===null?'zero':r.gain_pct>0?'pos':r.gain_pct<0?'neg':'zero';
     const gS=r.gain_pct===null?'—':(r.gain_pct>0?'+':'')+r.gain_pct.toFixed(2)+'%';
@@ -1523,7 +1543,11 @@ function renderDetailTable(rows){
       <td><span class="td-num ${nC}">${r.net_mf!==null?fmtM(r.net_mf):'—'}</span></td>
       <td><span class="gain-val ${gC}">${gS}</span></td></tr>`});
   h+='</tbody></table></div>';
-  const c=document.getElementById('sectorContainer');c.querySelectorAll('.loading-wrap').forEach(l=>l.remove());c.insertAdjacentHTML('beforeend',h);
+  const c=document.getElementById('sectorContainer');
+  const oldTable=c.querySelector('.table-wrap');
+  if(oldTable)oldTable.remove();
+  c.querySelectorAll('.loading-wrap').forEach(l=>l.remove());
+  c.insertAdjacentHTML('beforeend',h);
 }
 function backToGrid(){activeSector=null;document.getElementById('rowCount').textContent='';loadSectors()}
 function onDateChange(){if(activeSector)openSectorDetail(activeSector);else loadSectors()}

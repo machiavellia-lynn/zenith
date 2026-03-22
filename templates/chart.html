@@ -120,6 +120,7 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 <header>
   <div class="logo">ZENITH <span>/ chart</span></div>
   <div class="nav-divider"></div>
+  <a href="/chart" class="nav-btn active">⬡ Chart</a>
   <a href="/flow" class="nav-btn">⊞ Flow</a>
   <a href="/sector" class="nav-btn">◈ Sector</a>
   <div class="nav-divider"></div>
@@ -305,7 +306,7 @@ async function doLoad(){
     chart.timeScale().resetTimeScale();
     candleSeries.setData(candles);
     volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'#00e8a240':'#ff4d6a40'})));
-    requestAnimationFrame(()=>{if(candles.length>INIT_CANDLES)chart.timeScale().setVisibleRange({from:candles[candles.length-INIT_CANDLES].time,to:candles[candles.length-1].time});else chart.timeScale().fitContent()});
+    requestAnimationFrame(()=>{if(candles.length>INIT_CANDLES)chart.timeScale().setVisibleLogicalRange({from:candles.length-INIT_CANDLES,to:candles.length-1});else chart.timeScale().fitContent()});
     applyAutoScale(isAutoScale);hideLoading();
     if(data.name)document.getElementById('tName').textContent=data.name;
     if(data.price){document.getElementById('tPrice').textContent=data.price.toLocaleString('id-ID')}

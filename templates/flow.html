@@ -606,7 +606,6 @@ td:first-child { text-align: left; }
 <header>
   <div class="logo">ZENITH <span>/ flow</span></div>
   <div class="nav-divider"></div>
-  <a href="/" class="nav-btn">⬡ Chart</a>
   <a href="/chart" class="nav-btn">⬡ Chart</a>
   <a href="/flow" class="nav-btn active">⊞ Flow</a>
   <a href="/sector" class="nav-btn">◈ Sector</a>
@@ -1356,9 +1355,9 @@ async function loadModalChart() {
     })));
     requestAnimationFrame(() => {
       if (candles.length > INIT_CANDLES) {
-        modalChart.timeScale().setVisibleRange({
-          from: candles[candles.length - INIT_CANDLES].time,
-          to:   candles[candles.length - 1].time,
+        modalChart.timeScale().setVisibleLogicalRange({
+          from: candles.length - INIT_CANDLES,
+          to:   candles.length - 1,
         });
       } else {
         modalChart.timeScale().fitContent();
