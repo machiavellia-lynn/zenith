@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#4a6070;--up:#00e8a2;--down:#ff4d6a}
+*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:200}
+.logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap}
+.logo span{color:var(--muted)}
+.nav-divider{width:1px;height:20px;background:var(--border)}
+.nav-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:5px 14px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;font-family:'Space Mono',monospace}
+.ihsg-label{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.ihsg-price{font-size:13px;font-weight:700;color:var(--text)}
+.ihsg-gain{font-size:11px;font-weight:700}
+
+.hero{text-align:center;padding:48px 24px 0}
+.hero-logo{font-family:'Space Mono',monospace;font-size:36px;font-weight:700;letter-spacing:.35em;color:var(--accent)}
+.hero-tag{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-top:8px}
+
+.stats-row{display:flex;justify-content:center;gap:24px;padding:24px;font-family:'Space Mono',monospace}
+.sr-item{display:flex;align-items:center;gap:8px}
+.sr-label{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.sr-val{font-size:13px;font-weight:700}
+.sr-sep{width:1px;height:18px;background:var(--border)}
+
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:940px;margin:0 auto;padding:16px 24px 48px;width:100%}
+@media(max-width:800px){.cards{grid-template-columns:1fr}}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:28px;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;gap:12px;text-decoration:none;color:var(--text)}
+.card:hover{border-color:var(--accent);box-shadow:0 0 24px rgba(0,232,162,.08);transform:translateY(-3px)}
+.card.primary{border-color:var(--border2)}
+.card-icon{font-size:24px;margin-bottom:4px}
+.card-title{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text)}
+.card-sub{font-size:12px;font-style:italic;color:var(--accent);margin-top:-4px}
+.card-desc{font-size:12px;color:var(--muted);line-height:1.5}
+
+.footer{text-align:center;padding:24px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:auto}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ZENITH <span>/ hub</span></div>
+  <div class="nav-divider"></div>
+  <a href="/chart" class="nav-btn">⬡ Chart</a>
+  <a href="/flow" class="nav-btn">⊞ Flow</a>
+  <a href="/sector" class="nav-btn">◈ Sector</a>
+  <div class="nav-right">
+    <span class="ihsg-label">IHSG</span>
+    <span class="ihsg-price" id="ihsgPrice">—</span>
+    <span class="ihsg-gain" id="ihsgGain">—</span>
+  </div>
+</header>
+
+<div class="hero">
+  <div class="hero-logo">ZENITH</div>
+  <div class="hero-tag">Smart Money Intelligence Platform</div>
+</div>
+
+<div class="stats-row">
+  <div class="sr-item"><span class="sr-label">IHSG</span><span class="sr-val" id="sIHSG" style="color:var(--text)">—</span></div>
+  <div class="sr-sep"></div>
+  <div class="sr-item"><span class="sr-label">WIB</span><span class="sr-val" id="sTime" style="color:var(--text)">—</span></div>
+  <div class="sr-sep"></div>
+  <div class="sr-item"><span class="sr-label">Total SM</span><span class="sr-val" id="sSM" style="color:var(--accent2)">—</span></div>
+</div>
+
+<div class="cards">
+  <a href="/chart" class="card">
+    <div class="card-icon">⬡</div>
+    <div class="card-title">Chart</div>
+    <div class="card-sub">Real-time Candlestick IDX</div>
+    <div class="card-desc">Analisis pergerakan harga saham IDX dengan timeframe 5m hingga 1D. Dilengkapi overlay CM, SM, dan BM langsung di atas candlestick.</div>
+  </a>
+  <a href="/flow" class="card primary">
+    <div class="card-icon">⊞</div>
+    <div class="card-title">Flow</div>
+    <div class="card-sub">Smart & Bad Money Flow</div>
+    <div class="card-desc">Pantau aliran dana smart money dan bad money per emiten IDX. Filter tanggal, multi-sort, dan detail transaksi lengkap per ticker.</div>
+  </a>
+  <a href="/sector" class="card">
+    <div class="card-icon">◈</div>
+    <div class="card-title">Sector</div>
+    <div class="card-sub">Sector Rotation Analysis</div>
+    <div class="card-desc">Identifikasi sektor yang sedang diakumulasi atau didistribusi. Breakdown CM, SM, BM per sektor industri IDX.</div>
+  </a>
+</div>
+
+<div class="footer">zenith project v1.0 | by machiavellia</div>
+
+<script>
+function fmtM(v){if(v===null||v===undefined)return'—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1000)return s+(a/1000).toFixed(1)+'B';return s+a.toFixed(1)+'M'}
+
+async function init(){
+  // IHSG
+  try{
+    const r=await fetch('/api/ihsg');const d=await r.json();
+    if(d.price){
+      const p=d.price.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
+      document.getElementById('ihsgPrice').textContent=p;
+      const g=d.gain_pct;
+      if(g!==null&&g!==undefined){
+        const el=document.getElementById('ihsgGain');
+        el.textContent=(g>0?'+':'')+g.toFixed(2)+'%';
+        el.style.color=g>=0?'var(--up)':'var(--down)';
+      }
+      const gStr=g!==null?(g>0?'+':'')+g.toFixed(2)+'%':'';
+      const sEl=document.getElementById('sIHSG');
+      sEl.textContent=p+(gStr?' ('+gStr+')':'');
+      if(g!==null)sEl.style.color=g>=0?'var(--up)':'var(--down)';
+    }
+  }catch(_){}
+  // Total SM today
+  try{
+    const r2=await fetch('/api/last-date');const ld=await r2.json();
+    if(ld.date){
+      const apiDate=ld.date.replace(/\//g,'-');
+      const r3=await fetch(`/api/flow?date_from=${apiDate}&date_to=${apiDate}`);
+      const fd=await r3.json();
+      if(fd.totals)document.getElementById('sSM').textContent=fmtM(fd.totals.sm);
+    }
+  }catch(_){}
+  // Clock
+  function tick(){const now=new Date(Date.now()+7*3600*1000);document.getElementById('sTime').textContent=String(now.getUTCHours()).padStart(2,'0')+':'+String(now.getUTCMinutes()).padStart(2,'0')+':'+String(now.getUTCSeconds()).padStart(2,'0')}
+  tick();setInterval(tick,1000);
+}
+window.addEventListener('DOMContentLoaded',init);
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, render_template, request, session, redirect
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
@@ -8,6 +8,10 @@ import time
 import threading
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("FLASK_SECRET", "zenith-secret-key")
+
+def is_authed():
+    return session.get("authed") is True
 
 # ── Config ──────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("DB_PATH", r"C:\Users\rabim\Downloads\zenith_project\zenith.db")
@@ -204,18 +208,41 @@ def get_db():
 
 
 # ── Routes ───────────────────────────────────────────────────────────────
-@app.route("/")
-def index():
-    return render_template("index.html")
+@app.route("/", methods=["GET", "POST"])
+def login():
+    if is_authed():
+        return redirect("/hub")
+    if request.method == "POST":
+        key = request.form.get("key", "").strip()
+        if key == os.environ.get("ACCESS_KEY", "zenith2026"):
+            session["authed"] = True
+            return jsonify({"ok": True})
+        return jsonify({"ok": False})
+    return render_template("login.html")
 
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect("/")
 
-@app.route("/dashboard")
-def dashboard():
-    return render_template("dashboard.html")
+@app.route("/hub")
+def hub():
+    if not is_authed(): return redirect("/")
+    return render_template("hub.html")
 
+@app.route("/chart")
+def chart_page():
+    if not is_authed(): return redirect("/")
+    return render_template("chart.html")
+
+@app.route("/flow")
+def flow_page():
+    if not is_authed(): return redirect("/")
+    return render_template("flow.html")
 
 @app.route("/sector")
 def sector_page():
+    if not is_authed(): return redirect("/")
     return render_template("sector.html")
 
 
@@ -224,6 +251,7 @@ _ihsg_cache = {"data": None, "ts": 0}
 
 @app.route("/api/ihsg")
 def ihsg():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     now = time.time()
     if _ihsg_cache["data"] and (now - _ihsg_cache["ts"]) < CACHE_TTL:
         return jsonify(_ihsg_cache["data"])
@@ -256,6 +284,7 @@ def ihsg():
 # ── API: last date with data in DB ──────────────────────────────────────
 @app.route("/api/last-date")
 def last_date():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     try:
         conn = get_db()
         row = conn.execute("""
@@ -275,6 +304,7 @@ def last_date():
 # ── API: flow data ────────────────────────────────────────────────────────
 @app.route("/api/flow")
 def flow():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     today_wib = datetime.now(WIB).strftime("%d-%m-%Y")
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
@@ -433,6 +463,7 @@ def flow():
 # ── API: transactions per ticker ─────────────────────────────────────────
 @app.route("/api/transactions")
 def transactions():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     ticker    = request.args.get("ticker", "").upper().strip()
     today_wib = datetime.now(WIB).strftime("%d-%m-%Y")
     date_from = request.args.get("date_from", today_wib)
@@ -504,6 +535,7 @@ def transactions():
 # ── API: overlay data (CM/SM/BM per candle bucket) ──────────────────────
 @app.route("/api/overlay")
 def overlay():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     ticker = request.args.get("ticker", "").upper().strip()
     tf     = request.args.get("tf", "1d")
 
@@ -603,6 +635,7 @@ def overlay():
 
 @app.route("/api/ohlcv")
 def ohlcv():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     ticker = request.args.get("ticker", "BBRI").upper().strip()
     tf     = request.args.get("tf", "15m")
 
@@ -796,6 +829,7 @@ def upload_db():
 # ── API: sector aggregation ──────────────────────────────────────────────
 @app.route("/api/sector")
 def sector_api():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
     today_wib = datetime.now(WIB).strftime("%d-%m-%Y")
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)

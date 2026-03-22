@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Chart</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
+<style>
+:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#4a6070;--up:#00e8a2;--down:#ff4d6a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column}
+
+header{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:200;flex-wrap:wrap}
+.logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap}
+.logo span{color:var(--muted)}
+.nav-divider{width:1px;height:20px;background:var(--border)}
+.nav-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:5px 14px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+.nav-btn.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.search-wrap{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 12px;transition:border-color .2s}
+.search-wrap:focus-within{border-color:var(--accent)}
+.search-wrap input{background:none;border:none;outline:none;color:var(--text);font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;width:100px}
+.search-wrap input::placeholder{color:var(--muted);text-transform:none;font-weight:400}
+.search-btn{background:var(--accent);color:var(--bg);border:none;border-radius:4px;padding:5px 12px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;cursor:pointer;text-transform:uppercase;transition:opacity .15s}
+.search-btn:hover{opacity:.85}
+.ticker-info{display:flex;align-items:center;gap:10px}
+.t-name{font-size:11px;color:var(--muted)}
+.t-price{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;color:var(--text)}
+.ihsg-wrap{display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace}
+.ihsg-label{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.ihsg-price{font-size:12px;font-weight:700;color:var(--text)}
+.ihsg-gain{font-size:10px;font-weight:700}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px}
+
+main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
+.tf-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.tf-label{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.tf-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:4px 12px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.06em}
+.tf-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tf-btn.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;position:relative;height:max(600px,calc(100vh - 280px))}
+#chart{width:100%;height:100%}
+.hover-tooltip{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:16px;background:rgba(14,19,24,.92);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-family:'Space Mono',monospace;font-size:11px;pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap}
+.hover-tooltip.visible{opacity:1}
+.ht-item{display:flex;flex-direction:column;align-items:center;gap:2px}
+.ht-label{font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.ht-val{font-size:12px;font-weight:700;color:var(--text)}
+.ht-val.up{color:var(--up)}.ht-val.down{color:var(--down)}
+.ht-sep{width:1px;height:28px;background:var(--border)}
+.state-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:20;background:var(--surface)}
+.state-overlay.hidden{display:none}
+.spinner{width:32px;height:32px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.state-msg{font-size:13px;color:var(--muted)}.state-err{font-size:13px;color:var(--danger)}
+
+/* ── OVERLAY TOGGLES */
+.overlay-toggles{display:flex;gap:4px;margin-left:8px}
+.ovl-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:3px 10px;cursor:pointer;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.06em;transition:all .15s;display:flex;align-items:center;gap:5px}
+.ovl-btn .ovl-dot{width:7px;height:7px;border-radius:50%;opacity:.4;transition:opacity .15s}
+.ovl-btn:hover{border-color:var(--text);color:var(--text)}
+.ovl-btn.active{border-color:currentColor}
+.ovl-btn.active .ovl-dot{opacity:1}
+.ovl-btn.active.cm{color:#00e8a2}
+.ovl-btn.active.sm{color:#4d9fff}
+.ovl-btn.active.bm{color:#ff8c42}
+.m-overlay-vals{position:absolute;top:12px;left:14px;z-index:10;display:flex;flex-direction:column;gap:2px;pointer-events:none}
+.m-ovl-row{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;opacity:0;transition:opacity .15s}
+.m-ovl-row.visible{opacity:1}
+.m-ovl-row .m-ovl-label{font-size:9px;font-weight:400;letter-spacing:.08em;margin-right:6px}
+/* ── TRANSACTIONS */
+.trx-section{padding:16px 24px 20px}
+.trx-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.trx-section-title{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:12px;white-space:nowrap}
+.trx-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.trx-date-range{display:flex;align-items:center;gap:6px}
+.trx-date-input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;font-family:'Space Mono',monospace;font-size:10px;outline:none;width:96px;letter-spacing:.04em;transition:border-color .2s}
+.trx-date-input:focus{border-color:var(--accent)}
+.trx-date-input::placeholder{color:var(--muted)}
+.trx-date-arrow{color:var(--muted);font-size:11px;padding:0 2px}
+.trx-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.trx-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;height:260px;display:flex;flex-direction:column;overflow:hidden}
+.trx-box-header{padding:6px 12px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;background:var(--bg);z-index:1}
+.trx-box-header.sm{color:var(--accent2)}
+.trx-box-header.bm{color:#ff8c42}
+.trx-box-header .trx-count{color:var(--muted);font-size:8px}
+.trx-table-wrap{flex:1 1 0;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.trx-table-wrap::-webkit-scrollbar{width:5px}
+.trx-table-wrap::-webkit-scrollbar-track{background:transparent}
+.trx-table-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.trx-table{width:100%;border-collapse:collapse}
+.trx-table thead th{position:sticky;top:0;z-index:1;background:var(--bg);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+.trx-table th:first-child{text-align:left}
+.trx-table td{padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;color:var(--text);text-align:right;border-bottom:1px solid rgba(26,34,48,.5);white-space:nowrap}
+.trx-table td:first-child{text-align:left;color:var(--muted)}
+.trx-table tbody tr:last-child td{border-bottom:none}
+.trx-table tbody tr:hover{background:rgba(255,255,255,.02)}
+.trx-gain-pos{color:var(--up)}.trx-gain-neg{color:var(--down)}
+.trx-mf-sm{color:var(--accent2)}.trx-mf-bm{color:#ff8c42}
+.trx-empty,.trx-loading{padding:20px;text-align:center;color:var(--muted);font-size:11px}
+
+/* PIKADAY */
+.pika-single{background:var(--surface2)!important;border:1px solid var(--border2)!important;border-radius:8px!important;font-family:'DM Sans',sans-serif!important;color:var(--text)!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important}
+.pika-title{padding:8px 10px!important}
+.pika-label{background:transparent!important;color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:12px!important}
+.pika-prev,.pika-next{color:var(--muted)!important;opacity:1!important}
+.pika-prev:hover,.pika-next:hover{color:var(--accent)!important}
+.pika-table th{color:var(--muted)!important;font-size:10px!important;font-family:'Space Mono',monospace!important}
+.pika-button{background:transparent!important;color:var(--text)!important;border-radius:4px!important;font-size:12px!important;text-align:center!important}
+.pika-button:hover,.is-selected .pika-button{background:var(--accent)!important;color:var(--bg)!important}
+.is-today .pika-button{color:var(--accent)!important;font-weight:700!important}
+.is-disabled .pika-button{color:var(--muted)!important;opacity:.4!important}
+.pika-select{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">ZENITH <span>/ chart</span></div>
+  <div class="nav-divider"></div>
+  <a href="/flow" class="nav-btn">⊞ Flow</a>
+  <a href="/sector" class="nav-btn">◈ Sector</a>
+  <div class="nav-divider"></div>
+  <div class="search-wrap">
+    <input type="text" id="tickerInput" placeholder="Ticker..." value="BBRI" maxlength="8"/>
+  </div>
+  <button class="search-btn" onclick="doLoad()">Load</button>
+  <div class="ticker-info">
+    <div class="t-name" id="tName">—</div>
+    <div class="t-price" id="tPrice">—</div>
+  </div>
+  <div class="nav-right">
+    <div class="ihsg-wrap">
+      <span class="ihsg-label">IHSG</span>
+      <span class="ihsg-price" id="ihsgPrice">—</span>
+      <span class="ihsg-gain" id="ihsgGain">—</span>
+    </div>
+    <div class="nav-divider"></div>
+    <div class="overlay-toggles">
+      <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
+      <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
+      <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="tf-row">
+    <span class="tf-label">TF</span>
+    <button class="tf-btn" data-tf="5m" onclick="setTF('5m')">5m</button>
+    <button class="tf-btn" data-tf="15m" onclick="setTF('15m')">15m</button>
+    <button class="tf-btn" data-tf="30m" onclick="setTF('30m')">30m</button>
+    <button class="tf-btn" data-tf="1h" onclick="setTF('1h')">1h</button>
+    <button class="tf-btn active" data-tf="1d" onclick="setTF('1d')">1D</button>
+    <div style="flex:1"></div>
+    <button class="tf-btn" id="btnLog" onclick="setScale('log')" title="Log scale">L</button>
+    <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')" title="Auto scale">A</button>
+  </div>
+
+  <div class="chart-card">
+    <div class="m-overlay-vals" id="mOverlayVals" style="top:16px;left:16px">
+      <div class="m-ovl-row" id="mOvlCM" style="color:#00e8a2"><span class="m-ovl-label">CM</span><span id="mOvlCMv">—</span></div>
+      <div class="m-ovl-row" id="mOvlSM" style="color:#4d9fff"><span class="m-ovl-label">SM</span><span id="mOvlSMv">—</span></div>
+      <div class="m-ovl-row" id="mOvlBM" style="color:#ff8c42"><span class="m-ovl-label">BM</span><span id="mOvlBMv">—</span></div>
+    </div>
+    <div class="hover-tooltip" id="hoverTooltip">
+      <div class="ht-item"><span class="ht-label">GAIN</span><span class="ht-val" id="htGain">—</span></div>
+      <div class="ht-sep"></div>
+      <div class="ht-item"><span class="ht-label">O</span><span class="ht-val" id="htOpen">—</span></div>
+      <div class="ht-item"><span class="ht-label">H</span><span class="ht-val up" id="htHigh">—</span></div>
+      <div class="ht-item"><span class="ht-label">L</span><span class="ht-val down" id="htLow">—</span></div>
+      <div class="ht-item"><span class="ht-label">C</span><span class="ht-val" id="htClose">—</span></div>
+      <div class="ht-sep"></div>
+      <div class="ht-item"><span class="ht-label">Vol</span><span class="ht-val" id="htVol">—</span></div>
+    </div>
+    <div id="chart"></div>
+    <div class="state-overlay hidden" id="loadingOverlay"></div>
+  </div>
+
+  <!-- TRANSAKSI SM & BM -->
+  <div class="trx-section">
+    <div class="trx-toolbar">
+      <div class="trx-section-title">Transaksi SM &amp; BM</div>
+      <div class="trx-date-range">
+        <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+        <span class="trx-date-arrow">→</span>
+        <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+      </div>
+    </div>
+    <div class="trx-grid">
+      <div class="trx-box">
+        <div class="trx-box-header sm">Smart Money <span class="trx-count" id="smCount"></span></div>
+        <div class="trx-table-wrap">
+          <table class="trx-table"><thead><tr><th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th></tr></thead>
+          <tbody id="smBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody></table>
+        </div>
+      </div>
+      <div class="trx-box">
+        <div class="trx-box-header bm">Bad Money <span class="trx-count" id="bmCount"></span></div>
+        <div class="trx-table-wrap">
+          <table class="trx-table"><thead><tr><th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th></tr></thead>
+          <tbody id="bmBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody></table>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+let chart=null,candleSeries=null,volumeSeries=null;
+let currentTicker='BBRI',currentTF='1d';
+let isLogScale=false,isAutoScale=true;
+const INIT_CANDLES=150;
+let prevCloseMap={};
+
+// Overlay state
+let ovlSeriesCM=null,ovlSeriesSM=null,ovlSeriesBM=null;
+let ovlShowCM=true,ovlShowSM=false,ovlShowBM=false;
+let overlayDataCache=[];
+
+// Date helpers
+function todayDDMMYYYY(){const now=new Date(Date.now()+7*3600*1000);return`${String(now.getUTCDate()).padStart(2,'0')}/${String(now.getUTCMonth()+1).padStart(2,'0')}/${now.getUTCFullYear()}`}
+function displayToApi(s){return s.replace(/\//g,'-')}
+function autoFormatDate(input){let v=input.value.replace(/\D/g,'');if(v.length>=3)v=v.slice(0,2)+'/'+v.slice(2);if(v.length>=6)v=v.slice(0,5)+'/'+v.slice(5);input.value=v.slice(0,10)}
+function fmtMf(v){if(v===null||v===undefined)return'—';const sign=v>0?'+':'';if(Math.abs(v)>=1000)return sign+(v/1000).toFixed(1)+'B';return sign+v.toFixed(1)+'M'}
+
+function initChart(){
+  const container=document.getElementById('chart');
+  chart=LightweightCharts.createChart(container,{
+    layout:{background:{color:'#0e1318'},textColor:'#4a6070'},
+    grid:{vertLines:{color:'#1a2230'},horzLines:{color:'#1a2230'}},
+    crosshair:{mode:LightweightCharts.CrosshairMode.Normal,vertLine:{color:'#4a6070',labelBackgroundColor:'#1a2230'},horzLine:{color:'#4a6070',labelBackgroundColor:'#1a2230'}},
+    rightPriceScale:{borderColor:'#1a2230'},
+    timeScale:{borderColor:'#1a2230',timeVisible:true,secondsVisible:false,
+      tickMarkFormatter:t=>{const d=new Date(t*1000);const h=String(d.getUTCHours()).padStart(2,'0');const m=String(d.getUTCMinutes()).padStart(2,'0');const day=d.getUTCDate();const mon=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];return currentTF==='1d'?`${day} ${mon}`:`${h}:${m}`}},
+    localization:{priceFormatter:p=>Math.round(p).toLocaleString('id-ID')},
+    handleScroll:true,handleScale:true,
+    width:container.clientWidth||800,height:container.clientHeight||600,
+  });
+
+  candleSeries=chart.addCandlestickSeries({upColor:'#00e8a2',downColor:'#ff4d6a',borderUpColor:'#00e8a2',borderDownColor:'#ff4d6a',wickUpColor:'#00e8a2',wickDownColor:'#ff4d6a'});
+  volumeSeries=chart.addHistogramSeries({color:'#1a2230',priceFormat:{type:'volume'},priceScaleId:'volume',scaleMargins:{top:0.85,bottom:0}});
+  chart.priceScale('volume').applyOptions({scaleMargins:{top:0.85,bottom:0}});
+
+  // Overlay series
+  chart.priceScale('overlay').applyOptions({scaleMargins:{top:0.05,bottom:0.2},visible:false,autoScale:true});
+  ovlSeriesCM=chart.addLineSeries({color:'#00e8a2',lineWidth:2,priceScaleId:'overlay',lastValueVisible:false,priceLineVisible:false,crosshairMarkerRadius:4});
+  ovlSeriesSM=chart.addLineSeries({color:'#4d9fff',lineWidth:1.5,priceScaleId:'overlay',lastValueVisible:false,priceLineVisible:false,crosshairMarkerRadius:3});
+  ovlSeriesBM=chart.addLineSeries({color:'#ff8c42',lineWidth:1.5,priceScaleId:'overlay',lastValueVisible:false,priceLineVisible:false,crosshairMarkerRadius:3});
+  ovlSeriesCM.applyOptions({visible:ovlShowCM});ovlSeriesSM.applyOptions({visible:ovlShowSM});ovlSeriesBM.applyOptions({visible:ovlShowBM});
+  updateOvlValVisibility();
+
+  // Crosshair
+  chart.subscribeCrosshairMove(param=>{
+    const tt=document.getElementById('hoverTooltip');
+    if(!param.time||!param.seriesData){tt.classList.remove('visible');return}
+    const bar=param.seriesData.get(candleSeries);
+    if(!bar){tt.classList.remove('visible');return}
+    const fmt=v=>Math.round(v).toLocaleString('id-ID');
+    const fmtV=v=>{if(!v)return'—';if(v>=1e9)return(v/1e9).toFixed(1)+'B';if(v>=1e6)return(v/1e6).toFixed(1)+'M';if(v>=1e3)return(v/1e3).toFixed(1)+'K';return String(v)};
+    const pc=prevCloseMap[param.time]||bar.open;
+    const gPct=pc>0?((bar.close-pc)/pc*100):0;
+    const gEl=document.getElementById('htGain');
+    gEl.textContent=(gPct>0?'+':'')+gPct.toFixed(2)+'%';
+    gEl.className='ht-val '+(gPct>=0?'up':'down');
+    document.getElementById('htOpen').textContent=fmt(bar.open);
+    document.getElementById('htHigh').textContent=fmt(bar.high);
+    document.getElementById('htLow').textContent=fmt(bar.low);
+    const cEl=document.getElementById('htClose');cEl.textContent=fmt(bar.close);cEl.className='ht-val '+(bar.close>=bar.open?'up':'down');
+    const vb=param.seriesData.get(volumeSeries);
+    document.getElementById('htVol').textContent=vb?fmtV(vb.value):'—';
+    tt.classList.add('visible');
+    // Overlay values
+    const ovlP=overlayDataCache.find(p=>p.time===param.time);
+    document.getElementById('mOvlCMv').textContent=ovlP?fmtMf(ovlP.cm):'—';
+    document.getElementById('mOvlSMv').textContent=ovlP?fmtMf(ovlP.sm):'—';
+    document.getElementById('mOvlBMv').textContent=ovlP?fmtMf(ovlP.bm):'—';
+    document.getElementById('mOvlCM').classList.toggle('visible',ovlShowCM&&!!ovlP);
+    document.getElementById('mOvlSM').classList.toggle('visible',ovlShowSM&&!!ovlP);
+    document.getElementById('mOvlBM').classList.toggle('visible',ovlShowBM&&!!ovlP);
+  });
+
+  applyAutoScale(true);
+  const ro=new ResizeObserver(()=>{chart.applyOptions({width:container.clientWidth,height:container.clientHeight})});
+  ro.observe(container);
+}
+
+function applyAutoScale(on){if(!chart)return;chart.priceScale('right').applyOptions({autoScale:on,scaleMargins:{top:0.1,bottom:0.2}});chart.applyOptions({handleScale:{axisPressedMouseMove:{price:!on,time:true}}})}
+function setScale(mode){if(mode==='auto'){isAutoScale=!isAutoScale;applyAutoScale(isAutoScale);document.getElementById('btnAuto').classList.toggle('active',isAutoScale)}else{isLogScale=!isLogScale;if(chart)chart.priceScale('right').applyOptions({mode:isLogScale?1:0});document.getElementById('btnLog').classList.toggle('active',isLogScale)}}
+function setTF(tf){currentTF=tf;document.querySelectorAll('.tf-btn[data-tf]').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf));doLoad()}
+
+async function doLoad(){
+  const input=document.getElementById('tickerInput').value.trim().toUpperCase();
+  if(!input)return;currentTicker=input;
+  showLoading('Mengambil data...');
+  if(!candleSeries){if(chart){chart.remove();chart=null};initChart()}
+  try{
+    const res=await fetch(`/api/ohlcv?ticker=${currentTicker}&tf=${currentTF}`);
+    const data=await res.json();if(data.error)throw new Error(data.error);
+    const candles=data.candles||[];if(!candles.length)throw new Error('Data kosong');
+    prevCloseMap={};
+    for(let i=0;i<candles.length;i++)prevCloseMap[candles[i].time]=i>0?candles[i-1].close:candles[i].open;
+    chart.timeScale().resetTimeScale();
+    candleSeries.setData(candles);
+    volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'#00e8a240':'#ff4d6a40'})));
+    requestAnimationFrame(()=>{if(candles.length>INIT_CANDLES)chart.timeScale().setVisibleRange({from:candles[candles.length-INIT_CANDLES].time,to:candles[candles.length-1].time});else chart.timeScale().fitContent()});
+    applyAutoScale(isAutoScale);hideLoading();
+    if(data.name)document.getElementById('tName').textContent=data.name;
+    if(data.price){document.getElementById('tPrice').textContent=data.price.toLocaleString('id-ID')}
+    loadOverlayData(candles);loadTransactions();
+  }catch(err){showError(err.message)}
+}
+
+async function loadOverlayData(candles){
+  if(!chart||!ovlSeriesCM)return;
+  try{
+    const res=await fetch(`/api/overlay?ticker=${currentTicker}&tf=${currentTF}`);
+    const data=await res.json();
+    if(data.error||!data.points||!data.points.length){overlayDataCache=[];ovlSeriesCM.setData([]);ovlSeriesSM.setData([]);ovlSeriesBM.setData([]);return}
+    const candleTimes=new Set(candles.map(c=>c.time));const candleArr=candles.map(c=>c.time).sort((a,b)=>a-b);
+    function snapTime(t){if(candleTimes.has(t))return t;let best=null,bestDist=Infinity;for(const ct of candleArr){const dist=Math.abs(ct-t);if(dist<bestDist){bestDist=dist;best=ct}if(ct>t)break}return best}
+    const cmD=[],smD=[],bmD=[],seen=new Set();overlayDataCache=[];
+    for(const p of data.points){const st=snapTime(p.time);if(!st||seen.has(st))continue;seen.add(st);
+      cmD.push({time:st,value:p.cum_cm});smD.push({time:st,value:p.cum_sm});bmD.push({time:st,value:p.cum_bm});
+      overlayDataCache.push({time:st,cm:p.cm,sm:p.sm,bm:p.bm})}
+    ovlSeriesCM.setData(cmD);ovlSeriesSM.setData(smD);ovlSeriesBM.setData(bmD);
+  }catch(_){overlayDataCache=[]}
+}
+
+function toggleOverlay(which){
+  if(which==='cm'){ovlShowCM=!ovlShowCM;document.getElementById('ovlBtnCM').classList.toggle('active',ovlShowCM);if(ovlSeriesCM)ovlSeriesCM.applyOptions({visible:ovlShowCM})}
+  else if(which==='sm'){ovlShowSM=!ovlShowSM;document.getElementById('ovlBtnSM').classList.toggle('active',ovlShowSM);if(ovlSeriesSM)ovlSeriesSM.applyOptions({visible:ovlShowSM})}
+  else{ovlShowBM=!ovlShowBM;document.getElementById('ovlBtnBM').classList.toggle('active',ovlShowBM);if(ovlSeriesBM)ovlSeriesBM.applyOptions({visible:ovlShowBM})}
+  updateOvlValVisibility();
+}
+function updateOvlValVisibility(){document.getElementById('mOvlCM').style.display=ovlShowCM?'':'none';document.getElementById('mOvlSM').style.display=ovlShowSM?'':'none';document.getElementById('mOvlBM').style.display=ovlShowBM?'':'none'}
+
+async function loadTransactions(){
+  const df=document.getElementById('trxDateFrom').value.trim();
+  const dt=document.getElementById('trxDateTo').value.trim();
+  if(!df||!dt)return;
+  const url=`/api/transactions?ticker=${currentTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+  const fmtGain=g=>{if(g===null||g===undefined)return'—';const cls=g>0?'trx-gain-pos':g<0?'trx-gain-neg':'';return`<span class="${cls}">${g>0?'+':''}${g.toFixed(2)}%</span>`};
+  const buildRows=(rows,mfCls)=>{if(!rows.length)return`<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;return rows.map(r=>`<tr><td>${r.time}</td><td>${r.price?r.price.toLocaleString('id-ID'):'—'}</td><td>${fmtGain(r.gain_pct)}</td><td><span class="${mfCls}">${r.mf||'—'}</span></td><td>${r.vol_x?r.vol_x.toFixed(1)+'x':'—'}</td></tr>`).join('')};
+  try{
+    const res=await fetch(url);const data=await res.json();if(data.error)throw new Error(data.error);
+    document.getElementById('smCount').textContent=`(${data.sm_count}TX)`;
+    document.getElementById('bmCount').textContent=`(${data.bm_count}TX)`;
+    document.getElementById('smBody').innerHTML=buildRows(data.sm,'trx-mf-sm');
+    document.getElementById('bmBody').innerHTML=buildRows(data.bm,'trx-mf-bm');
+  }catch(e){const err=`<tr><td colspan="5" class="trx-empty">⚠ ${e.message}</td></tr>`;document.getElementById('smBody').innerHTML=err;document.getElementById('bmBody').innerHTML=err}
+}
+
+function showLoading(msg){const ov=document.getElementById('loadingOverlay');ov.classList.remove('hidden');ov.innerHTML=`<div class="spinner"></div><div class="state-msg">${msg}</div>`}
+function showError(msg){const ov=document.getElementById('loadingOverlay');ov.classList.remove('hidden');ov.innerHTML=`<div class="state-err">⚠ ${msg}</div>`}
+function hideLoading(){document.getElementById('loadingOverlay').classList.add('hidden')}
+
+document.getElementById('tickerInput').addEventListener('keydown',e=>{if(e.key==='Enter')doLoad()});
+
+// Pikaday + init
+let trxPickerFrom,trxPickerTo;
+window.addEventListener('DOMContentLoaded',async()=>{
+  let initDateStr=todayDDMMYYYY();
+  try{const r=await fetch('/api/last-date');const d=await r.json();if(d.date)initDateStr=d.date}catch(_){}
+  const[dd,mm,yyyy]=initDateStr.split('/').map(Number);const initDate=new Date(yyyy,mm-1,dd);
+  const opts={format:'DD/MM/YYYY',toString:date=>{const d=String(date.getDate()).padStart(2,'0'),m=String(date.getMonth()+1).padStart(2,'0');return`${d}/${m}/${date.getFullYear()}`},parse:str=>{const[d,m,y]=str.split('/').map(Number);return new Date(y,m-1,d)},i18n:{previousMonth:'‹',nextMonth:'›',months:['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'],weekdays:['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],weekdaysShort:['Min','Sen','Sel','Rab','Kam','Jum','Sab']},maxDate:new Date()};
+  trxPickerFrom=new Pikaday({...opts,field:document.getElementById('trxDateFrom'),defaultDate:initDate,setDefaultDate:true,onSelect:date=>{if(trxPickerTo&&date>trxPickerTo.getDate())trxPickerTo.setDate(date);loadTransactions()}});
+  trxPickerTo=new Pikaday({...opts,field:document.getElementById('trxDateTo'),defaultDate:initDate,setDefaultDate:true,onSelect:()=>loadTransactions()});
+  document.querySelectorAll('.trx-date-input').forEach(el=>el.addEventListener('input',()=>autoFormatDate(el)));
+
+  // IHSG
+  try{const r=await fetch('/api/ihsg');const d=await r.json();if(d.price)document.getElementById('ihsgPrice').textContent=d.price.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});if(d.gain_pct!==null&&d.gain_pct!==undefined){const el=document.getElementById('ihsgGain');el.textContent=(d.gain_pct>0?'+':'')+d.gain_pct.toFixed(2)+'%';el.style.color=d.gain_pct>=0?'var(--up)':'var(--down)'}}catch(_){}
+
+  // URL param ticker
+  const params=new URLSearchParams(location.search);
+  const t=params.get('ticker');
+  if(t)document.getElementById('tickerInput').value=t.toUpperCase();
+
+  initChart();doLoad();
+});
+</script>
+</body>
+</html>
