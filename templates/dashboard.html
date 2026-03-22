@@ -78,6 +78,28 @@ header {
 }
 .ticker-search-wrap input::placeholder { color: var(--muted); }
 
+/* IHSG display */
+.ihsg-wrap {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  font-family: 'Space Mono', monospace;
+}
+.ihsg-label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.ihsg-price { font-size: 13px; font-weight: 700; color: var(--text); }
+.ihsg-gain { font-size: 11px; font-weight: 700; }
+
+/* Sector filter badge */
+.sector-badge {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Space Mono', monospace;
+}
+.sector-badge-label {
+  font-size: 9px; color: var(--muted); letter-spacing: .06em;
+}
+.sector-badge-name {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+
 /* ── STATS BAR ───────────────────────────────────── */
 .stats-bar {
   display: flex; align-items: center; gap: 0;
@@ -587,10 +609,16 @@ td:first-child { text-align: left; }
   <div class="nav-divider"></div>
   <a href="/" class="nav-btn">⬡ Chart</a>
   <a href="/dashboard" class="nav-btn active">⊞ Flow</a>
+  <a href="/sector" class="nav-btn">◈ Sector</a>
   <div class="nav-divider"></div>
   <div class="ticker-search-wrap">
     <span style="color:var(--muted);font-size:12px">⌕</span>
     <input type="text" id="tickerFilter" placeholder="Filter ticker..."/>
+  </div>
+  <div class="ihsg-wrap">
+    <span class="ihsg-label">IHSG</span>
+    <span class="ihsg-price" id="ihsgPrice">—</span>
+    <span class="ihsg-gain" id="ihsgGain">—</span>
   </div>
 </header>
 
@@ -628,6 +656,13 @@ td:first-child { text-align: left; }
 
 <!-- TOOLBAR -->
 <div class="toolbar">
+  <div id="sectorBackWrap" style="display:none">
+    <a href="/sector" class="nav-btn" style="font-size:10px">← Sector</a>
+  </div>
+  <div id="sectorBadgeWrap" class="sector-badge" style="display:none">
+    <span class="sector-badge-label">Menampilkan:</span>
+    <span class="sector-badge-name" id="sectorBadgeName"></span>
+  </div>
   <div class="date-range">
     <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
     <div class="date-arrow">→</div>
@@ -770,6 +805,32 @@ let ovlSeriesCM = null, ovlSeriesSM = null, ovlSeriesBM = null;
 let ovlShowCM = true, ovlShowSM = false, ovlShowBM = false;
 let overlayDataCache = []; // [{time, sm, bm, cm}]
 
+// ── Sector filter ────────────────────────────────────────────────────
+const SECTORS = {
+  "Energy": ["ABMM", "MEDC", "SGER", "AKRA", "MTFN", "UNIQ", "APEX", "MYOH", "MCOL", "ARII", "PGAS", "GTSI", "ARTI", "PKPK", "RMKE", "BBRM", "PTBA", "BSML", "BIPI", "PTIS", "ADMR", "BSSR", "PTRO", "SEMA", "BULL", "RAJA", "SICO", "BUMI", "RIGS", "COAL", "BYAN", "RUIS", "SUNI", "CANI", "SMMT", "CBRE", "CNKO", "SMRU", "HILL", "DEWA", "SOCI", "CUAN", "DOID", "BUMA", "SUGI", "MAHA", "DSSA", "TOBA", "RMKO", "ELSA", "TPMA", "HUMI", "ENRG", "TRAM", "RGAS", "GEMS", "WINS", "ALII", "GTBO", "SHIP", "MKAP", "HITS", "TAMU", "ATLA", "HRUM", "FIRE", "BOAT", "IATA", "PSSI", "AADI", "INDY", "DWGL", "RATU", "ITMA", "BOSS", "PSAT", "ITMG", "JSKY", "BESS", "KKGI", "INPS", "CGAS", "KOPI", "TCPI", "ADRO", "LEAD", "SURE", "AIMS", "MBAP", "WOWS", "MBSS", "TEBE"],
+  "Basic Materials": ["AKPI", "MDKA", "ESIP", "ALDO", "NIKL", "IFSH", "ALKA", "OKAS", "IFII", "ALMI", "PICO", "SAMF", "ANTM", "PSAB", "EPAC", "APLI", "SIMA", "BEBS", "BAJA", "SMBR", "NPGF", "BMSR", "SMCB", "ARCI", "BRMS", "SMGR", "NICL", "BRNA", "SPMA", "SBMA", "BRPT", "SQMI", "CMNT", "BTON", "SRSN", "OBMD", "CITA", "SULI", "AVIA", "CLPI", "TALF", "CHEM", "CTBN", "TBMS", "KKES", "DKFT", "TINS", "PDPP", "DPNS", "TIRT", "FWCT", "EKAD", "TKIM", "PACK", "ESSA", "TPIA", "AMMN", "ETWA", "TRST", "PPRI", "FASW", "UNIC", "SMGA", "FPNI", "WTON", "SOLA", "GDST", "YPAS", "BATR", "IGAR", "INCF", "BLES", "INAI", "WSBP", "PTMR", "INCI", "KMTR", "DAAZ", "INCO", "MDKI", "DGWG", "INKP", "ZINC", "MINE", "INRU", "PBID", "ASPR", "INTD", "TDPM", "EMAS", "INTP", "SWAT", "AYLS", "IPOL", "MOLI", "NCKL", "ISSP", "HKMU", "MBMA", "KBRI", "KAYU", "NICE", "KDSI", "SMKL", "SMLE", "KRAS", "GGRP", "ADMG", "LMSH", "OPMS", "AGII", "LTLS", "PURE"],
+  "Industrials": ["AMFG", "KIAS", "ARKA", "AMIN", "KOBX", "SINI", "APII", "KOIN", "HOPE", "ARNA", "KONI", "LABA", "ASGR", "LION", "GPSO", "ASII", "MDRN", "KUAS", "BHIT", "MFMI", "BINO", "BNBR", "MLIA", "NTBK", "CTTH", "SCCO", "PADA", "DYAN", "TIRA", "KING", "HEXA", "TOTO", "PTMP", "IBFN", "TRIL", "SMIL", "ICON", "UNTR", "CRSN", "IKAI", "VOKS", "WIDI", "IKBI", "ZBRA", "FOLK", "IMPC", "MARK", "MUTU", "INDX", "SPTO", "HYGN", "INTA", "SKRN", "VISI", "JECC", "CAKK", "MHKI", "JTPE", "SOSS", "NAIK", "KBLI", "CCSI", "PIPA", "KBLM", "BLUE"],
+  "Consumer Non-Cyclicals": ["AALI", "SIPD", "FLMC", "ADES", "SKBM", "OILS", "AISA", "SKLT", "BOBA", "ALTO", "SMAR", "CMRY", "AMRT", "SSMS", "TAYS", "ANJT", "STTP", "WMPP", "BISI", "TBLA", "IPPE", "BTEK", "TCID", "NASI", "BUDI", "TGKA", "STAA", "BWPT", "ULTJ", "NANO", "CEKA", "UNSP", "TLDN", "CPIN", "UNVR", "IBOS", "CPRO", "WAPO", "ASHA", "DLTA", "WICO", "TRGU", "DSFI", "WIIM", "DEWI", "DSNG", "DAYA", "GULA", "EPMT", "DPUM", "JARR", "FISH", "KINO", "AMMS", "GGRM", "CLEO", "EURO", "GOLL", "HOKI", "BUAH", "GZCO", "CAMP", "CRAB", "HERO", "PCAR", "CBUT", "HMSP", "MGRO", "MKTR", "ICBP", "ANDI", "SOUL", "INDF", "GOOD", "BEER", "JAWA", "FOOD", "WINE", "JPFA", "BEEF", "NAYZ", "LAPD", "COCO", "NSSS", "LSIP", "ITIC", "MAXI", "MAGP", "KEJU", "GRPM", "MAIN", "PSGO", "TGUK", "MBTO", "AGAR", "PTPS", "MIDI", "UCID", "STRK", "MLBI", "CSRA", "UDNG", "MLPL", "DMND", "AYAM", "MPPA", "IKAN", "ISEA", "MRAT", "PGUN", "GUNA", "MYOR", "PNGO", "NEST", "PSDN", "KMDS", "BRRC", "RANC", "ENZO", "RLCO", "ROTI", "VICI", "YUPI", "SDPC", "PMMP", "FORE", "SGRO", "WMUU", "MSJA", "SIMP", "TAPG", "FAPA"],
+  "Consumer Cyclicals": ["ABBA", "PTSP", "SCNP", "ACES", "RALS", "PLAN", "AKKU", "RICY", "SNLK", "ARGO", "SCMA", "LFLO", "ARTA", "SHID", "LUCY", "AUTO", "SMSM", "MGLV", "BATA", "SONA", "IDEA", "BAYU", "SRIL", "DEPO", "BIMA", "SSTM", "DRMA", "BLTZ", "TELE", "ASLC", "BMTR", "TFCO", "NETV", "MDTV", "BOLT", "TMPO", "BAUT", "BRAM", "TRIO", "ENAK", "BUVA", "TRIS", "BIKE", "CINT", "UNIT", "OLIV", "CNTX", "VIVA", "SWID", "CSAP", "JGLE", "RAFI", "ECII", "MARI", "KLIN", "ERAA", "MKNT", "TOOL", "ERTX", "BOGA", "KDTN", "ESTI", "CARS", "ZATA", "FAST", "MINA", "ISAP", "FORU", "MAPB", "BMBL", "GDYR", "WOOD", "FUTR", "GEMA", "HRTA", "HAJJ", "GJTL", "MABA", "TYRE", "GLOB", "BELL", "VKTR", "GWSA", "DFAM", "CNMA", "HOME", "PZZA", "ERAL", "HOTL", "MSIN", "LMAX", "IIKP", "MAPA", "BABY", "IMAS", "NUSA", "AEGS", "INDR", "FILM", "GRPH", "INDS", "DIGI", "UNTD", "JIHD", "DUCK", "MEJA", "JSPT", "YELO", "LIVE", "KICI", "SOTS", "BAIK", "KPIG", "ZONE", "SPRE", "LMPI", "CLAY", "PART", "LPIN", "NATO", "GOLF", "LPPF", "HRME", "DOSS", "MAPI", "FITT", "VERN", "MDIA", "BOLA", "MDIY", "MGNA", "POLU", "MERI", "MICE", "IPTV", "PMUI", "MNCN", "EAST", "KAQI", "MPMX", "KOTA", "ESTA", "MSKY", "INOV", "RAAM", "MYTX", "SLIS", "DOOH", "PANR", "PMJS", "ACRO", "PBRX", "SBAT", "UFOE", "PDES", "CBMF", "PNSE", "PGLI", "CSMI", "POLY", "PJAA", "SOFA", "PSKT", "TOYS"],
+  "Healthcare": ["DVLA", "PRDA", "PEVE", "INAF", "PRIM", "HALO", "KAEF", "HEAL", "RSCH", "KLBF", "PEHA", "IKPM", "MERK", "IRRA", "SURI", "MIKA", "SOHO", "LABS", "PYFA", "BMHS", "OBAT", "SAME", "RSGK", "CHEK", "SCPI", "MTMH", "MDLA", "SIDO", "MEDS", "DKHH", "SILO", "PRAY", "CARE", "SRAJ", "OMED", "DGNS", "TSPC", "MMIX"],
+  "Financials": ["ABDA", "BPFI", "TIFA", "AMAG", "BPII", "TRIM", "APIC", "BSIM", "TRUS", "ARTO", "BSWD", "VICO", "ASBI", "BTPN", "SMBC", "VINS", "ASDM", "BVIC", "VRNA", "ASJT", "CFIN", "WOMF", "ASMI", "DEFI", "YULE", "ASRM", "DNAR", "CASA", "BABP", "DNET", "BRIS", "BACA", "GSMF", "MTWI", "BBCA", "HDFA", "JMAS", "BBHI", "INPC", "NICK", "BBKP", "LPGI", "BTPS", "BBLD", "LPPS", "TUGU", "BBMD", "MAYA", "POLA", "BBNI", "MCOR", "SFAN", "BBRI", "MEGA", "LIFE", "MSIG", "BBTN", "MREI", "FUJI", "BBYB", "NISP", "OCBC", "AMAR", "BCAP", "NOBU", "AMOR", "BCIC", "OCAP", "BHAT", "BDMN", "PADI", "BBSI", "BEKS", "PALM", "BANK", "BFIN", "PANS", "MASB", "BGTG", "PEGE", "VTNY", "BINA", "PLAS", "YOII", "BJBR", "PNBN", "COIN", "BJTM", "PNBS", "SUPA", "BKSW", "PNIN", "ADMF", "BMAS", "PNLF", "AGRO", "BMRI", "RELI", "AGRS", "BNBA", "SDRA", "AHAP", "BNGA", "CIMB", "SMMA", "POOL", "BNII", "SRTG", "BNLI", "STAR"],
+  "Property": ["APLN", "MMLP", "NZIA", "ASRI", "MTLA", "REAL", "BAPA", "MTSM", "INDO", "BCIP", "NIRO", "TRIN", "BEST", "OMRE", "KBAG", "BIKA", "PLIN", "BBSS", "BIPP", "PUDP", "UANG", "BKDP", "PWON", "PURI", "BKSL", "RBMS", "HOMI", "BSDE", "RDTX", "ROCK", "COWL", "RIMO", "ATAP", "CTRA", "RODA", "ADCP", "DART", "SMDM", "TRUE", "DILD", "SMRA", "IPAC", "DMAS", "TARA", "WINR", "DUTI", "CSIS", "BSBK", "ELTY", "ARMY", "CBPE", "EMDE", "NASA", "VAST", "FMII", "RISE", "SAGE", "GAMA", "POLL", "RELF", "GMTD", "LAND", "HBAT", "GPRA", "PANI", "GRIA", "INPP", "CITY", "MSIE", "JRPT", "MPRO", "KOCI", "KIJA", "SATU", "KSIX", "LCGP", "URBN", "CBDK", "LPCK", "POLI", "DADA", "LPKR", "CPRI", "ASPI", "LPLI", "POSA", "AMAN", "MDLN", "PAMG", "PPRO", "MKPI", "BAPI"],
+  "Technology": ["ATIC", "DMMX", "ELIT", "EMTK", "GLVA", "IRSX", "KREN", "PGJO", "CHIP", "LMAS", "CASH", "TRON", "MLPT", "TECH", "JATI", "MTDL", "EDGE", "CYBR", "PTSN", "ZYRX", "IOTF", "SKYB", "UVCR", "MSTI", "KIOS", "BUKA", "TOSK", "MCAS", "RUNS", "MPIX", "NFCX", "WGSH", "AREA", "DIVA", "WIRG", "ASIA", "MENN", "LUCK", "GOTO", "AWAN", "ENVY", "AXIO", "WIFI", "HDIT", "BELI", "DCII", "TFAS", "NINE"],
+  "Infrastructure": ["ACST", "TBIG", "JAST", "ADHI", "TLKM", "KEEN", "BALI", "TOTL", "PTPW", "BTEL", "TOWR", "TAMA", "BUKK", "WIKA", "RONY", "CASS", "WSKT", "PTDU", "CENT", "IDPR", "FIMP", "CMNP", "MTRA", "MTEL", "DGIK", "OASA", "SMKM", "EXCL", "POWR", "ARKO", "GOLD", "PBSA", "KRYA", "HADE", "PORT", "PGEO", "IBST", "TGRA", "BDKR", "ISAT", "TOPS", "INET", "JKON", "MPOW", "BREN", "JSMR", "GMFI", "KOKA", "KARW", "PPRE", "ASLI", "KBLV", "WEGE", "LINK", "MORA", "HGII", "META", "IPCM", "CDIA", "NRCA", "LCKM", "MANG", "PTPP", "GHON", "KETR", "SSIA", "IPCC", "SUPR", "MTPS"],
+  "Transport": ["AKSI", "SMDR", "PPGL", "ASSA", "TAXI", "TRJA", "BIRD", "TMAS", "HAIS", "BLTA", "WEHA", "HATM", "CMPP", "HELI", "RCCC", "GIAA", "TRUK", "ELPI", "IMJS", "TNCA", "LAJU", "LRNA", "BPTR", "GTRA", "MIRA", "SAPX", "MPXL", "MITI", "DEAL", "KLAS", "NELY", "JAYA", "LOPI", "SAFE", "KJEN", "BLOG", "SDMU", "PURA", "PJHB"],
+};
+const _urlParams = new URLSearchParams(location.search);
+const activeSector = _urlParams.get('sector');
+let sectorTickers = null; // Set of allowed tickers when sector filter active
+if (activeSector && SECTORS[activeSector]) {
+  sectorTickers = new Set(SECTORS[activeSector]);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('sectorBackWrap').style.display = '';
+    document.getElementById('sectorBadgeWrap').style.display = '';
+    document.getElementById('sectorBadgeName').textContent = activeSector;
+  });
+}
+
 // ── Date helpers ──────────────────────────────────────────────────────
 // Input/display: DD/MM/YYYY
 // API: DD-MM-YYYY
@@ -890,6 +951,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   loadFlow();
 
+  // Load IHSG
+  fetch('/api/ihsg').then(r => r.json()).then(d => {
+    if (d.price) document.getElementById('ihsgPrice').textContent = d.price.toLocaleString('id-ID');
+    if (d.gain_pct !== null && d.gain_pct !== undefined) {
+      const el = document.getElementById('ihsgGain');
+      el.textContent = (d.gain_pct > 0 ? '+' : '') + d.gain_pct.toFixed(2) + '%';
+      el.style.color = d.gain_pct >= 0 ? 'var(--up)' : 'var(--down)';
+    }
+  }).catch(() => {});
+
   document.getElementById('tickerFilter').addEventListener('input', e => {
     filterText = e.target.value.trim().toUpperCase();
     renderTable();
@@ -994,6 +1065,8 @@ function renderTable() {
   let rows = allRows.filter(r =>
     !filterText || r.ticker.includes(filterText)
   );
+  // Sector filter
+  if (sectorTickers) rows = rows.filter(r => sectorTickers.has(r.ticker));
 
   // Multi-sort
   rows.sort((a, b) => {

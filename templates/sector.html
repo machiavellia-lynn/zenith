@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Sector Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
+<style>
+:root {
+  --bg:       #080c10;
+  --surface:  #0e1318;
+  --surface2: #121920;
+  --border:   #1a2230;
+  --border2:  #243040;
+  --accent:   #00e8a2;
+  --accent2:  #4d9fff;
+  --danger:   #ff4d6a;
+  --text:     #c8d8e8;
+  --muted:    #4a6070;
+  --up:       #00e8a2;
+  --down:     #ff4d6a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+}
+
+/* ── HEADER ─────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 200;
+}
+.logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: .18em; color: var(--accent);
+  text-transform: uppercase; white-space: nowrap;
+}
+.logo span { color: var(--muted); }
+.nav-divider { width: 1px; height: 20px; background: var(--border); }
+.nav-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 5px;
+  padding: 5px 14px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .06em;
+  text-decoration: none; transition: all .15s;
+}
+.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nav-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+.ihsg-wrap {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  font-family: 'Space Mono', monospace;
+}
+.ihsg-label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.ihsg-price { font-size: 13px; font-weight: 700; color: var(--text); }
+.ihsg-gain { font-size: 11px; font-weight: 700; }
+
+/* ── TOOLBAR ─────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+.date-range { display: flex; align-items: center; gap: 8px; }
+.date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 6px 10px; font-family: 'Space Mono', monospace;
+  font-size: 11px; outline: none; width: 108px;
+  letter-spacing: .04em; transition: border-color .2s;
+}
+.date-input:focus { border-color: var(--accent); }
+.date-input::placeholder { color: var(--muted); }
+.date-arrow {
+  width: 28px; height: 28px;
+  background: var(--border); border: 1px solid var(--border2);
+  border-radius: 5px; display: flex; align-items: center;
+  justify-content: center; color: var(--muted); font-size: 13px;
+}
+
+/* ── SECTOR GRID ─────────────────────────────── */
+.sector-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+@media (max-width: 900px) { .sector-grid { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 560px) { .sector-grid { grid-template-columns: 1fr; } }
+
+.sector-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 20px;
+  cursor: pointer;
+  transition: border-color .2s, box-shadow .2s, transform .15s;
+  display: flex; flex-direction: column; gap: 14px;
+  position: relative;
+}
+.sector-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(0, 232, 162, .08);
+  transform: translateY(-2px);
+}
+
+.sc-top { display: flex; align-items: flex-start; justify-content: space-between; }
+.sc-name {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px; font-weight: 700;
+  letter-spacing: .1em; text-transform: uppercase;
+  color: var(--text);
+}
+.sc-gain {
+  font-family: 'Space Mono', monospace;
+  font-size: 20px; font-weight: 700;
+  letter-spacing: .02em;
+}
+.sc-gain.up { color: var(--up); }
+.sc-gain.down { color: var(--down); }
+.sc-gain.zero { color: var(--muted); }
+
+.sc-stats {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
+}
+.sc-stat {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sc-stat-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+}
+.sc-stat-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+}
+.sc-stat-val.cm-pos { color: var(--up); }
+.sc-stat-val.cm-neg { color: var(--down); }
+.sc-stat-val.sm { color: var(--accent2); }
+.sc-stat-val.bm { color: #ff8c42; }
+.sc-stat-val.mfp { color: var(--up); }
+.sc-stat-val.mfm { color: var(--down); }
+.sc-stat-val.net-pos { color: var(--up); }
+.sc-stat-val.net-neg { color: var(--down); }
+
+.sc-footer {
+  display: flex; justify-content: space-between; align-items: center;
+  border-top: 1px solid var(--border);
+  padding-top: 10px; margin-top: 2px;
+}
+.sc-tickers {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; color: var(--muted); letter-spacing: .06em;
+}
+.sc-arrow { color: var(--muted); font-size: 14px; transition: color .15s; }
+.sector-card:hover .sc-arrow { color: var(--accent); }
+
+/* ── LOADING ─────────────────────────────────── */
+.loading-wrap {
+  display: flex; align-items: center; justify-content: center;
+  padding: 80px;
+}
+.spinner {
+  width: 24px; height: 24px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+  margin-right: 10px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── PIKADAY DARK THEME ─────────────────────── */
+.pika-single {
+  background: var(--surface2) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 8px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  color: var(--text) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
+}
+.pika-title { padding: 8px 10px !important; }
+.pika-label {
+  background: transparent !important;
+  color: var(--text) !important;
+  font-family: 'Space Mono', monospace !important;
+  font-size: 12px !important;
+}
+.pika-prev, .pika-next { color: var(--muted) !important; opacity: 1 !important; }
+.pika-prev:hover, .pika-next:hover { color: var(--accent) !important; }
+.pika-table th {
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-family: 'Space Mono', monospace !important;
+}
+.pika-button {
+  background: transparent !important;
+  color: var(--text) !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+}
+.pika-button:hover, .is-selected .pika-button {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+}
+.is-today .pika-button { color: var(--accent) !important; font-weight: 700 !important; }
+.is-disabled .pika-button { color: var(--muted) !important; opacity: .4 !important; }
+.pika-select {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ZENITH <span>/ sector</span></div>
+  <div class="nav-divider"></div>
+  <a href="/" class="nav-btn">⬡ Chart</a>
+  <a href="/dashboard" class="nav-btn">⊞ Flow</a>
+  <a href="/sector" class="nav-btn active">◈ Sector</a>
+  <div class="ihsg-wrap">
+    <span class="ihsg-label">IHSG</span>
+    <span class="ihsg-price" id="ihsgPrice">—</span>
+    <span class="ihsg-gain" id="ihsgGain">—</span>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="date-range">
+    <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+    <div class="date-arrow">→</div>
+    <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+  </div>
+</div>
+
+<div id="sectorContainer">
+  <div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>
+</div>
+
+<script>
+// ── Helpers ──────────────────────────────────────────────────
+function fmtM(v) {
+  if (v === null || v === undefined) return '—';
+  const abs = Math.abs(v);
+  const s   = v < 0 ? '-' : '';
+  if (abs >= 1000) return s + (abs/1000).toFixed(1) + 'B';
+  return s + abs.toFixed(1) + 'M';
+}
+function todayDDMMYYYY() {
+  const now = new Date(Date.now() + 7 * 3600 * 1000);
+  const d   = String(now.getUTCDate()).padStart(2, '0');
+  const m   = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const y   = now.getUTCFullYear();
+  return `${d}/${m}/${y}`;
+}
+function displayToApi(s) { return s.replace(/\//g, '-'); }
+function autoFormatDate(input) {
+  let v = input.value.replace(/\D/g, '');
+  if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  if (v.length >= 6) v = v.slice(0,5) + '/' + v.slice(5);
+  input.value = v.slice(0, 10);
+}
+
+// ── IHSG ─────────────────────────────────────────────────────
+async function loadIHSG() {
+  try {
+    const res = await fetch('/api/ihsg');
+    const d = await res.json();
+    if (d.price) document.getElementById('ihsgPrice').textContent = d.price.toLocaleString('id-ID');
+    if (d.gain_pct !== null && d.gain_pct !== undefined) {
+      const el = document.getElementById('ihsgGain');
+      el.textContent = (d.gain_pct > 0 ? '+' : '') + d.gain_pct.toFixed(2) + '%';
+      el.style.color = d.gain_pct >= 0 ? 'var(--up)' : 'var(--down)';
+    }
+  } catch (_) {}
+}
+
+// ── Load sectors ─────────────────────────────────────────────
+async function loadSectors() {
+  const df = document.getElementById('dateFrom').value.trim();
+  const dt = document.getElementById('dateTo').value.trim();
+  if (!df || !dt) return;
+
+  document.getElementById('sectorContainer').innerHTML =
+    '<div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>';
+
+  try {
+    const res = await fetch(`/api/sector?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderSectors(data.sectors || []);
+  } catch (e) {
+    document.getElementById('sectorContainer').innerHTML =
+      `<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`;
+  }
+}
+
+function renderSectors(sectors) {
+  if (!sectors.length) {
+    document.getElementById('sectorContainer').innerHTML =
+      '<div class="loading-wrap">Tidak ada data untuk tanggal ini</div>';
+    return;
+  }
+
+  const html = '<div class="sector-grid">' + sectors.map((s, i) => {
+    const gainCls = s.gain_pct === null ? 'zero' : s.gain_pct > 0 ? 'up' : s.gain_pct < 0 ? 'down' : 'zero';
+    const gainStr = s.gain_pct === null ? '—' : (s.gain_pct > 0 ? '+' : '') + s.gain_pct.toFixed(2) + '%';
+    const cmCls = s.cm >= 0 ? 'cm-pos' : 'cm-neg';
+    const netCls = s.net_mf === null ? '' : s.net_mf >= 0 ? 'net-pos' : 'net-neg';
+
+    return `<div class="sector-card" onclick="location.href='/dashboard?sector=${encodeURIComponent(s.name)}'"
+                 style="animation: cardIn .3s ease ${Math.min(i * 40, 400)}ms both">
+      <div class="sc-top">
+        <div class="sc-name">${s.name}</div>
+        <div class="sc-gain ${gainCls}">${gainStr}</div>
+      </div>
+      <div class="sc-stats">
+        <div class="sc-stat"><span class="sc-stat-label">CM</span><span class="sc-stat-val ${cmCls}">${fmtM(s.cm)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">SM</span><span class="sc-stat-val sm">${fmtM(s.sm_val)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">BM</span><span class="sc-stat-val bm">${fmtM(s.bm_val)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">MF+</span><span class="sc-stat-val mfp">${fmtM(s.mf_plus)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">MF−</span><span class="sc-stat-val mfm">${fmtM(s.mf_minus)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">NET MF</span><span class="sc-stat-val ${netCls}">${fmtM(s.net_mf)}</span></div>
+      </div>
+      <div class="sc-footer">
+        <span class="sc-tickers">${s.ticker_count} tickers</span>
+        <span class="sc-arrow">→</span>
+      </div>
+    </div>`;
+  }).join('') + '</div>';
+
+  document.getElementById('sectorContainer').innerHTML = html;
+}
+
+// ── Init Pikaday ─────────────────────────────────────────────
+let pickerFrom, pickerTo;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  let initDateStr = todayDDMMYYYY();
+  try {
+    const res = await fetch('/api/last-date');
+    const d = await res.json();
+    if (d.date) initDateStr = d.date;
+  } catch (_) {}
+
+  const [dd, mm, yyyy] = initDateStr.split('/').map(Number);
+  const initDate = new Date(yyyy, mm - 1, dd);
+
+  const pikadayOpts = {
+    format: 'DD/MM/YYYY',
+    toString: date => {
+      const d = String(date.getDate()).padStart(2,'0');
+      const m = String(date.getMonth()+1).padStart(2,'0');
+      return `${d}/${m}/${date.getFullYear()}`;
+    },
+    parse: str => {
+      const [d,m,y] = str.split('/').map(Number);
+      return new Date(y, m-1, d);
+    },
+    i18n: {
+      previousMonth: '‹', nextMonth: '›',
+      months: ['Januari','Februari','Maret','April','Mei','Juni',
+               'Juli','Agustus','September','Oktober','November','Desember'],
+      weekdays: ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],
+      weekdaysShort: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'],
+    },
+    maxDate: new Date(),
+  };
+
+  pickerFrom = new Pikaday({
+    ...pikadayOpts,
+    field: document.getElementById('dateFrom'),
+    defaultDate: initDate,
+    setDefaultDate: true,
+    onSelect: date => {
+      if (pickerTo && date > pickerTo.getDate()) pickerTo.setDate(date);
+      loadSectors();
+    },
+  });
+  pickerTo = new Pikaday({
+    ...pikadayOpts,
+    field: document.getElementById('dateTo'),
+    defaultDate: initDate,
+    setDefaultDate: true,
+    onSelect: () => loadSectors(),
+  });
+
+  loadIHSG();
+  loadSectors();
+});
+
+// Card entrance animation
+const style = document.createElement('style');
+style.textContent = `@keyframes cardIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>
