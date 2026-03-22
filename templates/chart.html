@@ -225,6 +225,7 @@ let overlayDataCache=[];
 function todayDDMMYYYY(){const now=new Date(Date.now()+7*3600*1000);return`${String(now.getUTCDate()).padStart(2,'0')}/${String(now.getUTCMonth()+1).padStart(2,'0')}/${now.getUTCFullYear()}`}
 function displayToApi(s){return s.replace(/\//g,'-')}
 function autoFormatDate(input){let v=input.value.replace(/\D/g,'');if(v.length>=3)v=v.slice(0,2)+'/'+v.slice(2);if(v.length>=6)v=v.slice(0,5)+'/'+v.slice(5);input.value=v.slice(0,10)}
+function fmtM(v){if(v===null||v===undefined)return'—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1000)return s+(a/1000).toFixed(1)+'B';if(a>=1)return s+a.toFixed(1)+'M';if(a>0)return s+(a*1000).toFixed(0)+'K';return'0'}
 function fmtMf(v){if(v===null||v===undefined)return'—';const sign=v>0?'+':'';const a=Math.abs(v);if(a>=1000)return sign+(v/1000).toFixed(1)+'B';if(a>=1)return sign+v.toFixed(1)+'M';if(a>0)return sign+(v*1000).toFixed(0)+'K';return'0'}
 
 function initChart(){
@@ -354,7 +355,7 @@ async function loadTransactions(){
   if(!df||!dt)return;
   const url=`/api/transactions?ticker=${currentTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
   const fmtGain=g=>{if(g===null||g===undefined)return'—';const cls=g>0?'trx-gain-pos':g<0?'trx-gain-neg':'';return`<span class="${cls}">${g>0?'+':''}${g.toFixed(2)}%</span>`};
-  const buildRows=(rows,mfCls)=>{if(!rows.length)return`<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;return rows.map(r=>`<tr><td>${r.time}</td><td>${r.price?r.price.toLocaleString('id-ID'):'—'}</td><td>${fmtGain(r.gain_pct)}</td><td><span class="${mfCls}">${r.mf||'—'}</span></td><td>${r.vol_x?r.vol_x.toFixed(1)+'x':'—'}</td></tr>`).join('')};
+  const buildRows=(rows,mfCls)=>{if(!rows.length)return`<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;return rows.map(r=>`<tr><td>${r.time}</td><td>${r.price?r.price.toLocaleString('id-ID'):'—'}</td><td>${fmtGain(r.gain_pct)}</td><td><span class="${mfCls}">${fmtM(r.mf_num)}</span></td><td>${r.vol_x?r.vol_x.toFixed(1)+'x':'—'}</td></tr>`).join('')};
   try{
     const res=await fetch(url);const data=await res.json();if(data.error)throw new Error(data.error);
     document.getElementById('smCount').textContent=`(${data.sm_count}TX)`;

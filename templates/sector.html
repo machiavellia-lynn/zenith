@@ -1086,7 +1086,7 @@ async function loadTransactions() {
       <td>${r.time}</td>
       <td>${r.price ? r.price.toLocaleString('id-ID') : '—'}</td>
       <td>${fmtGain(r.gain_pct)}</td>
-      <td><span class="${mfCls}">${r.mf || '—'}</span></td>
+      <td><span class="${mfCls}">${fmtM(r.mf_num)}</span></td>
       <td>${r.vol_x ? r.vol_x.toFixed(1) + 'x' : '—'}</td>
     </tr>`).join('');
   };
@@ -1421,7 +1421,7 @@ async function loadTransactions() {
       <td>${r.time}</td>
       <td>${r.price ? r.price.toLocaleString('id-ID') : '—'}</td>
       <td>${fmtGain(r.gain_pct)}</td>
-      <td><span class="${mfCls}">${r.mf || '—'}</span></td>
+      <td><span class="${mfCls}">${fmtM(r.mf_num)}</span></td>
       <td>${r.vol_x ? r.vol_x.toFixed(1) + 'x' : '—'}</td>
     </tr>`).join('');
   };
