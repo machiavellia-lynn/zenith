@@ -202,9 +202,38 @@ def date_to_sortkey(s: str):
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    """Thread-local connection reuse with optimized PRAGMAs."""
+    import threading
+    _local = getattr(get_db, '_local', None)
+    if _local is None:
+        get_db._local = threading.local()
+        _local = get_db._local
+
+    conn = getattr(_local, 'conn', None)
+    # Reuse connection if same DB path and still alive
+    if conn is not None:
+        try:
+            conn.execute("SELECT 1")
+            return conn
+        except Exception:
+            conn = None
+
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # ── Performance PRAGMAs ──
+    conn.execute("PRAGMA journal_mode=WAL")       # ~5x faster reads
+    conn.execute("PRAGMA synchronous=NORMAL")     # safe enough for read-heavy
+    conn.execute("PRAGMA cache_size=-64000")       # 64MB page cache (default 2MB)
+    conn.execute("PRAGMA mmap_size=268435456")     # 256MB mmap — read from memory
+    conn.execute("PRAGMA temp_store=MEMORY")       # temp tables in RAM
+    _local.conn = conn
     return conn
+
+
+# ── Flow result cache (60s TTL) ─────────────────────────────────────────
+_flow_cache = {}
+_flow_cache_lock = threading.Lock()
+FLOW_CACHE_TTL = 60  # detik
 
 
 # ── Routes ───────────────────────────────────────────────────────────────
@@ -292,7 +321,6 @@ def last_date():
             ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2) DESC
             LIMIT 1
         """).fetchone()
-        conn.close()
         if row:
             # DD-MM-YYYY → DD/MM/YYYY for frontend
             return jsonify({"date": row["date"].replace("-", "/")})
@@ -331,36 +359,53 @@ def flow():
 
     placeholders = ",".join("?" for _ in dates)
 
-    try:
-        conn = get_db()
+    # Check flow DB cache
+    cache_key = f"{date_from}|{date_to}"
+    with _flow_cache_lock:
+        cached = _flow_cache.get(cache_key)
+        if cached and (time.time() - cached["ts"]) < FLOW_CACHE_TTL:
+            rows_sm_bm = cached["sm_bm"]
+            rows_mf = cached["mf"]
+            # Skip DB query, use cached
+            conn = None
+        else:
+            cached = None
 
-        # Query SM/BM dari raw_messages
-        rows_sm_bm = conn.execute(f"""
-            SELECT
-                ticker,
-                channel,
-                SUM(mf_delta_numeric) AS mf
-            FROM raw_messages
-            WHERE date IN ({placeholders})
-            GROUP BY ticker, channel
-        """, dates).fetchall()
+    if cached is None:
+        try:
+            conn = get_db()
 
-        # Query MF+/MF- dari raw_mf_messages
-        rows_mf = conn.execute(f"""
-            SELECT
-                ticker,
-                channel,
-                SUM(mf_numeric)       AS mf,
-                SUM(mft_numeric)      AS mft,
-                SUM(cm_delta_numeric) AS cm_delta
-            FROM raw_mf_messages
-            WHERE date IN ({placeholders})
-            GROUP BY ticker, channel
-        """, dates).fetchall()
+            rows_sm_bm = conn.execute(f"""
+                SELECT
+                    ticker,
+                    channel,
+                    SUM(mf_delta_numeric) AS mf
+                FROM raw_messages
+                WHERE date IN ({placeholders})
+                GROUP BY ticker, channel
+            """, dates).fetchall()
 
-        conn.close()
-    except Exception as e:
-        return jsonify({"error": f"DB error: {e}"}), 500
+            rows_mf = conn.execute(f"""
+                SELECT
+                    ticker,
+                    channel,
+                    SUM(mf_numeric)       AS mf,
+                    SUM(mft_numeric)      AS mft,
+                    SUM(cm_delta_numeric) AS cm_delta
+                FROM raw_mf_messages
+                WHERE date IN ({placeholders})
+                GROUP BY ticker, channel
+            """, dates).fetchall()
+
+            # Convert to plain dicts for caching (sqlite3.Row not picklable)
+            rows_sm_bm = [dict(r) for r in rows_sm_bm]
+            rows_mf = [dict(r) for r in rows_mf]
+
+            with _flow_cache_lock:
+                _flow_cache[cache_key] = {"sm_bm": rows_sm_bm, "mf": rows_mf, "ts": time.time()}
+
+        except Exception as e:
+            return jsonify({"error": f"DB error: {e}"}), 500
 
     # Agregasi SM/BM per ticker
     data = {}
@@ -501,7 +546,6 @@ def transactions():
                 substr(date,7,4)||substr(date,4,2)||substr(date,1,2),
                 time
         """, params).fetchall()
-        conn.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -552,7 +596,6 @@ def overlay():
                 substr(date,7,4)||substr(date,4,2)||substr(date,1,2),
                 time
         """, [ticker]).fetchall()
-        conn.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -873,7 +916,6 @@ def sector_api():
             WHERE ticker IN ({placeholders_t}) AND date IN ({placeholders_d})
             GROUP BY ticker, channel
         """, all_tickers + dates).fetchall()
-        conn.close()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -968,7 +1010,6 @@ def ensure_indexes():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mf_date ON raw_mf_messages(date)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_mf_ticker_date ON raw_mf_messages(ticker, date)")
         conn.commit()
-        conn.close()
     except Exception:
         pass  # DB mungkin belum ada saat deploy pertama
 
