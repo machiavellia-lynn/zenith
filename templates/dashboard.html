@@ -802,6 +802,7 @@ const INIT_CANDLES = 150;
 let ovlSeriesCM = null, ovlSeriesSM = null, ovlSeriesBM = null;
 let ovlShowCM = true, ovlShowSM = false, ovlShowBM = false;
 let overlayDataCache = []; // [{time, sm, bm, cm}]
+let modalPrevCloseMap = {}; // time → prev candle close
 
 // ── Sector filter ────────────────────────────────────────────────────
 const SECTORS = {
@@ -1286,8 +1287,9 @@ function initModalChart() {
       return String(v);
     };
     const d = new Date(param.time * 1000);
-    // Gain% = (close - open) / open * 100
-    const gainPct = bar.open > 0 ? ((bar.close - bar.open) / bar.open * 100) : 0;
+    // Gain% vs prev candle close (Yahoo-style)
+    const prevClose = modalPrevCloseMap[param.time] || bar.open;
+    const gainPct = prevClose > 0 ? ((bar.close - prevClose) / prevClose * 100) : 0;
     const gainEl = document.getElementById('mHtGain');
     gainEl.textContent = (gainPct > 0 ? '+' : '') + gainPct.toFixed(2) + '%';
     gainEl.className = 'mht-v ' + (gainPct >= 0 ? 'up' : 'down');
@@ -1340,6 +1342,11 @@ async function loadModalChart() {
     if (data.error) return;
     const candles = data.candles || [];
     if (!candles.length) return;
+    // Build prev close map for gain% calculation (Yahoo-style: vs prev candle close)
+    modalPrevCloseMap = {};
+    for (let i = 0; i < candles.length; i++) {
+      modalPrevCloseMap[candles[i].time] = i > 0 ? candles[i - 1].close : candles[i].open;
+    }
     modalChart.timeScale().resetTimeScale();
     modalCandle.setData(candles);
     modalVolume.setData(candles.map(c => ({
