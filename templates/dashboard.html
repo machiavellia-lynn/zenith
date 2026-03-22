@@ -615,11 +615,6 @@ td:first-child { text-align: left; }
     <span style="color:var(--muted);font-size:12px">⌕</span>
     <input type="text" id="tickerFilter" placeholder="Filter ticker..."/>
   </div>
-  <div class="ihsg-wrap">
-    <span class="ihsg-label">IHSG</span>
-    <span class="ihsg-price" id="ihsgPrice">—</span>
-    <span class="ihsg-gain" id="ihsgGain">—</span>
-  </div>
 </header>
 
 <!-- STATS BAR -->
@@ -651,6 +646,10 @@ td:first-child { text-align: left; }
   <div class="stat-item">
     <span class="s-label">Tickers</span>
     <span class="s-val neutral" id="sCount">—</span>
+  </div>
+  <div class="stat-item" style="margin-left:auto" title="IHSG Composite">
+    <span class="s-label">IHSG</span>
+    <span class="s-val" id="sIHSG" style="color:var(--text)">—</span>
   </div>
 </div>
 
@@ -953,11 +952,16 @@ window.addEventListener('DOMContentLoaded', async () => {
 
   // Load IHSG
   fetch('/api/ihsg').then(r => r.json()).then(d => {
-    if (d.price) document.getElementById('ihsgPrice').textContent = d.price.toLocaleString('id-ID');
-    if (d.gain_pct !== null && d.gain_pct !== undefined) {
-      const el = document.getElementById('ihsgGain');
-      el.textContent = (d.gain_pct > 0 ? '+' : '') + d.gain_pct.toFixed(2) + '%';
-      el.style.color = d.gain_pct >= 0 ? 'var(--up)' : 'var(--down)';
+    const el = document.getElementById('sIHSG');
+    if (d.price) {
+      const priceStr = d.price.toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      const gainStr = (d.gain_pct !== null && d.gain_pct !== undefined)
+        ? ` (${d.gain_pct > 0 ? '+' : ''}${d.gain_pct.toFixed(2)}%)`
+        : '';
+      el.textContent = priceStr + gainStr;
+      if (d.gain_pct !== null) {
+        el.style.color = d.gain_pct >= 0 ? 'var(--up)' : 'var(--down)';
+      }
     }
   }).catch(() => {});
 
@@ -983,6 +987,19 @@ async function loadFlow() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     allRows = data.tickers || [];
+    // If sector filter active, add missing tickers with null values
+    if (sectorTickers) {
+      const existing = new Set(allRows.map(r => r.ticker));
+      for (const t of sectorTickers) {
+        if (!existing.has(t)) {
+          allRows.push({
+            ticker: t, clean_money: null, sm_val: null, bm_val: null, rsm: null,
+            mf_plus: null, mf_minus: null, net_mf: null,
+            gain_pct: null, price: null, _nodata: true,
+          });
+        }
+      }
+    }
     updateStats(data.totals || {});
     renderTable();
   } catch (e) {
@@ -1084,7 +1101,7 @@ function renderTable() {
 
   document.getElementById('rowCount').textContent = `${rows.length} ticker`;
 
-  const maxCM = Math.max(...rows.map(r => Math.abs(r.clean_money)), 1);
+  const maxCM = Math.max(...rows.map(r => Math.abs(r.clean_money || 0)), 1);
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
@@ -1093,15 +1110,17 @@ function renderTable() {
   }
 
   tbody.innerHTML = rows.map((r, i) => {
-    const barPct  = Math.min(Math.abs(r.clean_money) / maxCM * 48, 48);
-    const barPos  = r.clean_money >= 0;
+    const cm = r.clean_money || 0;
+    const barPct  = Math.min(Math.abs(cm) / maxCM * 48, 48);
+    const barPos  = cm >= 0;
     const barStyle = barPos
       ? `left:50%; width:${barPct}%;`
       : `right:50%; width:${barPct}%;`;
 
-    const rsmColor = rsmToColor(r.rsm);
+    const rsmColor = rsmToColor(r.rsm || 0);
     const gainCls  = r.gain_pct === null ? 'zero' : r.gain_pct > 0 ? 'pos' : r.gain_pct < 0 ? 'neg' : 'zero';
     const gainStr  = r.gain_pct === null ? '—' : (r.gain_pct > 0 ? '+' : '') + r.gain_pct.toFixed(2) + '%';
+    const rsmStr   = r.rsm !== null && r.rsm !== undefined ? r.rsm.toFixed(1) + '%' : '—';
 
     return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
@@ -1112,7 +1131,7 @@ function renderTable() {
       </td>
       <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
       <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
-      <td><span class="rsm-val" style="color:${rsmColor}">${r.rsm.toFixed(1)}%</span></td>
+      <td><span class="rsm-val" style="color:${rsmColor}">${rsmStr}</span></td>
       <td><span class="td-num mfp">${r.mf_plus  !== null ? fmtM(r.mf_plus)  : '—'}</span></td>
       <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
       <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? fmtM(r.net_mf) : '—'}</span></td>

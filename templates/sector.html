@@ -284,7 +284,7 @@ async function loadIHSG() {
   try {
     const res = await fetch('/api/ihsg');
     const d = await res.json();
-    if (d.price) document.getElementById('ihsgPrice').textContent = d.price.toLocaleString('id-ID');
+    if (d.price) document.getElementById('ihsgPrice').textContent = d.price.toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     if (d.gain_pct !== null && d.gain_pct !== undefined) {
       const el = document.getElementById('ihsgGain');
       el.textContent = (d.gain_pct > 0 ? '+' : '') + d.gain_pct.toFixed(2) + '%';
@@ -333,9 +333,9 @@ function renderSectors(sectors) {
         <div class="sc-gain ${gainCls}">${gainStr}</div>
       </div>
       <div class="sc-stats">
-        <div class="sc-stat"><span class="sc-stat-label">CM</span><span class="sc-stat-val ${cmCls}">${fmtM(s.cm)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">SM</span><span class="sc-stat-val sm">${fmtM(s.sm_val)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">BM</span><span class="sc-stat-val bm">${fmtM(s.bm_val)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">CM</span><span class="sc-stat-val ${cmCls}">${fmtM(s.cm)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">MF+</span><span class="sc-stat-val mfp">${fmtM(s.mf_plus)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">MF−</span><span class="sc-stat-val mfm">${fmtM(s.mf_minus)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">NET MF</span><span class="sc-stat-val ${netCls}">${fmtM(s.net_mf)}</span></div>

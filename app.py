@@ -231,22 +231,21 @@ def ihsg():
         resp = requests.get(
             "https://query1.finance.yahoo.com/v8/finance/chart/%5EJKSE",
             headers=YF_HEADERS,
-            params={"interval": "1d", "range": "5d", "includeAdjustedClose": "false"},
+            params={"interval": "1d", "range": "10d", "includeAdjustedClose": "false"},
             timeout=10,
         )
         data = resp.json()
         r = data.get("chart", {}).get("result", [{}])[0]
-        meta = r.get("meta", {})
-        price_raw = meta.get("regularMarketPrice")
         closes = r.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+        # Filter valid closes only (last trading days)
         valid = [c for c in closes if c and float(c) > 0]
+        price = None
         gain = None
+        if valid:
+            price = round(float(valid[-1]), 2)  # decimal, not rounded to int
         if len(valid) >= 2:
             gain = round((valid[-1] - valid[-2]) / valid[-2] * 100, 2)
-        result = {
-            "price": int(round(float(price_raw))) if price_raw else None,
-            "gain_pct": gain,
-        }
+        result = {"price": price, "gain_pct": gain}
         _ihsg_cache["data"] = result
         _ihsg_cache["ts"] = time.time()
         return jsonify(result)
