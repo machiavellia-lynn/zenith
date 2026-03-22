@@ -983,23 +983,12 @@ async function loadFlow() {
 
   showLoading();
   try {
-    const res  = await fetch(`/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`);
+    let url = `/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+    if (activeSector) url += `&sector=${encodeURIComponent(activeSector)}`;
+    const res  = await fetch(url);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     allRows = data.tickers || [];
-    // If sector filter active, add missing tickers with null values
-    if (sectorTickers) {
-      const existing = new Set(allRows.map(r => r.ticker));
-      for (const t of sectorTickers) {
-        if (!existing.has(t)) {
-          allRows.push({
-            ticker: t, clean_money: null, sm_val: null, bm_val: null, rsm: null,
-            mf_plus: null, mf_minus: null, net_mf: null,
-            gain_pct: null, price: null, _nodata: true,
-          });
-        }
-      }
-    }
     updateStats(data.totals || {});
     renderTable();
   } catch (e) {

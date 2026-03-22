@@ -361,19 +361,38 @@ def flow():
             data[t]["net_mf"] = round(mfp - mfm, 2)
 
     if not data:
+        # If sector param given, still need to return sector tickers with gains
+        pass
+
+    # Optional sector filter: ensure ALL sector tickers are present
+    sector_name = request.args.get("sector", "").strip()
+    sector_members = None
+    if sector_name and sector_name in SECTORS:
+        sector_members = set(SECTORS[sector_name])
+        # Add missing tickers that have no DB data
+        for t in sector_members:
+            if t not in data:
+                data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "_nodata": True}
+
+    if not data:
         return jsonify({"tickers": [], "totals": {}})
 
+    # Fetch gains — for all tickers in data (includes sector empties)
     gains = get_gains_batch(list(data.keys()), date_from, date_to)
 
     tickers = []
     for t, d in data.items():
-        sm  = round(d["sm_val"], 2)
-        bm  = round(d["bm_val"], 2)
-        cm  = round(sm - bm, 2)
-        rsm = round(sm / (sm + bm) * 100, 1) if (sm + bm) > 0 else 0
+        # If sector filter, skip tickers not in sector
+        if sector_members and t not in sector_members:
+            continue
+        nodata = d.get("_nodata", False)
+        sm  = round(d["sm_val"], 2) if not nodata else None
+        bm  = round(d["bm_val"], 2) if not nodata else None
+        cm  = round((d["sm_val"] - d["bm_val"]), 2) if not nodata else None
+        rsm = round(d["sm_val"] / (d["sm_val"] + d["bm_val"]) * 100, 1) if not nodata and (d["sm_val"] + d["bm_val"]) > 0 else None
         mfp = round(d["mf_plus"],  2) if d["mf_plus"]  is not None else None
         mfm = round(d["mf_minus"], 2) if d["mf_minus"] is not None else None
-        net = round(d["net_mf"],   2) if d["net_mf"]   is not None else None
+        net = round(d["net_mf"],   2) if d.get("net_mf") is not None else None
 
         g = gains.get(t, {})
         tickers.append({
@@ -389,19 +408,21 @@ def flow():
             "price":       g.get("price"),
         })
 
-    # Sort default: clean_money desc
-    tickers.sort(key=lambda x: x["clean_money"], reverse=True)
+    # Sort default: clean_money desc (nulls last)
+    tickers.sort(key=lambda x: x["clean_money"] if x["clean_money"] is not None else -999999, reverse=True)
 
     def safe_sum(key):
-        total = round(sum(x[key] or 0 for x in tickers), 2)
+        vals = [x[key] for x in tickers if x[key] is not None]
+        if not vals: return None
+        total = round(sum(vals), 2)
         return total if total != 0 else None
 
     totals = {
-        "sm":       round(sum(x["sm_val"]      for x in tickers), 2),
-        "bm":       round(sum(x["bm_val"]      for x in tickers), 2),
+        "sm":       round(sum(x["sm_val"] or 0      for x in tickers), 2),
+        "bm":       round(sum(x["bm_val"] or 0      for x in tickers), 2),
         "mf_plus":  safe_sum("mf_plus"),
         "mf_minus": safe_sum("mf_minus"),
-        "net_cm":   round(sum(x["clean_money"] for x in tickers), 2),
+        "net_cm":   round(sum(x["clean_money"] or 0 for x in tickers), 2),
         "net_mf":   safe_sum("net_mf"),
         "count":    len(tickers),
     }

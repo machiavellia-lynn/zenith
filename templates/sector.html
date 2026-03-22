@@ -9,227 +9,91 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
 <style>
-:root {
-  --bg:       #080c10;
-  --surface:  #0e1318;
-  --surface2: #121920;
-  --border:   #1a2230;
-  --border2:  #243040;
-  --accent:   #00e8a2;
-  --accent2:  #4d9fff;
-  --danger:   #ff4d6a;
-  --text:     #c8d8e8;
-  --muted:    #4a6070;
-  --up:       #00e8a2;
-  --down:     #ff4d6a;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-html, body { height: 100%; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Sans', sans-serif;
-  font-size: 13px;
-  min-height: 100vh;
-}
-
-/* ── HEADER ─────────────────────────────────── */
-header {
-  display: flex; align-items: center; gap: 16px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface);
-  position: sticky; top: 0; z-index: 200;
-}
-.logo {
-  font-family: 'Space Mono', monospace;
-  font-size: 12px; font-weight: 700;
-  letter-spacing: .18em; color: var(--accent);
-  text-transform: uppercase; white-space: nowrap;
-}
-.logo span { color: var(--muted); }
-.nav-divider { width: 1px; height: 20px; background: var(--border); }
-.nav-btn {
-  background: none; border: 1px solid var(--border);
-  color: var(--muted); border-radius: 5px;
-  padding: 5px 14px; cursor: pointer;
-  font-family: 'Space Mono', monospace;
-  font-size: 11px; letter-spacing: .06em;
-  text-decoration: none; transition: all .15s;
-}
-.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
-.nav-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
-
-.ihsg-wrap {
-  margin-left: auto; display: flex; align-items: center; gap: 8px;
-  font-family: 'Space Mono', monospace;
-}
-.ihsg-label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
-.ihsg-price { font-size: 13px; font-weight: 700; color: var(--text); }
-.ihsg-gain { font-size: 11px; font-weight: 700; }
-
-/* ── TOOLBAR ─────────────────────────────────── */
-.toolbar {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface2);
-}
-.date-range { display: flex; align-items: center; gap: 8px; }
-.date-input {
-  background: var(--bg); border: 1px solid var(--border);
-  color: var(--text); border-radius: 5px;
-  padding: 6px 10px; font-family: 'Space Mono', monospace;
-  font-size: 11px; outline: none; width: 108px;
-  letter-spacing: .04em; transition: border-color .2s;
-}
-.date-input:focus { border-color: var(--accent); }
-.date-input::placeholder { color: var(--muted); }
-.date-arrow {
-  width: 28px; height: 28px;
-  background: var(--border); border: 1px solid var(--border2);
-  border-radius: 5px; display: flex; align-items: center;
-  justify-content: center; color: var(--muted); font-size: 13px;
-}
-
-/* ── SECTOR GRID ─────────────────────────────── */
-.sector-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  padding: 24px;
-  max-width: 1200px;
-  margin: 0 auto;
-}
-@media (max-width: 900px) { .sector-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 560px) { .sector-grid { grid-template-columns: 1fr; } }
-
-.sector-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 20px;
-  cursor: pointer;
-  transition: border-color .2s, box-shadow .2s, transform .15s;
-  display: flex; flex-direction: column; gap: 14px;
-  position: relative;
-}
-.sector-card:hover {
-  border-color: var(--accent);
-  box-shadow: 0 0 20px rgba(0, 232, 162, .08);
-  transform: translateY(-2px);
-}
-
-.sc-top { display: flex; align-items: flex-start; justify-content: space-between; }
-.sc-name {
-  font-family: 'Space Mono', monospace;
-  font-size: 13px; font-weight: 700;
-  letter-spacing: .1em; text-transform: uppercase;
-  color: var(--text);
-}
-.sc-gain {
-  font-family: 'Space Mono', monospace;
-  font-size: 20px; font-weight: 700;
-  letter-spacing: .02em;
-}
-.sc-gain.up { color: var(--up); }
-.sc-gain.down { color: var(--down); }
-.sc-gain.zero { color: var(--muted); }
-
-.sc-stats {
-  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
-}
-.sc-stat {
-  display: flex; flex-direction: column; gap: 2px;
-}
-.sc-stat-label {
-  font-family: 'Space Mono', monospace;
-  font-size: 8px; letter-spacing: .1em;
-  color: var(--muted); text-transform: uppercase;
-}
-.sc-stat-val {
-  font-family: 'Space Mono', monospace;
-  font-size: 12px; font-weight: 700;
-}
-.sc-stat-val.cm-pos { color: var(--up); }
-.sc-stat-val.cm-neg { color: var(--down); }
-.sc-stat-val.sm { color: var(--accent2); }
-.sc-stat-val.bm { color: #ff8c42; }
-.sc-stat-val.mfp { color: var(--up); }
-.sc-stat-val.mfm { color: var(--down); }
-.sc-stat-val.net-pos { color: var(--up); }
-.sc-stat-val.net-neg { color: var(--down); }
-
-.sc-footer {
-  display: flex; justify-content: space-between; align-items: center;
-  border-top: 1px solid var(--border);
-  padding-top: 10px; margin-top: 2px;
-}
-.sc-tickers {
-  font-family: 'Space Mono', monospace;
-  font-size: 9px; color: var(--muted); letter-spacing: .06em;
-}
-.sc-arrow { color: var(--muted); font-size: 14px; transition: color .15s; }
-.sector-card:hover .sc-arrow { color: var(--accent); }
-
-/* ── LOADING ─────────────────────────────────── */
-.loading-wrap {
-  display: flex; align-items: center; justify-content: center;
-  padding: 80px;
-}
-.spinner {
-  width: 24px; height: 24px;
-  border: 2px solid var(--border); border-top-color: var(--accent);
-  border-radius: 50%; animation: spin .7s linear infinite;
-  margin-right: 10px;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── PIKADAY DARK THEME ─────────────────────── */
-.pika-single {
-  background: var(--surface2) !important;
-  border: 1px solid var(--border2) !important;
-  border-radius: 8px !important;
-  font-family: 'DM Sans', sans-serif !important;
-  color: var(--text) !important;
-  box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
-}
-.pika-title { padding: 8px 10px !important; }
-.pika-label {
-  background: transparent !important;
-  color: var(--text) !important;
-  font-family: 'Space Mono', monospace !important;
-  font-size: 12px !important;
-}
-.pika-prev, .pika-next { color: var(--muted) !important; opacity: 1 !important; }
-.pika-prev:hover, .pika-next:hover { color: var(--accent) !important; }
-.pika-table th {
-  color: var(--muted) !important;
-  font-size: 10px !important;
-  font-family: 'Space Mono', monospace !important;
-}
-.pika-button {
-  background: transparent !important;
-  color: var(--text) !important;
-  border-radius: 4px !important;
-  font-size: 12px !important;
-  text-align: center !important;
-}
-.pika-button:hover, .is-selected .pika-button {
-  background: var(--accent) !important;
-  color: var(--bg) !important;
-}
-.is-today .pika-button { color: var(--accent) !important; font-weight: 700 !important; }
-.is-disabled .pika-button { color: var(--muted) !important; opacity: .4 !important; }
-.pika-select {
-  background: var(--surface) !important;
-  color: var(--text) !important;
-  border: 1px solid var(--border) !important;
-}
+:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#4a6070;--up:#00e8a2;--down:#ff4d6a}
+*{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;min-height:100vh}
+header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:200}
+.logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap}
+.logo span{color:var(--muted)}
+.nav-divider{width:1px;height:20px;background:var(--border)}
+.nav-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:5px 14px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
+.nav-btn:hover{border-color:var(--accent);color:var(--accent)}
+.nav-btn.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.ihsg-wrap{margin-left:auto;display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace}
+.ihsg-label{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.ihsg-price{font-size:13px;font-weight:700;color:var(--text)}
+.ihsg-gain{font-size:11px;font-weight:700}
+.toolbar{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.date-range{display:flex;align-items:center;gap:8px}
+.date-input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 10px;font-family:'Space Mono',monospace;font-size:11px;outline:none;width:108px;letter-spacing:.04em;transition:border-color .2s}
+.date-input:focus{border-color:var(--accent)}
+.date-input::placeholder{color:var(--muted)}
+.date-arrow{width:28px;height:28px;background:var(--border);border:1px solid var(--border2);border-radius:5px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+.row-count{margin-left:auto;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.06em}
+.sector-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:24px;max-width:1200px;margin:0 auto}
+@media(max-width:900px){.sector-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.sector-grid{grid-template-columns:1fr}}
+.sector-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:20px;cursor:pointer;transition:border-color .2s,box-shadow .2s,transform .15s;display:flex;flex-direction:column;gap:14px}
+.sector-card:hover{border-color:var(--accent);box-shadow:0 0 20px rgba(0,232,162,.08);transform:translateY(-2px)}
+.sc-top{display:flex;align-items:flex-start;justify-content:space-between}
+.sc-name{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text)}
+.sc-gain{font-family:'Space Mono',monospace;font-size:20px;font-weight:700}
+.sc-gain.up{color:var(--up)}.sc-gain.down{color:var(--down)}.sc-gain.zero{color:var(--muted)}
+.sc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.sc-stat{display:flex;flex-direction:column;gap:2px}
+.sc-stat-label{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.sc-stat-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700}
+.sc-stat-val.cm-pos{color:var(--up)}.sc-stat-val.cm-neg{color:var(--down)}
+.sc-stat-val.sm{color:var(--accent2)}.sc-stat-val.bm{color:#ff8c42}
+.sc-stat-val.mfp{color:var(--up)}.sc-stat-val.mfm{color:var(--down)}
+.sc-stat-val.net-pos{color:var(--up)}.sc-stat-val.net-neg{color:var(--down)}
+.sc-footer{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border);padding-top:10px;margin-top:2px}
+.sc-tickers{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.06em}
+.sc-arrow{color:var(--muted);font-size:14px;transition:color .15s}
+.sector-card:hover .sc-arrow{color:var(--accent)}
+.detail-header{display:flex;align-items:center;gap:16px;padding:16px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+.detail-name{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--accent)}
+.detail-stats{display:flex;gap:0;padding:0 24px;background:var(--surface);border-bottom:1px solid var(--border);overflow-x:auto}
+.dst-item{display:flex;align-items:center;gap:8px;padding:10px 20px 10px 0;margin-right:20px;border-right:1px solid var(--border);white-space:nowrap}
+.dst-item:last-child{border-right:none}
+.dst-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.dst-val{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;color:var(--text)}
+.dst-val.up{color:var(--up)}.dst-val.down{color:var(--down)}.dst-val.sm{color:var(--accent2)}.dst-val.bm{color:#ff8c42}
+.table-wrap{flex:1;overflow:auto;padding:0 24px 24px}
+.flow-table{width:100%;border-collapse:collapse;margin-top:12px}
+.flow-table thead th{position:sticky;top:0;z-index:10;background:var(--surface2);border-bottom:1px solid var(--border2);padding:9px 12px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--muted);text-align:right;text-transform:uppercase;white-space:nowrap}
+.flow-table thead th:first-child{text-align:left}
+.flow-table tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+.flow-table tbody tr:hover{background:rgba(255,255,255,.03)}
+.flow-table td{padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.flow-table td:first-child{text-align:left}
+.td-ticker{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--text);letter-spacing:.04em}
+.td-num{font-family:'Space Mono',monospace;font-size:11px;color:var(--text)}
+.td-num.sm{color:var(--accent2)}.td-num.bm{color:#ff8c42}
+.td-num.mfp{color:var(--up)}.td-num.mfm{color:var(--down)}
+.gain-val{font-family:'Space Mono',monospace;font-size:11px;font-weight:700}
+.gain-val.pos{color:var(--up)}.gain-val.neg{color:var(--down)}.gain-val.zero{color:var(--muted)}
+.cm-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700}
+.cm-val.pos{color:var(--up)}.cm-val.neg{color:var(--down)}
+.rsm-val{font-family:'Space Mono',monospace;font-size:11px;font-weight:700}
+.loading-wrap{display:flex;align-items:center;justify-content:center;padding:80px}
+.spinner{width:24px;height:24px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;margin-right:10px}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes cardIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+.pika-single{background:var(--surface2)!important;border:1px solid var(--border2)!important;border-radius:8px!important;font-family:'DM Sans',sans-serif!important;color:var(--text)!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important}
+.pika-title{padding:8px 10px!important}
+.pika-label{background:transparent!important;color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:12px!important}
+.pika-prev,.pika-next{color:var(--muted)!important;opacity:1!important}
+.pika-prev:hover,.pika-next:hover{color:var(--accent)!important}
+.pika-table th{color:var(--muted)!important;font-size:10px!important;font-family:'Space Mono',monospace!important}
+.pika-button{background:transparent!important;color:var(--text)!important;border-radius:4px!important;font-size:12px!important;text-align:center!important}
+.pika-button:hover,.is-selected .pika-button{background:var(--accent)!important;color:var(--bg)!important}
+.is-today .pika-button{color:var(--accent)!important;font-weight:700!important}
+.is-disabled .pika-button{color:var(--muted)!important;opacity:.4!important}
+.pika-select{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important}
 </style>
 </head>
 <body>
-
 <header>
   <div class="logo">ZENITH <span>/ sector</span></div>
   <div class="nav-divider"></div>
@@ -242,175 +106,122 @@ header {
     <span class="ihsg-gain" id="ihsgGain">—</span>
   </div>
 </header>
-
 <div class="toolbar">
   <div class="date-range">
     <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
     <div class="date-arrow">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
   </div>
+  <span class="row-count" id="rowCount"></span>
 </div>
-
-<div id="sectorContainer">
-  <div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>
-</div>
-
+<div id="sectorContainer"><div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div></div>
 <script>
-// ── Helpers ──────────────────────────────────────────────────
-function fmtM(v) {
-  if (v === null || v === undefined) return '—';
-  const abs = Math.abs(v);
-  const s   = v < 0 ? '-' : '';
-  if (abs >= 1000) return s + (abs/1000).toFixed(1) + 'B';
-  return s + abs.toFixed(1) + 'M';
+let activeSector = null;
+function fmtM(v){if(v===null||v===undefined)return'—';const abs=Math.abs(v),s=v<0?'-':'';if(abs>=1000)return s+(abs/1000).toFixed(1)+'B';return s+abs.toFixed(1)+'M'}
+function todayDDMMYYYY(){const now=new Date(Date.now()+7*3600*1000);return`${String(now.getUTCDate()).padStart(2,'0')}/${String(now.getUTCMonth()+1).padStart(2,'0')}/${now.getUTCFullYear()}`}
+function displayToApi(s){return s.replace(/\//g,'-')}
+function rsmToColor(rsm){if(!rsm)return'var(--muted)';if(rsm>=70)return'#00e8a2';if(rsm>=50)return`hsl(${(rsm-50)*3.6+50},80%,55%)`;if(rsm>=30)return`hsl(${rsm*1.2},80%,55%)`;return'#ff4d6a'}
+
+async function loadIHSG(){try{const res=await fetch('/api/ihsg');const d=await res.json();if(d.price)document.getElementById('ihsgPrice').textContent=d.price.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});if(d.gain_pct!==null&&d.gain_pct!==undefined){const el=document.getElementById('ihsgGain');el.textContent=(d.gain_pct>0?'+':'')+d.gain_pct.toFixed(2)+'%';el.style.color=d.gain_pct>=0?'var(--up)':'var(--down)'}}catch(_){}}
+
+async function loadSectors(){
+  const df=document.getElementById('dateFrom').value.trim(),dt=document.getElementById('dateTo').value.trim();
+  if(!df||!dt)return;
+  document.getElementById('sectorContainer').innerHTML='<div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>';
+  document.getElementById('rowCount').textContent='';
+  try{const res=await fetch(`/api/sector?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`);const data=await res.json();if(data.error)throw new Error(data.error);renderSectors(data.sectors||[])}
+  catch(e){document.getElementById('sectorContainer').innerHTML=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
 }
-function todayDDMMYYYY() {
-  const now = new Date(Date.now() + 7 * 3600 * 1000);
-  const d   = String(now.getUTCDate()).padStart(2, '0');
-  const m   = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const y   = now.getUTCFullYear();
-  return `${d}/${m}/${y}`;
-}
-function displayToApi(s) { return s.replace(/\//g, '-'); }
-function autoFormatDate(input) {
-  let v = input.value.replace(/\D/g, '');
-  if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
-  if (v.length >= 6) v = v.slice(0,5) + '/' + v.slice(5);
-  input.value = v.slice(0, 10);
-}
-
-// ── IHSG ─────────────────────────────────────────────────────
-async function loadIHSG() {
-  try {
-    const res = await fetch('/api/ihsg');
-    const d = await res.json();
-    if (d.price) document.getElementById('ihsgPrice').textContent = d.price.toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-    if (d.gain_pct !== null && d.gain_pct !== undefined) {
-      const el = document.getElementById('ihsgGain');
-      el.textContent = (d.gain_pct > 0 ? '+' : '') + d.gain_pct.toFixed(2) + '%';
-      el.style.color = d.gain_pct >= 0 ? 'var(--up)' : 'var(--down)';
-    }
-  } catch (_) {}
-}
-
-// ── Load sectors ─────────────────────────────────────────────
-async function loadSectors() {
-  const df = document.getElementById('dateFrom').value.trim();
-  const dt = document.getElementById('dateTo').value.trim();
-  if (!df || !dt) return;
-
-  document.getElementById('sectorContainer').innerHTML =
-    '<div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>';
-
-  try {
-    const res = await fetch(`/api/sector?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    renderSectors(data.sectors || []);
-  } catch (e) {
-    document.getElementById('sectorContainer').innerHTML =
-      `<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`;
-  }
-}
-
-function renderSectors(sectors) {
-  if (!sectors.length) {
-    document.getElementById('sectorContainer').innerHTML =
-      '<div class="loading-wrap">Tidak ada data untuk tanggal ini</div>';
-    return;
-  }
-
-  const html = '<div class="sector-grid">' + sectors.map((s, i) => {
-    const gainCls = s.gain_pct === null ? 'zero' : s.gain_pct > 0 ? 'up' : s.gain_pct < 0 ? 'down' : 'zero';
-    const gainStr = s.gain_pct === null ? '—' : (s.gain_pct > 0 ? '+' : '') + s.gain_pct.toFixed(2) + '%';
-    const cmCls = s.cm >= 0 ? 'cm-pos' : 'cm-neg';
-    const netCls = s.net_mf === null ? '' : s.net_mf >= 0 ? 'net-pos' : 'net-neg';
-
-    return `<div class="sector-card" onclick="location.href='/dashboard?sector=${encodeURIComponent(s.name)}'"
-                 style="animation: cardIn .3s ease ${Math.min(i * 40, 400)}ms both">
-      <div class="sc-top">
-        <div class="sc-name">${s.name}</div>
-        <div class="sc-gain ${gainCls}">${gainStr}</div>
-      </div>
+function renderSectors(sectors){
+  if(!sectors.length){document.getElementById('sectorContainer').innerHTML='<div class="loading-wrap">Tidak ada data</div>';return}
+  const html='<div class="sector-grid">'+sectors.map((s,i)=>{
+    const gC=s.gain_pct===null?'zero':s.gain_pct>0?'up':s.gain_pct<0?'down':'zero';
+    const gS=s.gain_pct===null?'—':(s.gain_pct>0?'+':'')+s.gain_pct.toFixed(2)+'%';
+    const cmC=s.cm>=0?'cm-pos':'cm-neg';const nC=s.net_mf===null?'':s.net_mf>=0?'net-pos':'net-neg';
+    return`<div class="sector-card" onclick="openSectorDetail('${s.name}')" style="animation:cardIn .3s ease ${Math.min(i*40,400)}ms both">
+      <div class="sc-top"><div class="sc-name">${s.name}</div><div class="sc-gain ${gC}">${gS}</div></div>
       <div class="sc-stats">
         <div class="sc-stat"><span class="sc-stat-label">SM</span><span class="sc-stat-val sm">${fmtM(s.sm_val)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">BM</span><span class="sc-stat-val bm">${fmtM(s.bm_val)}</span></div>
-        <div class="sc-stat"><span class="sc-stat-label">CM</span><span class="sc-stat-val ${cmCls}">${fmtM(s.cm)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">CM</span><span class="sc-stat-val ${cmC}">${fmtM(s.cm)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">MF+</span><span class="sc-stat-val mfp">${fmtM(s.mf_plus)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">MF−</span><span class="sc-stat-val mfm">${fmtM(s.mf_minus)}</span></div>
-        <div class="sc-stat"><span class="sc-stat-label">NET MF</span><span class="sc-stat-val ${netCls}">${fmtM(s.net_mf)}</span></div>
+        <div class="sc-stat"><span class="sc-stat-label">NET MF</span><span class="sc-stat-val ${nC}">${fmtM(s.net_mf)}</span></div>
       </div>
-      <div class="sc-footer">
-        <span class="sc-tickers">${s.ticker_count} tickers</span>
-        <span class="sc-arrow">→</span>
-      </div>
-    </div>`;
-  }).join('') + '</div>';
-
-  document.getElementById('sectorContainer').innerHTML = html;
+      <div class="sc-footer"><span class="sc-tickers">${s.ticker_count} tickers</span><span class="sc-arrow">→</span></div>
+    </div>`}).join('')+'</div>';
+  document.getElementById('sectorContainer').innerHTML=html;
 }
 
-// ── Init Pikaday ─────────────────────────────────────────────
-let pickerFrom, pickerTo;
+async function openSectorDetail(name){
+  activeSector=name;
+  const df=document.getElementById('dateFrom').value.trim(),dt=document.getElementById('dateTo').value.trim();
+  document.getElementById('sectorContainer').innerHTML=
+    `<div class="detail-header"><button class="nav-btn" onclick="backToGrid()" style="font-size:10px">← Kembali</button><div class="detail-name">${name}</div></div>
+     <div class="detail-stats" id="detailStats"></div>
+     <div class="loading-wrap"><div class="spinner"></div> Memuat data ${name}...</div>`;
+  try{
+    const res=await fetch(`/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&sector=${encodeURIComponent(name)}`);
+    const data=await res.json();if(data.error)throw new Error(data.error);
+    renderDetailStats(data.totals||{});renderDetailTable(data.tickers||[]);
+  }catch(e){document.getElementById('sectorContainer').innerHTML+=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
+}
+function renderDetailStats(t){
+  const el=document.getElementById('detailStats');if(!el)return;
+  const sv=(v,c)=>`<span class="dst-val ${c||''}">${v!==null&&v!==undefined?fmtM(v):'—'}</span>`;
+  el.innerHTML=`
+    <div class="dst-item"><span class="dst-label">SM</span>${sv(t.sm,'sm')}</div>
+    <div class="dst-item"><span class="dst-label">BM</span>${sv(t.bm,'bm')}</div>
+    <div class="dst-item"><span class="dst-label">MF+</span>${sv(t.mf_plus,'up')}</div>
+    <div class="dst-item"><span class="dst-label">MF−</span>${sv(t.mf_minus,'down')}</div>
+    <div class="dst-item"><span class="dst-label">NET CM</span>${sv(t.net_cm,t.net_cm>=0?'up':'down')}</div>
+    <div class="dst-item"><span class="dst-label">NET MF</span>${sv(t.net_mf,(t.net_mf||0)>=0?'up':'down')}</div>
+    <div class="dst-item"><span class="dst-label">Tickers</span><span class="dst-val">${t.count||'—'}</span></div>`;
+}
+function renderDetailTable(rows){
+  rows.sort((a,b)=>{const av=a.clean_money!==null?a.clean_money:-999999;const bv=b.clean_money!==null?b.clean_money:-999999;return bv-av});
+  document.getElementById('rowCount').textContent=`${rows.length} ticker`;
+  let h=`<div class="table-wrap"><table class="flow-table"><thead><tr>
+    <th>TICKER</th><th>PRICE</th><th>CLEAN MONEY</th><th>SM VAL</th><th>BM VAL</th><th>RSM</th><th>MF+</th><th>MF−</th><th>NET MF</th><th>GAIN%</th>
+  </tr></thead><tbody>`;
+  if(!rows.length)h+=`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
+  else rows.forEach(r=>{
+    const gC=r.gain_pct===null?'zero':r.gain_pct>0?'pos':r.gain_pct<0?'neg':'zero';
+    const gS=r.gain_pct===null?'—':(r.gain_pct>0?'+':'')+r.gain_pct.toFixed(2)+'%';
+    const cmC=r.clean_money===null?'':r.clean_money>=0?'pos':'neg';
+    const rS=r.rsm!==null&&r.rsm!==undefined?r.rsm.toFixed(1)+'%':'—';
+    const nC=r.net_mf===null?'':r.net_mf>=0?'net-pos':'net-neg';
+    h+=`<tr>
+      <td><span class="td-ticker">${r.ticker}</span></td>
+      <td><span class="td-num">${r.price!==null&&r.price!==undefined?r.price.toLocaleString('id-ID'):'—'}</span></td>
+      <td><span class="cm-val ${cmC}">${fmtM(r.clean_money)}</span></td>
+      <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
+      <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
+      <td><span class="rsm-val" style="color:${rsmToColor(r.rsm)}">${rS}</span></td>
+      <td><span class="td-num mfp">${r.mf_plus!==null?fmtM(r.mf_plus):'—'}</span></td>
+      <td><span class="td-num mfm">${r.mf_minus!==null?fmtM(r.mf_minus):'—'}</span></td>
+      <td><span class="td-num ${nC}">${r.net_mf!==null?fmtM(r.net_mf):'—'}</span></td>
+      <td><span class="gain-val ${gC}">${gS}</span></td></tr>`});
+  h+='</tbody></table></div>';
+  const c=document.getElementById('sectorContainer');c.querySelectorAll('.loading-wrap').forEach(l=>l.remove());c.insertAdjacentHTML('beforeend',h);
+}
+function backToGrid(){activeSector=null;document.getElementById('rowCount').textContent='';loadSectors()}
+function onDateChange(){if(activeSector)openSectorDetail(activeSector);else loadSectors()}
 
-window.addEventListener('DOMContentLoaded', async () => {
-  let initDateStr = todayDDMMYYYY();
-  try {
-    const res = await fetch('/api/last-date');
-    const d = await res.json();
-    if (d.date) initDateStr = d.date;
-  } catch (_) {}
-
-  const [dd, mm, yyyy] = initDateStr.split('/').map(Number);
-  const initDate = new Date(yyyy, mm - 1, dd);
-
-  const pikadayOpts = {
-    format: 'DD/MM/YYYY',
-    toString: date => {
-      const d = String(date.getDate()).padStart(2,'0');
-      const m = String(date.getMonth()+1).padStart(2,'0');
-      return `${d}/${m}/${date.getFullYear()}`;
-    },
-    parse: str => {
-      const [d,m,y] = str.split('/').map(Number);
-      return new Date(y, m-1, d);
-    },
-    i18n: {
-      previousMonth: '‹', nextMonth: '›',
-      months: ['Januari','Februari','Maret','April','Mei','Juni',
-               'Juli','Agustus','September','Oktober','November','Desember'],
-      weekdays: ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],
-      weekdaysShort: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'],
-    },
-    maxDate: new Date(),
-  };
-
-  pickerFrom = new Pikaday({
-    ...pikadayOpts,
-    field: document.getElementById('dateFrom'),
-    defaultDate: initDate,
-    setDefaultDate: true,
-    onSelect: date => {
-      if (pickerTo && date > pickerTo.getDate()) pickerTo.setDate(date);
-      loadSectors();
-    },
-  });
-  pickerTo = new Pikaday({
-    ...pikadayOpts,
-    field: document.getElementById('dateTo'),
-    defaultDate: initDate,
-    setDefaultDate: true,
-    onSelect: () => loadSectors(),
-  });
-
-  loadIHSG();
-  loadSectors();
+let pickerFrom,pickerTo;
+window.addEventListener('DOMContentLoaded',async()=>{
+  let initDateStr=todayDDMMYYYY();
+  try{const res=await fetch('/api/last-date');const d=await res.json();if(d.date)initDateStr=d.date}catch(_){}
+  const[dd,mm,yyyy]=initDateStr.split('/').map(Number);const initDate=new Date(yyyy,mm-1,dd);
+  const opts={format:'DD/MM/YYYY',
+    toString:date=>{const d=String(date.getDate()).padStart(2,'0'),m=String(date.getMonth()+1).padStart(2,'0');return`${d}/${m}/${date.getFullYear()}`},
+    parse:str=>{const[d,m,y]=str.split('/').map(Number);return new Date(y,m-1,d)},
+    i18n:{previousMonth:'‹',nextMonth:'›',months:['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'],weekdays:['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],weekdaysShort:['Min','Sen','Sel','Rab','Kam','Jum','Sab']},
+    maxDate:new Date()};
+  pickerFrom=new Pikaday({...opts,field:document.getElementById('dateFrom'),defaultDate:initDate,setDefaultDate:true,onSelect:date=>{if(pickerTo&&date>pickerTo.getDate())pickerTo.setDate(date);onDateChange()}});
+  pickerTo=new Pikaday({...opts,field:document.getElementById('dateTo'),defaultDate:initDate,setDefaultDate:true,onSelect:()=>onDateChange()});
+  loadIHSG();loadSectors();
 });
-
-// Card entrance animation
-const style = document.createElement('style');
-style.textContent = `@keyframes cardIn { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }`;
-document.head.appendChild(style);
 </script>
 </body>
 </html>
