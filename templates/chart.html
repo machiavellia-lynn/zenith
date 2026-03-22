@@ -321,12 +321,21 @@ async function loadOverlayData(candles){
     const res=await fetch(`/api/overlay?ticker=${currentTicker}&tf=${currentTF}`);
     const data=await res.json();
     if(data.error||!data.points||!data.points.length){overlayDataCache=[];ovlSeriesCM.setData([]);ovlSeriesSM.setData([]);ovlSeriesBM.setData([]);return}
-    const candleTimes=new Set(candles.map(c=>c.time));const candleArr=candles.map(c=>c.time).sort((a,b)=>a-b);
+    const candleArr=candles.map(c=>c.time).sort((a,b)=>a-b);
+    const candleTimes=new Set(candleArr);
     function snapTime(t){if(candleTimes.has(t))return t;let best=null,bestDist=Infinity;for(const ct of candleArr){const dist=Math.abs(ct-t);if(dist<bestDist){bestDist=dist;best=ct}if(ct>t)break}return best}
-    const cmD=[],smD=[],bmD=[],seen=new Set();overlayDataCache=[];
-    for(const p of data.points){const st=snapTime(p.time);if(!st||seen.has(st))continue;seen.add(st);
-      cmD.push({time:st,value:p.cum_cm});smD.push({time:st,value:p.cum_sm});bmD.push({time:st,value:p.cum_bm});
-      overlayDataCache.push({time:st,cm:p.cm,sm:p.sm,bm:p.bm})}
+    const ovlMap={};
+    for(const p of data.points){const st=snapTime(p.time);if(st&&!ovlMap[st])ovlMap[st]=p}
+    const cmD=[],smD=[],bmD=[];overlayDataCache=[];
+    let lastCum={cm:0,sm:0,bm:0};let prevT=null;const isIntra=currentTF!=='1d';
+    for(const ct of candleArr){
+      if(isIntra&&prevT!==null&&(ct-prevT)>28800)lastCum={cm:0,sm:0,bm:0};
+      prevT=ct;
+      const ovl=ovlMap[ct];
+      if(ovl){lastCum={cm:ovl.cum_cm,sm:ovl.cum_sm,bm:ovl.cum_bm};overlayDataCache.push({time:ct,cm:ovl.cm,sm:ovl.sm,bm:ovl.bm})}
+      else{overlayDataCache.push({time:ct,cm:0,sm:0,bm:0})}
+      cmD.push({time:ct,value:lastCum.cm});smD.push({time:ct,value:lastCum.sm});bmD.push({time:ct,value:lastCum.bm});
+    }
     ovlSeriesCM.setData(cmD);ovlSeriesSM.setData(smD);ovlSeriesBM.setData(bmD);
   }catch(_){overlayDataCache=[]}
 }

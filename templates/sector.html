@@ -986,35 +986,51 @@ async function loadOverlayData(candles) {
       return;
     }
 
-    // Build candle time set for snapping overlay points
-    const candleTimes = new Set(candles.map(c => c.time));
-    const candleArr   = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleArr = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleTimes = new Set(candleArr);
 
-    // Snap overlay point to nearest candle time
     function snapTime(t) {
       if (candleTimes.has(t)) return t;
       let best = null, bestDist = Infinity;
       for (const ct of candleArr) {
         const dist = Math.abs(ct - t);
         if (dist < bestDist) { bestDist = dist; best = ct; }
-        if (ct > t) break; // sorted, no need to keep going
+        if (ct > t) break;
       }
       return best;
     }
 
-    // Snap and deduplicate
-    const cmData = [], smData = [], bmData = [];
-    const seen = new Set();
-    overlayDataCache = [];
-
+    // Build overlay map: snapped candle time → overlay point
+    const ovlMap = {};
     for (const p of data.points) {
       const st = snapTime(p.time);
-      if (!st || seen.has(st)) continue;
-      seen.add(st);
-      cmData.push({ time: st, value: p.cum_cm });
-      smData.push({ time: st, value: p.cum_sm });
-      bmData.push({ time: st, value: p.cum_bm });
-      overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
+      if (st && !ovlMap[st]) ovlMap[st] = p;
+    }
+
+    // Fill ALL candle times with carry-forward cumulative
+    const cmData = [], smData = [], bmData = [];
+    overlayDataCache = [];
+    let lastCum = { cm: 0, sm: 0, bm: 0 };
+    let prevTime = null;
+    const isIntraday = modalTF !== '1d';
+
+    for (const ct of candleArr) {
+      if (isIntraday && prevTime !== null && (ct - prevTime) > 28800) {
+        lastCum = { cm: 0, sm: 0, bm: 0 };
+      }
+      prevTime = ct;
+
+      const ovl = ovlMap[ct];
+      if (ovl) {
+        lastCum = { cm: ovl.cum_cm, sm: ovl.cum_sm, bm: ovl.cum_bm };
+        overlayDataCache.push({ time: ct, cm: ovl.cm, sm: ovl.sm, bm: ovl.bm });
+      } else {
+        overlayDataCache.push({ time: ct, cm: 0, sm: 0, bm: 0 });
+      }
+
+      cmData.push({ time: ct, value: lastCum.cm });
+      smData.push({ time: ct, value: lastCum.sm });
+      bmData.push({ time: ct, value: lastCum.bm });
     }
 
     ovlSeriesCM.setData(cmData);
@@ -1302,35 +1318,51 @@ async function loadOverlayData(candles) {
       return;
     }
 
-    // Build candle time set for snapping overlay points
-    const candleTimes = new Set(candles.map(c => c.time));
-    const candleArr   = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleArr = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleTimes = new Set(candleArr);
 
-    // Snap overlay point to nearest candle time
     function snapTime(t) {
       if (candleTimes.has(t)) return t;
       let best = null, bestDist = Infinity;
       for (const ct of candleArr) {
         const dist = Math.abs(ct - t);
         if (dist < bestDist) { bestDist = dist; best = ct; }
-        if (ct > t) break; // sorted, no need to keep going
+        if (ct > t) break;
       }
       return best;
     }
 
-    // Snap and deduplicate
-    const cmData = [], smData = [], bmData = [];
-    const seen = new Set();
-    overlayDataCache = [];
-
+    // Build overlay map: snapped candle time → overlay point
+    const ovlMap = {};
     for (const p of data.points) {
       const st = snapTime(p.time);
-      if (!st || seen.has(st)) continue;
-      seen.add(st);
-      cmData.push({ time: st, value: p.cum_cm });
-      smData.push({ time: st, value: p.cum_sm });
-      bmData.push({ time: st, value: p.cum_bm });
-      overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
+      if (st && !ovlMap[st]) ovlMap[st] = p;
+    }
+
+    // Fill ALL candle times with carry-forward cumulative
+    const cmData = [], smData = [], bmData = [];
+    overlayDataCache = [];
+    let lastCum = { cm: 0, sm: 0, bm: 0 };
+    let prevTime = null;
+    const isIntraday = modalTF !== '1d';
+
+    for (const ct of candleArr) {
+      if (isIntraday && prevTime !== null && (ct - prevTime) > 28800) {
+        lastCum = { cm: 0, sm: 0, bm: 0 };
+      }
+      prevTime = ct;
+
+      const ovl = ovlMap[ct];
+      if (ovl) {
+        lastCum = { cm: ovl.cum_cm, sm: ovl.cum_sm, bm: ovl.cum_bm };
+        overlayDataCache.push({ time: ct, cm: ovl.cm, sm: ovl.sm, bm: ovl.bm });
+      } else {
+        overlayDataCache.push({ time: ct, cm: 0, sm: 0, bm: 0 });
+      }
+
+      cmData.push({ time: ct, value: lastCum.cm });
+      smData.push({ time: ct, value: lastCum.sm });
+      bmData.push({ time: ct, value: lastCum.bm });
     }
 
     ovlSeriesCM.setData(cmData);
@@ -1447,22 +1479,45 @@ function rsmToColor(rsm){if(!rsm)return'var(--muted)';if(rsm>=70)return'#00e8a2'
 
 async function loadIHSG(){try{const res=await fetch('/api/ihsg');const d=await res.json();if(d.price)document.getElementById('ihsgPrice').textContent=d.price.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});if(d.gain_pct!==null&&d.gain_pct!==undefined){const el=document.getElementById('ihsgGain');el.textContent=(d.gain_pct>0?'+':'')+d.gain_pct.toFixed(2)+'%';el.style.color=d.gain_pct>=0?'var(--up)':'var(--down)'}}catch(_){}}
 
+let _sectorData = []; // store for async gain update
 async function loadSectors(){
   const df=document.getElementById('dateFrom').value.trim(),dt=document.getElementById('dateTo').value.trim();
   if(!df||!dt)return;
   document.getElementById('sectorContainer').innerHTML='<div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>';
   document.getElementById('rowCount').textContent='';
-  try{const res=await fetch(`/api/sector?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`);const data=await res.json();if(data.error)throw new Error(data.error);renderSectors(data.sectors||[])}
-  catch(e){document.getElementById('sectorContainer').innerHTML=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
+  try{const res=await fetch(`/api/sector?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&skip_gains=1`);const data=await res.json();if(data.error)throw new Error(data.error);
+    _sectorData=data.sectors||[];renderSectors(_sectorData);
+    // Async: fetch gains per sector and update cards
+    loadSectorGainsAsync(displayToApi(df),displayToApi(dt),data.sectors||[]);
+  }catch(e){document.getElementById('sectorContainer').innerHTML=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
+}
+async function loadSectorGainsAsync(dateFrom,dateTo,sectors){
+  // Fetch gains for each sector's members in parallel
+  for(const s of sectors){
+    if(!s.members||!s.members.length)continue;
+    fetch(`/api/gains?tickers=${encodeURIComponent(s.members.join(','))}&date_from=${dateFrom}&date_to=${dateTo}`)
+      .then(r=>r.json()).then(gains=>{
+        if(gains.error)return;
+        const gvals=s.members.map(t=>(gains[t]||{}).gain).filter(g=>g!==null&&g!==undefined);
+        const avg=gvals.length?Math.round(gvals.reduce((a,b)=>a+b,0)/gvals.length*100)/100:null;
+        s.gain_pct=avg;
+        // Update the card gain element
+        const el=document.getElementById('sg_'+s.name);
+        if(el){
+          el.textContent=avg===null?'—':(avg>0?'+':'')+avg.toFixed(2)+'%';
+          el.className='sc-gain '+(avg===null?'zero':avg>0?'up':avg<0?'down':'zero');
+        }
+      }).catch(()=>{});
+  }
 }
 function renderSectors(sectors){
   if(!sectors.length){document.getElementById('sectorContainer').innerHTML='<div class="loading-wrap">Tidak ada data</div>';return}
   const html='<div class="sector-grid">'+sectors.map((s,i)=>{
     const gC=s.gain_pct===null?'zero':s.gain_pct>0?'up':s.gain_pct<0?'down':'zero';
-    const gS=s.gain_pct===null?'—':(s.gain_pct>0?'+':'')+s.gain_pct.toFixed(2)+'%';
+    const gS=s.gain_pct===null?'···':(s.gain_pct>0?'+':'')+s.gain_pct.toFixed(2)+'%';
     const cmC=s.cm>=0?'cm-pos':'cm-neg';const nC=s.net_mf===null?'':s.net_mf>=0?'net-pos':'net-neg';
     return`<div class="sector-card" onclick="openSectorDetail('${s.name}')" style="animation:cardIn .3s ease ${Math.min(i*40,400)}ms both">
-      <div class="sc-top"><div class="sc-name">${s.name}</div><div class="sc-gain ${gC}">${gS}</div></div>
+      <div class="sc-top"><div class="sc-name">${s.name}</div><div class="sc-gain ${gC}" id="sg_${s.name}">${gS}</div></div>
       <div class="sc-stats">
         <div class="sc-stat"><span class="sc-stat-label">SM</span><span class="sc-stat-val sm">${fmtM(s.sm_val)}</span></div>
         <div class="sc-stat"><span class="sc-stat-label">BM</span><span class="sc-stat-val bm">${fmtM(s.bm_val)}</span></div>
@@ -1484,9 +1539,16 @@ async function openSectorDetail(name){
      <div class="detail-stats" id="detailStats"></div>
      <div class="loading-wrap"><div class="spinner"></div> Memuat data ${name}...</div>`;
   try{
-    const res=await fetch(`/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&sector=${encodeURIComponent(name)}`);
+    const res=await fetch(`/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&sector=${encodeURIComponent(name)}&skip_gains=1`);
     const data=await res.json();if(data.error)throw new Error(data.error);
     renderDetailStats(data.totals||{});sectorDetailRows=data.tickers||[];sectorSortCol='clean_money';sectorSortAsc=false;renderDetailTable();
+    // Async gains
+    const tickers=sectorDetailRows.map(r=>r.ticker).join(',');
+    fetch(`/api/gains?tickers=${encodeURIComponent(tickers)}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`).then(r=>r.json()).then(gains=>{
+      if(gains.error)return;
+      for(const r of sectorDetailRows){const g=gains[r.ticker];if(g){r.gain_pct=g.gain;if(g.price!==null&&g.price!==undefined)r.price=g.price}}
+      renderDetailTable();
+    }).catch(()=>{});
   }catch(e){document.getElementById('sectorContainer').innerHTML+=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
 }
 function renderDetailStats(t){

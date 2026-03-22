@@ -983,7 +983,7 @@ async function loadFlow() {
 
   showLoading();
   try {
-    let url = `/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+    let url = `/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&skip_gains=1`;
     if (activeSector) url += `&sector=${encodeURIComponent(activeSector)}`;
     const res  = await fetch(url);
     const data = await res.json();
@@ -991,9 +991,29 @@ async function loadFlow() {
     allRows = data.tickers || [];
     updateStats(data.totals || {});
     renderTable();
+    // Async: fetch gains separately then update table
+    loadGainsAsync(displayToApi(df), displayToApi(dt));
   } catch (e) {
     showError(e.message);
   }
+}
+
+async function loadGainsAsync(dateFrom, dateTo) {
+  if (!allRows.length) return;
+  const tickers = allRows.map(r => r.ticker).join(',');
+  try {
+    const res = await fetch(`/api/gains?tickers=${encodeURIComponent(tickers)}&date_from=${dateFrom}&date_to=${dateTo}`);
+    const gains = await res.json();
+    if (gains.error) return;
+    for (const r of allRows) {
+      const g = gains[r.ticker];
+      if (g) {
+        r.gain_pct = g.gain;
+        if (g.price !== null && g.price !== undefined) r.price = g.price;
+      }
+    }
+    renderTable(); // re-render with gains filled in
+  } catch (_) {}
 }
 
 // ── Stats bar ─────────────────────────────────────────────────────────
@@ -1382,9 +1402,8 @@ async function loadOverlayData(candles) {
       return;
     }
 
-    // Build candle time set for snapping overlay points
-    const candleTimes = new Set(candles.map(c => c.time));
-    const candleArr   = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleArr = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleTimes = new Set(candleArr);
 
     // Snap overlay point to nearest candle time
     function snapTime(t) {
@@ -1393,24 +1412,43 @@ async function loadOverlayData(candles) {
       for (const ct of candleArr) {
         const dist = Math.abs(ct - t);
         if (dist < bestDist) { bestDist = dist; best = ct; }
-        if (ct > t) break; // sorted, no need to keep going
+        if (ct > t) break;
       }
       return best;
     }
 
-    // Snap and deduplicate
-    const cmData = [], smData = [], bmData = [];
-    const seen = new Set();
-    overlayDataCache = [];
-
+    // Build overlay map: snapped candle time → overlay point
+    const ovlMap = {};
     for (const p of data.points) {
       const st = snapTime(p.time);
-      if (!st || seen.has(st)) continue;
-      seen.add(st);
-      cmData.push({ time: st, value: p.cum_cm });
-      smData.push({ time: st, value: p.cum_sm });
-      bmData.push({ time: st, value: p.cum_bm });
-      overlayDataCache.push({ time: st, cm: p.cm, sm: p.sm, bm: p.bm });
+      if (st && !ovlMap[st]) ovlMap[st] = p;
+    }
+
+    // Fill ALL candle times with carry-forward cumulative
+    const cmData = [], smData = [], bmData = [];
+    overlayDataCache = [];
+    let lastCum = { cm: 0, sm: 0, bm: 0 };
+    let prevTime = null;
+    const isIntraday = modalTF !== '1d';
+
+    for (const ct of candleArr) {
+      // Detect new day for intraday (overnight gap > 8h)
+      if (isIntraday && prevTime !== null && (ct - prevTime) > 28800) {
+        lastCum = { cm: 0, sm: 0, bm: 0 };
+      }
+      prevTime = ct;
+
+      const ovl = ovlMap[ct];
+      if (ovl) {
+        lastCum = { cm: ovl.cum_cm, sm: ovl.cum_sm, bm: ovl.cum_bm };
+        overlayDataCache.push({ time: ct, cm: ovl.cm, sm: ovl.sm, bm: ovl.bm });
+      } else {
+        overlayDataCache.push({ time: ct, cm: 0, sm: 0, bm: 0 });
+      }
+
+      cmData.push({ time: ct, value: lastCum.cm });
+      smData.push({ time: ct, value: lastCum.sm });
+      bmData.push({ time: ct, value: lastCum.bm });
     }
 
     ovlSeriesCM.setData(cmData);
