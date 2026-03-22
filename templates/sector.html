@@ -952,13 +952,12 @@ async function loadModalChart() {
     for (let i = 0; i < candles.length; i++) {
       modalPrevCloseMap[candles[i].time] = i > 0 ? candles[i - 1].close : candles[i].open;
     }
-    modalChart.timeScale().resetTimeScale();
     modalCandle.setData(candles);
     modalVolume.setData(candles.map(c => ({
       time: c.time, value: c.volume,
       color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
     })));
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => { requestAnimationFrame(() => {
       if (candles.length > INIT_CANDLES) {
         modalChart.timeScale().setVisibleLogicalRange({
           from: candles.length - INIT_CANDLES,
@@ -967,7 +966,7 @@ async function loadModalChart() {
       } else {
         modalChart.timeScale().fitContent();
       }
-    });
+    }); });
     if (data.name) document.getElementById('mName').textContent = data.name;
     // Load overlay data after candles
     loadOverlayData(candles);
@@ -1094,6 +1093,7 @@ function setModalTF(tf) {
   document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
     b.classList.toggle('active', b.dataset.tf === tf)
   );
+  initModalChart();
   loadModalChart();
 }
 function modalToggleLog() {
@@ -1268,13 +1268,12 @@ async function loadModalChart() {
     if (data.error) return;
     const candles = data.candles || [];
     if (!candles.length) return;
-    modalChart.timeScale().resetTimeScale();
     modalCandle.setData(candles);
     modalVolume.setData(candles.map(c => ({
       time: c.time, value: c.volume,
       color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
     })));
-    requestAnimationFrame(() => {
+    requestAnimationFrame(() => { requestAnimationFrame(() => {
       if (candles.length > INIT_CANDLES) {
         modalChart.timeScale().setVisibleLogicalRange({
           from: candles.length - INIT_CANDLES,
@@ -1283,7 +1282,7 @@ async function loadModalChart() {
       } else {
         modalChart.timeScale().fitContent();
       }
-    });
+    }); });
     if (data.name) document.getElementById('mName').textContent = data.name;
     // Load overlay data after candles
     loadOverlayData(candles);
@@ -1410,6 +1409,7 @@ function setModalTF(tf) {
   document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
     b.classList.toggle('active', b.dataset.tf === tf)
   );
+  initModalChart();
   loadModalChart();
 }
 function modalToggleLog() {

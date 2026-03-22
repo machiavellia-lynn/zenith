@@ -1347,13 +1347,13 @@ async function loadModalChart() {
     for (let i = 0; i < candles.length; i++) {
       modalPrevCloseMap[candles[i].time] = i > 0 ? candles[i - 1].close : candles[i].open;
     }
-    modalChart.timeScale().resetTimeScale();
     modalCandle.setData(candles);
     modalVolume.setData(candles.map(c => ({
       time: c.time, value: c.volume,
       color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
     })));
-    requestAnimationFrame(() => {
+    // Double rAF ensures chart has processed new data before setting range
+    requestAnimationFrame(() => { requestAnimationFrame(() => {
       if (candles.length > INIT_CANDLES) {
         modalChart.timeScale().setVisibleLogicalRange({
           from: candles.length - INIT_CANDLES,
@@ -1362,7 +1362,7 @@ async function loadModalChart() {
       } else {
         modalChart.timeScale().fitContent();
       }
-    });
+    }); });
     if (data.name) document.getElementById('mName').textContent = data.name;
     // Load overlay data after candles
     loadOverlayData(candles);
@@ -1489,6 +1489,7 @@ function setModalTF(tf) {
   document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
     b.classList.toggle('active', b.dataset.tf === tf)
   );
+  initModalChart();
   loadModalChart();
 }
 function modalToggleLog() {

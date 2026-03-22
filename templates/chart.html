@@ -290,23 +290,24 @@ function initChart(){
 
 function applyAutoScale(on){if(!chart)return;chart.priceScale('right').applyOptions({autoScale:on,scaleMargins:{top:0.1,bottom:0.2}});chart.applyOptions({handleScale:{axisPressedMouseMove:{price:!on,time:true}}})}
 function setScale(mode){if(mode==='auto'){isAutoScale=!isAutoScale;applyAutoScale(isAutoScale);document.getElementById('btnAuto').classList.toggle('active',isAutoScale)}else{isLogScale=!isLogScale;if(chart)chart.priceScale('right').applyOptions({mode:isLogScale?1:0});document.getElementById('btnLog').classList.toggle('active',isLogScale)}}
-function setTF(tf){currentTF=tf;document.querySelectorAll('.tf-btn[data-tf]').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf));doLoad()}
+function setTF(tf){currentTF=tf;document.querySelectorAll('.tf-btn[data-tf]').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf));if(chart){chart.remove();chart=null;candleSeries=null;volumeSeries=null;ovlSeriesCM=null;ovlSeriesSM=null;ovlSeriesBM=null}doLoad()}
 
 async function doLoad(){
   const input=document.getElementById('tickerInput').value.trim().toUpperCase();
   if(!input)return;currentTicker=input;
   showLoading('Mengambil data...');
-  if(!candleSeries){if(chart){chart.remove();chart=null};initChart()}
+  // Always recreate chart for clean state
+  if(chart){chart.remove();chart=null;candleSeries=null;volumeSeries=null;ovlSeriesCM=null;ovlSeriesSM=null;ovlSeriesBM=null}
+  initChart();
   try{
     const res=await fetch(`/api/ohlcv?ticker=${currentTicker}&tf=${currentTF}`);
     const data=await res.json();if(data.error)throw new Error(data.error);
     const candles=data.candles||[];if(!candles.length)throw new Error('Data kosong');
     prevCloseMap={};
     for(let i=0;i<candles.length;i++)prevCloseMap[candles[i].time]=i>0?candles[i-1].close:candles[i].open;
-    chart.timeScale().resetTimeScale();
     candleSeries.setData(candles);
     volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'#00e8a240':'#ff4d6a40'})));
-    requestAnimationFrame(()=>{if(candles.length>INIT_CANDLES)chart.timeScale().setVisibleLogicalRange({from:candles.length-INIT_CANDLES,to:candles.length-1});else chart.timeScale().fitContent()});
+    requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(candles.length>INIT_CANDLES)chart.timeScale().setVisibleLogicalRange({from:candles.length-INIT_CANDLES,to:candles.length-1});else chart.timeScale().fitContent()})});
     applyAutoScale(isAutoScale);hideLoading();
     if(data.name)document.getElementById('tName').textContent=data.name;
     if(data.price){document.getElementById('tPrice').textContent=data.price.toLocaleString('id-ID')}
