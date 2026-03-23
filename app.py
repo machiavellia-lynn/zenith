@@ -380,7 +380,7 @@ def flow():
                     ticker,
                     channel,
                     SUM(mf_delta_numeric) AS mf,
-                    SUM(tx_count) AS tx_total
+                    COUNT(*) AS tx_total
                 FROM raw_messages
                 WHERE date IN ({placeholders})
                 GROUP BY ticker, channel
