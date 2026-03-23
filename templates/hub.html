@@ -42,6 +42,39 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 .card-desc{font-size:12px;color:var(--muted);line-height:1.5}
 
 .footer{text-align:center;padding:24px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:auto}
+
+.info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:24px;height:24px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.info-btn:hover{border-color:var(--accent);color:var(--accent)}
+.info-backdrop{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.info-backdrop.open{opacity:1;pointer-events:all}
+.info-modal{background:var(--surface);border:1px solid var(--border2);border-radius:10px;width:min(90vw,760px);max-height:85vh;display:flex;flex-direction:column;transform:scale(.97);transition:transform .2s;overflow:hidden}
+.info-backdrop.open .info-modal{transform:scale(1)}
+.info-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.info-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--accent)}
+.info-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.info-body{overflow-y:auto;padding:20px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.info-body::-webkit-scrollbar{width:5px}
+.info-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.info-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+.info-section:last-child{border-bottom:none;margin-bottom:0}
+.info-section-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.info-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.info-p{font-size:12px;color:var(--text);line-height:1.65;margin-bottom:8px}
+.info-p:last-child{margin-bottom:0}
+.info-highlight{background:rgba(0,232,162,.07);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;padding:10px 14px;margin:10px 0;font-family:'Space Mono',monospace;font-size:11px;color:var(--text);line-height:1.6}
+.info-highlight.danger{background:rgba(255,77,106,.07);border-left-color:var(--danger)}
+.info-highlight.neutral{background:rgba(77,159,255,.07);border-left-color:var(--accent2)}
+.info-glossary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media(max-width:560px){.info-glossary{grid-template-columns:1fr}}
+.info-term{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.info-term-label{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:4px}
+.info-term-label.cm{color:var(--up)}.info-term-label.sm{color:var(--accent2)}.info-term-label.bm{color:#ff8c42}.info-term-label.muted{color:var(--muted)}
+.info-term-desc{font-size:11px;color:var(--muted);line-height:1.5}
+.info-scenarios{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.info-scenario{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.info-scenario-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:var(--text);letter-spacing:.06em;margin-bottom:6px}
+.info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
+
 </style>
 </head>
 <body>
@@ -55,12 +88,13 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
     <span class="ihsg-label">IHSG</span>
     <span class="ihsg-price" id="ihsgPrice">—</span>
     <span class="ihsg-gain" id="ihsgGain">—</span>
+    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data">?</button>
   </div>
 </header>
 
 <div class="hero">
   <div class="hero-logo">ZENITH</div>
-  <div class="hero-tag">Smart Money Analysis Platform</div>
+  <div class="hero-tag">Smart Money Intelligence Platform</div>
 </div>
 
 <div class="stats-row">
@@ -75,7 +109,7 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
   <a href="/chart" class="card">
     <div class="card-icon">⬡</div>
     <div class="card-title">Chart</div>
-    <div class="card-sub">End-of-day Candlestick</div>
+    <div class="card-sub">Real-time Candlestick IDX</div>
     <div class="card-desc">Analisis pergerakan harga saham IDX dengan timeframe 5m hingga 1D. Dilengkapi overlay CM, SM, dan BM langsung di atas candlestick.</div>
   </a>
   <a href="/flow" class="card primary">
@@ -131,6 +165,77 @@ async function init(){
   tick();setInterval(tick,1000);
 }
 window.addEventListener('DOMContentLoaded',init);
+
+
+const INFO_CONTENT=`
+<div class="info-section">
+  <div class="info-section-title">Glossary Kolom Dashboard</div>
+  <div class="info-glossary">
+    <div class="info-term"><div class="info-term-label sm">SM VAL — Smart Money</div><div class="info-term-desc">Total dana besar yang masuk ke saham dari pemain institusional, fund manager, atau bandar besar. Semakin besar = potensi akumulasi.</div></div>
+    <div class="info-term"><div class="info-term-label bm">BM VAL — Bad Money</div><div class="info-term-desc">Total dana besar yang keluar dari saham. Dominan Bad Money = distribusi / penjualan besar. Perlu waspada.</div></div>
+    <div class="info-term"><div class="info-term-label cm">CM — Clean Money</div><div class="info-term-desc">SM Val − BM Val. Positif besar = dana masuk dominan. Negatif = distribusi lebih dominan dari akumulasi.</div></div>
+    <div class="info-term"><div class="info-term-label muted">RSM — Rasio Smart Money</div><div class="info-term-desc">SM / (SM + BM) × 100%. Makin tinggi = makin dominan Smart Money. Di atas 70% = sinyal kuat akumulasi.</div></div>
+    <div class="info-term"><div class="info-term-label cm">MF+ — Money Flow Plus</div><div class="info-term-desc">Akumulasi Money Flow positif dari sub-channel MF. Mengukur tekanan beli agregat di pasar.</div></div>
+    <div class="info-term"><div class="info-term-label bm">MF− — Money Flow Minus</div><div class="info-term-desc">Akumulasi Money Flow negatif. Mengukur tekanan jual agregat. Bandingkan dengan MF+ untuk lihat dominasi.</div></div>
+    <div class="info-term"><div class="info-term-label muted">NET MF</div><div class="info-term-desc">MF+ dikurangi MF−. Positif = tekanan beli lebih dominan. Negatif = tekanan jual lebih dominan.</div></div>
+    <div class="info-term"><div class="info-term-label muted">TX — Jumlah Transaksi</div><div class="info-term-desc">Total akumulasi frekuensi trigger Smart/Bad Money yang muncul. Makin banyak TX = aktivitas lebih konsisten dan signifikan.</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Memahami Smart Money</div>
+  <div class="info-p">Smart Money adalah aktivitas transaksi dari pemain besar di pasar saham: institusi, fund manager, market maker, dan bandar besar. Mereka memiliki modal besar dan biasanya membeli saham secara bertahap agar tidak langsung menggerakkan harga — proses ini disebut <strong>akumulasi</strong>.</div>
+  <div class="info-highlight">Clean Money = Smart Money − Bad Money<br>Positif → dana masuk lebih dominan<br>Negatif → distribusi lebih dominan</div>
+  <div class="info-p">Trigger Smart Money dibuat untuk membantu trader mendeteksi aktivitas ini lebih awal sebelum harga bergerak signifikan.</div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Skenario Pembacaan</div>
+  <div class="info-scenarios">
+    <div class="info-scenario"><div class="info-scenario-title">📈 SKENARIO 1 — Akumulasi Awal</div><div class="info-scenario-desc">SM muncul, Clean Money positif, harga belum naik jauh, volume mulai meningkat. Makna: Bandar sedang mengumpulkan saham secara diam-diam. Strategi: masukkan ke watchlist atau entry bertahap.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🔁 SKENARIO 2 — Akumulasi Berulang</div><div class="info-scenario-desc">SM muncul berkali-kali dalam satu hari (TX tinggi). Makna: terjadi akumulasi bertahap oleh pemain besar. Semakin sering muncul = semakin signifikan.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🚀 SKENARIO 3 — Breakout Momentum</div><div class="info-scenario-desc">SM sangat besar, volume 5–10× rata-rata, harga menembus resistance. Makna: pemain besar mulai mendorong harga naik. Strategi: momentum buy.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">⚠️ SKENARIO 4 — Distribusi</div><div class="info-scenario-desc">Bad Money dominan, Clean Money negatif, volume tinggi, harga mulai turun. Makna: bandar mulai menjual saham ke pasar. Strategi: hindari entry atau lakukan take profit.</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Smart Money Asli vs False Signal</div>
+  <div class="info-glossary">
+    <div class="info-term"><div class="info-term-label cm">✅ Smart Money Asli</div><div class="info-term-desc">Muncul berulang (TX tinggi) · Clean Money positif · Volume meningkat konsisten · Harga tidak langsung turun setelah trigger</div></div>
+    <div class="info-term"><div class="info-term-label bm">⚠️ Fake Smart Money</div><div class="info-term-desc">Hanya muncul sekali (TX rendah) · Volume tidak stabil · Harga langsung turun setelah trigger · Clean Money kecil atau negatif</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Kesalahan Umum Trader</div>
+  <div class="info-highlight danger">❌ Langsung buy saat trigger pertama muncul tanpa konfirmasi<br>❌ Tidak melihat Clean Money — hanya fokus ke SM saja<br>❌ Tidak memperhatikan volume dan arah harga<br>❌ Mengabaikan TX — satu trigger tidak cukup untuk konfirmasi</div>
+  <div class="info-p">Smart Money sebaiknya dijadikan alat <strong>konfirmasi</strong>, bukan satu-satunya indikator. Gunakan bersama: Support/Resistance, Volume, Trend harga, dan Breakout level.</div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Waktu Penting Smart Money</div>
+  <div class="info-highlight neutral">Pagi: 09:30 – 10:30 WIB → sering terjadi aktivitas institusi pembuka<br>Siang: 13:30 – 15:00 WIB → sesi sore, sering ada dorongan akhir hari</div>
+  <div class="info-p">Trigger yang muncul di luar jam-jam ini tetap valid, namun perlu konfirmasi tambahan dari volume dan pergerakan harga.</div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Kesimpulan</div>
+  <div class="info-highlight">SM besar + CM positif + TX tinggi = Potensi kenaikan harga<br>BM besar + CM negatif = Potensi penurunan harga<br>RSM > 70% = Smart Money mendominasi hari itu</div>
+</div>
+`;
+function openInfoModal(){document.getElementById('infoBody').innerHTML=INFO_CONTENT;document.getElementById('infoBackdrop').classList.add('open');document.body.style.overflow='hidden'}
+function closeInfoModal(){document.getElementById('infoBackdrop').classList.remove('open');document.body.style.overflow=''}
+function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdrop'))closeInfoModal()}
+
 </script>
+
+<div class="info-backdrop" id="infoBackdrop" onclick="handleInfoBackdrop(event)">
+  <div class="info-modal" id="infoModal">
+    <div class="info-header">
+      <div>
+        <div class="info-title">PANDUAN MEMBACA DATA</div>
+        <div class="info-sub">Smart Money Intelligence — Zenith</div>
+      </div>
+      <button class="close-btn" onclick="closeInfoModal()">✕</button>
+    </div>
+    <div class="info-body" id="infoBody"></div>
+  </div>
+</div>
+
 </body>
 </html>
