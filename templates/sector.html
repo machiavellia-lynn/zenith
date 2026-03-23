@@ -1014,15 +1014,8 @@ async function loadOverlayData(candles) {
     const cmData = [], smData = [], bmData = [];
     overlayDataCache = [];
     let lastCum = { cm: 0, sm: 0, bm: 0 };
-    let prevTime = null;
-    const isIntraday = modalTF !== '1d';
 
     for (const ct of candleArr) {
-      if (isIntraday && prevTime !== null && (ct - prevTime) > 28800) {
-        lastCum = { cm: 0, sm: 0, bm: 0 };
-      }
-      prevTime = ct;
-
       const ovl = ovlMap[ct];
       if (ovl) {
         lastCum = { cm: ovl.cum_cm, sm: ovl.cum_sm, bm: ovl.cum_bm };
@@ -1349,15 +1342,8 @@ async function loadOverlayData(candles) {
     const cmData = [], smData = [], bmData = [];
     overlayDataCache = [];
     let lastCum = { cm: 0, sm: 0, bm: 0 };
-    let prevTime = null;
-    const isIntraday = modalTF !== '1d';
 
     for (const ct of candleArr) {
-      if (isIntraday && prevTime !== null && (ct - prevTime) > 28800) {
-        lastCum = { cm: 0, sm: 0, bm: 0 };
-      }
-      prevTime = ct;
-
       const ovl = ovlMap[ct];
       if (ovl) {
         lastCum = { cm: ovl.cum_cm, sm: ovl.cum_sm, bm: ovl.cum_bm };

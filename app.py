@@ -654,23 +654,15 @@ def overlay():
         cm = round(sm - bm, 2)
         points.append({"time": v["time"], "sm": sm, "bm": bm, "cm": cm, "_date": v["date"]})
 
-    # Hitung cumulative untuk line series (terpisah dari per-bucket value)
-    # Intraday: reset cumulative setiap hari baru
-    # Daily: cumulative lintas semua hari
+    # Hitung cumulative untuk line series (continuous lintas semua hari, semua TF)
     cum_sm, cum_bm, cum_cm = 0.0, 0.0, 0.0
-    prev_date = None
     for p in points:
-        if bucket_min is not None and p.get("_date") != prev_date:
-            # Intraday: reset di hari baru
-            cum_sm, cum_bm, cum_cm = 0.0, 0.0, 0.0
-            prev_date = p.get("_date")
         cum_sm = round(cum_sm + p["sm"], 2)
         cum_bm = round(cum_bm + p["bm"], 2)
         cum_cm = round(cum_cm + p["cm"], 2)
         p["cum_sm"] = cum_sm
         p["cum_bm"] = cum_bm
         p["cum_cm"] = cum_cm
-        # Hapus internal field sebelum return
         p.pop("_date", None)
 
     return jsonify({"ticker": ticker, "tf": tf, "points": points})

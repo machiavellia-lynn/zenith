@@ -328,10 +328,9 @@ async function loadOverlayData(candles){
     const ovlMap={};
     for(const p of data.points){const st=snapTime(p.time);if(st&&!ovlMap[st])ovlMap[st]=p}
     const cmD=[],smD=[],bmD=[];overlayDataCache=[];
-    let lastCum={cm:0,sm:0,bm:0};let prevT=null;const isIntra=currentTF!=='1d';
+    let lastCum={cm:0,sm:0,bm:0};
     for(const ct of candleArr){
-      if(isIntra&&prevT!==null&&(ct-prevT)>28800)lastCum={cm:0,sm:0,bm:0};
-      prevT=ct;
+      
       const ovl=ovlMap[ct];
       if(ovl){lastCum={cm:ovl.cum_cm,sm:ovl.cum_sm,bm:ovl.cum_bm};overlayDataCache.push({time:ct,cm:ovl.cm,sm:ovl.sm,bm:ovl.bm})}
       else{overlayDataCache.push({time:ct,cm:0,sm:0,bm:0})}
