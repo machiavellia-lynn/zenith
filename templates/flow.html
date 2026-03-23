@@ -626,11 +626,11 @@ td:first-child { text-align: left; }
     <span class="s-label">BM</span>
     <span class="s-val bm" id="sBM">—</span>
   </div>
-  <div class="stat-item" title="Positive Money Flow">
+  <div class="stat-item" title="Money Inflow">
     <span class="s-label">MF+</span>
     <span class="s-val up" id="sMFP">—</span>
   </div>
-  <div class="stat-item" title="Negative Money Flow">
+  <div class="stat-item" title="Money Outflow">
     <span class="s-label">MF−</span>
     <span class="s-val down" id="sMFM">—</span>
   </div>
@@ -676,18 +676,19 @@ td:first-child { text-align: left; }
       <tr>
         <th onclick="sortBy('ticker',event)"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
         <th onclick="sortBy('price',event)"         data-col="price" title="Harga terakhir">PRICE <span class="sort-icon"></span></th>
+        <th onclick="sortBy('tx',event)"             data-col="tx" title="Total transaksi">TX <span class="sort-icon"></span></th>
         <th onclick="sortBy('clean_money',event)"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
         <th onclick="sortBy('sm_val',event)"       data-col="sm_val" title="Smart Money">SM VAL <span class="sort-icon"></span></th>
         <th onclick="sortBy('bm_val',event)"       data-col="bm_val" title="Bad Money">BM VAL <span class="sort-icon"></span></th>
         <th onclick="sortBy('rsm',event)"          data-col="rsm" title="Smart Money Ratio">RSM <span class="sort-icon"></span></th>
-        <th onclick="sortBy('mf_plus',event)"      data-col="mf_plus" title="Positive Money Flow">MF+ <span class="sort-icon"></span></th>
-        <th onclick="sortBy('mf_minus',event)"     data-col="mf_minus" title="Negative Money Flow">MF− <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_plus',event)"      data-col="mf_plus" title="Money Inflow">MF+ <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_minus',event)"     data-col="mf_minus" title="Money Outflow">MF− <span class="sort-icon"></span></th>
         <th onclick="sortBy('net_mf',event)"       data-col="net_mf" title="Net Money Flow">NET MF <span class="sort-icon"></span></th>
         <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="% perubahan harga">GAIN% <span class="sort-icon"></span></th>
       </tr>
     </thead>
     <tbody id="flowBody">
-      <tr class="state-row"><td colspan="10"><span class="spinner-inline"></span>Memuat data...</td></tr>
+      <tr class="state-row"><td colspan="11"><span class="spinner-inline"></span>Memuat data...</td></tr>
     </tbody>
   </table>
 </div>
@@ -1108,7 +1109,7 @@ function renderTable() {
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="10">Tidak ada data untuk tanggal ini</td></tr>`;
+    tbody.innerHTML = `<tr class="state-row"><td colspan="11">Tidak ada data untuk tanggal ini</td></tr>`;
     return;
   }
 
@@ -1128,6 +1129,7 @@ function renderTable() {
     return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
       <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
+      <td><span class="td-num" style="color:var(--muted)">${r.tx ? r.tx.toLocaleString('id-ID') : '—'}</span></td>
       <td class="cm-cell">
         <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
         <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
@@ -1153,11 +1155,11 @@ function rsmToColor(rsm) {
 
 function showLoading() {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="10"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+    `<tr class="state-row"><td colspan="11"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="10">⚠ ${msg}</td></tr>`;
+    `<tr class="state-row"><td colspan="11">⚠ ${msg}</td></tr>`;
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────

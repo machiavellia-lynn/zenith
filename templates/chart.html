@@ -138,23 +138,22 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
       <span class="ihsg-price" id="ihsgPrice">—</span>
       <span class="ihsg-gain" id="ihsgGain">—</span>
     </div>
-    <div class="nav-divider"></div>
-    <div class="overlay-toggles">
-      <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
-      <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
-      <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
-    </div>
   </div>
 </header>
 
 <main>
   <div class="tf-row">
-    <span class="tf-label">TF</span>
+    <span class="tf-label">Time Frame</span>
     <button class="tf-btn" data-tf="5m" onclick="setTF('5m')">5m</button>
     <button class="tf-btn" data-tf="15m" onclick="setTF('15m')">15m</button>
     <button class="tf-btn" data-tf="30m" onclick="setTF('30m')">30m</button>
     <button class="tf-btn" data-tf="1h" onclick="setTF('1h')">1h</button>
     <button class="tf-btn active" data-tf="1d" onclick="setTF('1d')">1D</button>
+    <div class="overlay-toggles">
+      <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
+      <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')" title="Smart Money"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
+      <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
+    </div>
     <div style="flex:1"></div>
     <button class="tf-btn" id="btnLog" onclick="setScale('log')" title="Log scale">L</button>
     <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')" title="Auto scale">A</button>

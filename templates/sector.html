@@ -1570,7 +1570,7 @@ function renderDetailTable(){
     return sectorSortAsc?av-bv:bv-av;
   });
   document.getElementById('rowCount').textContent=`${rows.length} ticker`;
-  const cols=[['ticker','TICKER'],['price','PRICE'],['clean_money','CLEAN MONEY'],['sm_val','SM VAL'],['bm_val','BM VAL'],['rsm','RSM'],['mf_plus','MF+'],['mf_minus','MF−'],['net_mf','NET MF'],['gain_pct','GAIN%']];
+  const cols=[['ticker','TICKER'],['price','PRICE'],['tx','TX'],['clean_money','CLEAN MONEY'],['sm_val','SM VAL'],['bm_val','BM VAL'],['rsm','RSM'],['mf_plus','MF+'],['mf_minus','MF−'],['net_mf','NET MF'],['gain_pct','GAIN%']];
   let h=`<div class="table-wrap"><table class="flow-table"><thead><tr>`;
   cols.forEach(([k,label])=>{
     const icon=sectorSortCol===k?(sectorSortAsc?'▲':'▼'):'';
@@ -1578,7 +1578,7 @@ function renderDetailTable(){
     h+=`<th onclick="sortSectorDetail('${k}')" style="cursor:pointer${sectorSortCol===k?';color:var(--accent)':''}">${label} ${icon}</th>`;
   });
   h+=`</tr></thead><tbody>`;
-  if(!rows.length)h+=`<tr><td colspan="10" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
+  if(!rows.length)h+=`<tr><td colspan="11" style="text-align:center;padding:40px;color:var(--muted)">Tidak ada data</td></tr>`;
   else rows.forEach(r=>{
     const gC=r.gain_pct===null?'zero':r.gain_pct>0?'pos':r.gain_pct<0?'neg':'zero';
     const gS=r.gain_pct===null?'—':(r.gain_pct>0?'+':'')+r.gain_pct.toFixed(2)+'%';
@@ -1588,6 +1588,7 @@ function renderDetailTable(){
     h+=`<tr onclick="openModal('${r.ticker}')" style="cursor:pointer">
       <td><span class="td-ticker">${r.ticker}</span></td>
       <td><span class="td-num">${r.price!==null&&r.price!==undefined?r.price.toLocaleString('id-ID'):'—'}</span></td>
+      <td><span class="td-num" style="color:var(--muted)">${r.tx?r.tx.toLocaleString('id-ID'):'—'}</span></td>
       <td><span class="cm-val ${cmC}">${fmtM(r.clean_money)}</span></td>
       <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
       <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>

@@ -379,7 +379,8 @@ def flow():
                 SELECT
                     ticker,
                     channel,
-                    SUM(mf_delta_numeric) AS mf
+                    SUM(mf_delta_numeric) AS mf,
+                    SUM(tx_count) AS tx_total
                 FROM raw_messages
                 WHERE date IN ({placeholders})
                 GROUP BY ticker, channel
@@ -412,17 +413,19 @@ def flow():
     for row in rows_sm_bm:
         t = row["ticker"]
         if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None}
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0}
         if row["channel"] == "smart":
             data[t]["sm_val"] += row["mf"] or 0
+            data[t]["tx"] = (data[t].get("tx") or 0) + (row.get("tx_total") or 0)
         else:
             data[t]["bm_val"] += abs(row["mf"] or 0)
+            data[t]["tx"] = (data[t].get("tx") or 0) + (row.get("tx_total") or 0)
 
     # Agregasi MF+/MF- per ticker dari raw_mf_messages
     for row in rows_mf:
         t = row["ticker"]
         if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None}
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0}
         if row["channel"] == "mf_plus":
             data[t]["mf_plus"] = (data[t]["mf_plus"] or 0) + (row["mf"] or 0)
         elif row["channel"] == "mf_minus":
@@ -447,7 +450,7 @@ def flow():
         # Add missing tickers that have no DB data
         for t in sector_members:
             if t not in data:
-                data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "_nodata": True}
+                data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0, "_nodata": True}
 
     if not data:
         return jsonify({"tickers": [], "totals": {}})
@@ -481,6 +484,7 @@ def flow():
             "net_mf":      net,
             "gain_pct":    g.get("gain"),
             "price":       g.get("price"),
+            "tx":          int(d.get("tx") or 0),
         })
 
     # Sort default: clean_money desc (nulls last)
@@ -748,7 +752,7 @@ def ohlcv():
             "tf":         tf,
             "candles":    candles,
             "count":      len(candles),
-            "name":       meta.get("longName", ticker),
+            "name":       meta.get("longName") or meta.get("shortName") or ticker,
             "price":      int(round(float(price_raw))) if price_raw else None,
             "data_range": f"{candles[0]['datetime_wib']} → {candles[-1]['datetime_wib']} WIB",
         })
