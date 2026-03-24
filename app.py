@@ -1027,6 +1027,9 @@ def ensure_pg_tables():
                 bad_money FLOAT DEFAULT 0,
                 clean_money FLOAT DEFAULT 0,
                 tx_count INT DEFAULT 0,
+                tx_sm INT DEFAULT 0,
+                tx_bm INT DEFAULT 0,
+                avg_price INT DEFAULT 0,
                 value_total FLOAT DEFAULT 0,
                 rcv FLOAT DEFAULT 0,
                 mf_plus FLOAT DEFAULT 0,
@@ -1036,6 +1039,15 @@ def ensure_pg_tables():
                 UNIQUE(date, ticker)
             )
         """)
+        for col, typedef in [
+            ("tx_sm", "INT DEFAULT 0"),
+            ("tx_bm", "INT DEFAULT 0"),
+            ("avg_price", "INT DEFAULT 0"),
+        ]:
+            try:
+                cur.execute(f"ALTER TABLE cm_daily ADD COLUMN {col} {typedef}")
+            except Exception:
+                pass
         conn.commit()
         cur.close()
         print("[PG] cm_daily table ready")
@@ -1065,13 +1077,14 @@ def sync_eod():
     try:
         sqlite_conn = get_db()
 
-        # Ambil data SM/BM
+        # Ambil data SM/BM dengan price
         rows_sm_bm = sqlite_conn.execute("""
             SELECT ticker,
                    channel,
                    SUM(mf_delta_numeric) AS mf,
                    COUNT(*) AS tx,
-                   SUM(ABS(mf_delta_numeric)) AS val
+                   SUM(ABS(mf_delta_numeric)) AS val,
+                   AVG(price) AS avg_price
             FROM raw_messages
             WHERE date = ?
             GROUP BY ticker, channel
@@ -1092,18 +1105,22 @@ def sync_eod():
         for row in rows_sm_bm:
             t = row["ticker"]
             if t not in tdata:
-                tdata[t] = {"sm": 0, "bm": 0, "tx": 0, "val": 0, "mfp": 0, "mfm": 0}
+                tdata[t] = {"sm": 0, "bm": 0, "tx_sm": 0, "tx_bm": 0, "val": 0, "mfp": 0, "mfm": 0, "price_sum": 0, "price_count": 0}
             if row["channel"] == "smart":
                 tdata[t]["sm"] += row["mf"] or 0
-                tdata[t]["tx"] += row["tx"] or 0
+                tdata[t]["tx_sm"] += row["tx"] or 0
                 tdata[t]["val"] += row["val"] or 0
+                if row["avg_price"]:
+                    tdata[t]["price_sum"] += (row["avg_price"] or 0) * (row["tx"] or 0)
+                    tdata[t]["price_count"] += row["tx"] or 0
             else:
                 tdata[t]["bm"] += abs(row["mf"] or 0)
+                tdata[t]["tx_bm"] += row["tx"] or 0
 
         for row in rows_mf:
             t = row["ticker"]
             if t not in tdata:
-                tdata[t] = {"sm": 0, "bm": 0, "tx": 0, "val": 0, "mfp": 0, "mfm": 0}
+                tdata[t] = {"sm": 0, "bm": 0, "tx_sm": 0, "tx_bm": 0, "val": 0, "mfp": 0, "mfm": 0, "price_sum": 0, "price_count": 0}
             if row["channel"] == "mf_plus":
                 tdata[t]["mfp"] += row["mf"] or 0
             elif row["channel"] == "mf_minus":
@@ -1119,17 +1136,22 @@ def sync_eod():
         # Build rows untuk insert
         rows = []
         for ticker, d in tdata.items():
-            sm  = round(d["sm"], 2)
-            bm  = round(d["bm"], 2)
-            cm  = round(sm - bm, 2)
-            val = round(d["val"], 2)
-            rcv = round((cm / val * 100), 2) if val > 0 else 0
-            mfp = round(d["mfp"], 2)
-            mfm = round(d["mfm"], 2)
+            sm     = round(d["sm"], 2)
+            bm     = round(d["bm"], 2)
+            cm     = round(sm - bm, 2)
+            val    = round(d["val"], 2)
+            rcv    = round((cm / val * 100), 2) if val > 0 else 0
+            mfp    = round(d["mfp"], 2)
+            mfm    = round(d["mfm"], 2)
             net_mf = round(mfp - mfm, 2)
+            tx_sm  = d["tx_sm"]
+            tx_bm  = d["tx_bm"]
+            tx_total = tx_sm + tx_bm
+            avg_price = int(round(d["price_sum"] / d["price_count"])) if d["price_count"] > 0 else 0
             rows.append((
                 pg_date, ticker, sm, bm, cm,
-                d["tx"], val, rcv, mfp, mfm, net_mf
+                tx_total, tx_sm, tx_bm, avg_price,
+                val, rcv, mfp, mfm, net_mf
             ))
 
         # Insert ke PostgreSQL
@@ -1141,13 +1163,17 @@ def sync_eod():
         execute_values(cur, """
             INSERT INTO cm_daily
                 (date, ticker, smart_money, bad_money, clean_money,
-                 tx_count, value_total, rcv, mf_plus, mf_minus, net_mf)
+                 tx_count, tx_sm, tx_bm, avg_price,
+                 value_total, rcv, mf_plus, mf_minus, net_mf)
             VALUES %s
             ON CONFLICT (date, ticker) DO UPDATE SET
                 smart_money  = EXCLUDED.smart_money,
                 bad_money    = EXCLUDED.bad_money,
                 clean_money  = EXCLUDED.clean_money,
                 tx_count     = EXCLUDED.tx_count,
+                tx_sm        = EXCLUDED.tx_sm,
+                tx_bm        = EXCLUDED.tx_bm,
+                avg_price    = EXCLUDED.avg_price,
                 value_total  = EXCLUDED.value_total,
                 rcv          = EXCLUDED.rcv,
                 mf_plus      = EXCLUDED.mf_plus,
