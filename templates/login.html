@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Access</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#080c10;--surface:#0e1318;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--text:#c8d8e8;--muted:#4a6070;--danger:#ff4d6a}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;position:relative}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(200,216,232,.02) 2px,rgba(200,216,232,.02) 4px);pointer-events:none;z-index:0}
+.card{position:relative;z-index:1;width:380px;display:flex;flex-direction:column;align-items:center;gap:28px;animation:fadeIn .5s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.logo{font-family:'Space Mono',monospace;font-size:28px;font-weight:700;letter-spacing:.3em;color:var(--accent);text-transform:uppercase}
+.tagline{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase;margin-top:-16px}
+.form{width:100%;display:flex;flex-direction:column;gap:12px}
+.form-label{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase}
+.form-input{width:100%;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:12px 14px;font-family:'Space Mono',monospace;font-size:13px;outline:none;transition:border-color .2s,box-shadow .2s;letter-spacing:.04em}
+.form-input:focus{border-color:var(--accent);box-shadow:0 0 12px rgba(0,232,162,.1)}
+.form-input::placeholder{color:var(--muted)}
+.form-btn{width:100%;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:12px;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;cursor:pointer;transition:opacity .15s}
+.form-btn:hover{opacity:.85}
+.msg{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-align:center;min-height:18px;transition:opacity .2s}
+.msg.error{color:var(--danger);animation:shake .4s ease}
+.msg.success{color:var(--accent)}
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.footer{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.06em;z-index:1}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">ZENITH</div>
+  <div class="tagline">Smart Money Analysis Platform</div>
+  <div class="form">
+    <span class="form-label">Access Key</span>
+    <input type="password" class="form-input" id="keyInput" placeholder="Enter access key..." autofocus/>
+    <button class="form-btn" id="authBtn" onclick="doAuth()">Authenticate →</button>
+    <div class="msg" id="msg"></div>
+  </div>
+</div>
+<div class="footer">zenith project v1.0 | by machiavellia</div>
+<script>
+async function doAuth(){
+  const key=document.getElementById('keyInput').value.trim();
+  if(!key)return;
+  const btn=document.getElementById('authBtn');
+  btn.disabled=true;btn.textContent='Authenticating...';
+  try{
+    const fd=new FormData();fd.append('key',key);
+    const res=await fetch('/',{method:'POST',body:fd});
+    const d=await res.json();
+    const msg=document.getElementById('msg');
+    if(d.ok){
+      msg.className='msg success';msg.textContent='✓ ACCESS GRANTED';
+      setTimeout(()=>location.href='/hub',600);
+    }else{
+      msg.className='msg error';msg.textContent='⚠ ACCESS DENIED';
+      document.getElementById('keyInput').value='';
+      document.getElementById('keyInput').focus();
+      btn.disabled=false;btn.textContent='Authenticate →';
+    }
+  }catch(e){
+    document.getElementById('msg').className='msg error';
+    document.getElementById('msg').textContent='⚠ Network error';
+    btn.disabled=false;btn.textContent='Authenticate →';
+  }
+}
+document.getElementById('keyInput').addEventListener('keydown',e=>{if(e.key==='Enter')doAuth()});
+</script>
+</body>
+</html>
