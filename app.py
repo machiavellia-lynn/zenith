@@ -1084,7 +1084,7 @@ def sync_eod():
                    SUM(mf_delta_numeric) AS mf,
                    COUNT(*) AS tx,
                    SUM(ABS(mf_delta_numeric)) AS val,
-                   AVG(price) AS avg_price
+                   SUM(price) AS price_sum_raw
             FROM raw_messages
             WHERE date = ?
             GROUP BY ticker, channel
@@ -1110,9 +1110,8 @@ def sync_eod():
                 tdata[t]["sm"] += row["mf"] or 0
                 tdata[t]["tx_sm"] += row["tx"] or 0
                 tdata[t]["val"] += row["val"] or 0
-                if row["avg_price"]:
-                    tdata[t]["price_sum"] += (row["avg_price"] or 0) * (row["tx"] or 0)
-                    tdata[t]["price_count"] += row["tx"] or 0
+                tdata[t]["price_sum"] += row["price_sum_raw"] or 0
+                tdata[t]["price_count"] += row["tx"] or 0
             else:
                 tdata[t]["bm"] += abs(row["mf"] or 0)
                 tdata[t]["tx_bm"] += row["tx"] or 0
