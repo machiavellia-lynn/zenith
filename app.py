@@ -7,9 +7,6 @@ import os
 import time
 import threading
 
-import psycopg2
-from psycopg2.extras import execute_values
-
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "zenith-secret-key")
 
@@ -977,6 +974,9 @@ def pull_db():
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
 
+    with _flow_cache_lock:
+        _flow_cache.clear()
+
     DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
 
     try:
@@ -1000,198 +1000,63 @@ def pull_db():
     except Exception as e:
         return f"❌ Error: {e}", 500
 
-# ── PostgreSQL connection ────────────────────────────────────────────────
-def get_pg():
-    db_url = os.environ.get("DATABASE_URL")
-    if not db_url:
-        return None
-    try:
-        return psycopg2.connect(db_url)
-    except Exception as e:
-        print(f"[PG] connect error: {e}")
-        return None
 
-
-def ensure_pg_tables():
-    conn = get_pg()
-    if not conn:
-        return
-    try:
-        cur = conn.cursor()
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS cm_daily (
-                id SERIAL PRIMARY KEY,
-                date DATE NOT NULL,
-                ticker VARCHAR(10) NOT NULL,
-                smart_money FLOAT DEFAULT 0,
-                bad_money FLOAT DEFAULT 0,
-                clean_money FLOAT DEFAULT 0,
-                tx_count INT DEFAULT 0,
-                tx_sm INT DEFAULT 0,
-                tx_bm INT DEFAULT 0,
-                avg_price INT DEFAULT 0,
-                value_total FLOAT DEFAULT 0,
-                rcv FLOAT DEFAULT 0,
-                mf_plus FLOAT DEFAULT 0,
-                mf_minus FLOAT DEFAULT 0,
-                net_mf FLOAT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE(date, ticker)
-            )
-        """)
-        for col, typedef in [
-            ("tx_sm", "INT DEFAULT 0"),
-            ("tx_bm", "INT DEFAULT 0"),
-            ("avg_price", "INT DEFAULT 0"),
-        ]:
-            try:
-                cur.execute(f"ALTER TABLE cm_daily ADD COLUMN {col} {typedef}")
-            except Exception:
-                pass
-        conn.commit()
-        cur.close()
-        print("[PG] cm_daily table ready")
-    except Exception as e:
-        print(f"[PG] ensure_tables error: {e}")
-    finally:
-        conn.close()
-
-
-# ── EOD Sync endpoint ────────────────────────────────────────────────────
-@app.route("/admin/sync-eod")
-def sync_eod():
+@app.route("/admin/upload-session", methods=["GET", "POST"])
+def upload_session():
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if request.method == "GET":
+        return """
+        <!DOCTYPE html><html><head>
+        <style>
+        body{background:#080c10;color:#c8d8e8;font-family:monospace;
+        display:flex;align-items:center;justify-content:center;height:100vh;margin:0;}
+        .box{background:#0e1318;border:1px solid #1a2230;border-radius:8px;padding:32px;width:420px;}
+        h3{color:#00e8a2;margin-bottom:20px;}
+        input,button{width:100%;padding:10px;margin:8px 0;border-radius:5px;
+        box-sizing:border-box;font-family:monospace;}
+        input{background:#080c10;border:1px solid #1a2230;color:#c8d8e8;}
+        button{background:#00e8a2;border:none;color:#080c10;font-weight:700;cursor:pointer;font-size:14px;}
+        #status{margin-top:12px;font-size:13px;color:#aac;min-height:20px;}
+        </style></head><body><div class="box">
+        <h3>⬆ Upload session_joker.session</h3>
+        <input type="file" id="f" accept=".session"/>
+        <input type="password" id="s" placeholder="Upload secret key"/>
+        <button onclick="doUpload()">Upload Session</button>
+        <div id="status"></div>
+        </div>
+        <script>
+        function doUpload(){
+            var file=document.getElementById('f').files[0];
+            var s=document.getElementById('s').value.trim();
+            if(!file){document.getElementById('status').innerText='Pilih file dulu!';return;}
+            if(!s){document.getElementById('status').innerText='Isi secret key!';return;}
+            document.getElementById('status').innerText='Uploading...';
+            var xhr=new XMLHttpRequest();
+            xhr.onload=function(){document.getElementById('status').innerText=xhr.status===200?xhr.responseText:'Error: '+xhr.responseText;};
+            xhr.onerror=function(){document.getElementById('status').innerText='Network error!';};
+            xhr.open('POST','/admin/upload-session?secret='+encodeURIComponent(s));
+            xhr.setRequestHeader('Content-Type','application/octet-stream');
+            xhr.send(file);
+        }
+        </script>
+        </body></html>
+        """
+    secret = request.args.get("secret", "")
+    if secret != SECRET:
         return "❌ Secret salah", 403
-
-    target_date = request.args.get("date")
-    if not target_date:
-        today_wib = datetime.now(WIB)
-        target_date = today_wib.strftime("%d-%m-%Y")
-
+    os.makedirs("/data", exist_ok=True)
+    dst_path = os.environ.get("TG_SESSION_PATH", "/data/session_joker") + ".session"
     try:
-        parse_date(target_date)
-    except ValueError:
-        return jsonify({"error": "Format tanggal salah, gunakan DD-MM-YYYY"}), 400
-
-    try:
-        sqlite_conn = get_db()
-
-        # Ambil data SM/BM dengan price
-        rows_sm_bm = sqlite_conn.execute("""
-            SELECT ticker,
-                   channel,
-                   SUM(mf_delta_numeric) AS mf,
-                   COUNT(*) AS tx,
-                   SUM(ABS(mf_delta_numeric)) AS val,
-                   SUM(price) AS price_sum_raw
-            FROM raw_messages
-            WHERE date = ?
-            GROUP BY ticker, channel
-        """, (target_date,)).fetchall()
-
-        # Ambil data MF+/MF-
-        rows_mf = sqlite_conn.execute("""
-            SELECT ticker,
-                   channel,
-                   SUM(mf_numeric) AS mf
-            FROM raw_mf_messages
-            WHERE date = ?
-            GROUP BY ticker, channel
-        """, (target_date,)).fetchall()
-
-        # Aggregate per ticker
-        tdata = {}
-        for row in rows_sm_bm:
-            t = row["ticker"]
-            if t not in tdata:
-                tdata[t] = {"sm": 0, "bm": 0, "tx_sm": 0, "tx_bm": 0, "val": 0, "mfp": 0, "mfm": 0, "price_sum": 0, "price_count": 0}
-            if row["channel"] == "smart":
-                tdata[t]["sm"] += row["mf"] or 0
-                tdata[t]["tx_sm"] += row["tx"] or 0
-                tdata[t]["val"] += row["val"] or 0
-                tdata[t]["price_sum"] += row["price_sum_raw"] or 0
-                tdata[t]["price_count"] += row["tx"] or 0
-            else:
-                tdata[t]["bm"] += abs(row["mf"] or 0)
-                tdata[t]["tx_bm"] += row["tx"] or 0
-
-        for row in rows_mf:
-            t = row["ticker"]
-            if t not in tdata:
-                tdata[t] = {"sm": 0, "bm": 0, "tx_sm": 0, "tx_bm": 0, "val": 0, "mfp": 0, "mfm": 0, "price_sum": 0, "price_count": 0}
-            if row["channel"] == "mf_plus":
-                tdata[t]["mfp"] += row["mf"] or 0
-            elif row["channel"] == "mf_minus":
-                tdata[t]["mfm"] += abs(row["mf"] or 0)
-
-        if not tdata:
-            return jsonify({"status": "no data", "date": target_date})
-
-        # Convert DD-MM-YYYY → YYYY-MM-DD untuk PostgreSQL
-        d = datetime.strptime(target_date, "%d-%m-%Y")
-        pg_date = d.strftime("%Y-%m-%d")
-
-        # Build rows untuk insert
-        rows = []
-        for ticker, d in tdata.items():
-            sm     = round(d["sm"], 2)
-            bm     = round(d["bm"], 2)
-            cm     = round(sm - bm, 2)
-            val    = round(d["val"], 2)
-            rcv    = round((cm / val * 100), 2) if val > 0 else 0
-            mfp    = round(d["mfp"], 2)
-            mfm    = round(d["mfm"], 2)
-            net_mf = round(mfp - mfm, 2)
-            tx_sm  = d["tx_sm"]
-            tx_bm  = d["tx_bm"]
-            tx_total = tx_sm + tx_bm
-            avg_price = int(round(d["price_sum"] / d["price_count"])) if d["price_count"] > 0 else 0
-            rows.append((
-                pg_date, ticker, sm, bm, cm,
-                tx_total, tx_sm, tx_bm, avg_price,
-                val, rcv, mfp, mfm, net_mf
-            ))
-
-        # Insert ke PostgreSQL
-        pg_conn = get_pg()
-        if not pg_conn:
-            return jsonify({"error": "PostgreSQL not configured"}), 500
-
-        cur = pg_conn.cursor()
-        execute_values(cur, """
-            INSERT INTO cm_daily
-                (date, ticker, smart_money, bad_money, clean_money,
-                 tx_count, tx_sm, tx_bm, avg_price,
-                 value_total, rcv, mf_plus, mf_minus, net_mf)
-            VALUES %s
-            ON CONFLICT (date, ticker) DO UPDATE SET
-                smart_money  = EXCLUDED.smart_money,
-                bad_money    = EXCLUDED.bad_money,
-                clean_money  = EXCLUDED.clean_money,
-                tx_count     = EXCLUDED.tx_count,
-                tx_sm        = EXCLUDED.tx_sm,
-                tx_bm        = EXCLUDED.tx_bm,
-                avg_price    = EXCLUDED.avg_price,
-                value_total  = EXCLUDED.value_total,
-                rcv          = EXCLUDED.rcv,
-                mf_plus      = EXCLUDED.mf_plus,
-                mf_minus     = EXCLUDED.mf_minus,
-                net_mf       = EXCLUDED.net_mf
-        """, rows)
-        pg_conn.commit()
-        cur.close()
-        pg_conn.close()
-
-        return jsonify({
-            "status":          "ok",
-            "date":            target_date,
-            "tickers_synced":  len(rows)
-        })
-
+        with open(dst_path, "wb") as out:
+            while True:
+                chunk = request.stream.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+        size = os.path.getsize(dst_path)
+        return f"✅ Session uploaded! {size} bytes → {dst_path}"
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        return f"❌ Error: {e}", 500
 
 # ── Create indexes on startup ────────────────────────────────────────────
 def ensure_indexes():
@@ -1206,7 +1071,61 @@ def ensure_indexes():
         pass  # DB mungkin belum ada saat deploy pertama
 
 ensure_indexes()
-ensure_pg_tables()
+
+# ── Start scraper thread (realtime listener + daily backfill) ────────────
+SCRAPER_ENABLED = os.environ.get("SCRAPER_ENABLED", "1") == "1"
+_scraper_thread = None
+if SCRAPER_ENABLED:
+    try:
+        from scraper_daily import start_scraper_thread
+        _scraper_thread = start_scraper_thread()
+    except Exception as e:
+        print(f"⚠️ Scraper failed to start: {e}")
+
+
+@app.route("/admin/scraper-status")
+def scraper_status():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+    alive = _scraper_thread is not None and _scraper_thread.is_alive()
+    try:
+        conn = get_db()
+        sm = conn.execute("SELECT MAX(date) FROM raw_messages WHERE channel='smart'").fetchone()[0]
+        bm = conn.execute("SELECT MAX(date) FROM raw_messages WHERE channel='bad'").fetchone()[0]
+        mfp = conn.execute("SELECT MAX(date) FROM raw_mf_messages WHERE channel='mf_plus'").fetchone()[0]
+        mfm = conn.execute("SELECT MAX(date) FROM raw_mf_messages WHERE channel='mf_minus'").fetchone()[0]
+        sm_count = conn.execute("SELECT COUNT(*) FROM raw_messages WHERE channel='smart'").fetchone()[0]
+        bm_count = conn.execute("SELECT COUNT(*) FROM raw_messages WHERE channel='bad'").fetchone()[0]
+        mfp_count = conn.execute("SELECT COUNT(*) FROM raw_mf_messages WHERE channel='mf_plus'").fetchone()[0]
+        mfm_count = conn.execute("SELECT COUNT(*) FROM raw_mf_messages WHERE channel='mf_minus'").fetchone()[0]
+    except:
+        sm = bm = mfp = mfm = "?"
+        sm_count = bm_count = mfp_count = mfm_count = 0
+    return jsonify({
+        "scraper_enabled": SCRAPER_ENABLED,
+        "thread_alive": alive,
+        "latest_data": {"SM": sm, "BM": bm, "MF+": mfp, "MF-": mfm},
+        "row_counts": {"SM": sm_count, "BM": bm_count, "MF+": mfp_count, "MF-": mfm_count},
+    })
+
+
+@app.route("/admin/scraper-weekly")
+def trigger_weekly():
+    """Trigger weekly backfill manually via HTTP."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+    days = int(request.args.get("days", "7"))
+    try:
+        import asyncio
+        from scraper_weekly import run_weekly_backfill
+        loop = asyncio.new_event_loop()
+        result = loop.run_until_complete(run_weekly_backfill(days=days))
+        loop.close()
+        return jsonify({"ok": True, "days": days, **result})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
