@@ -496,6 +496,31 @@ async def run_backfill(client, conn):
 
 
 # ══════════════════════════════════════════════════════════════════════════════
+#  BACKFILL REQUEST QUEUE (signalled from HTTP thread)
+# ══════════════════════════════════════════════════════════════════════════════
+
+_backfill_request = {"days": None, "status": "idle", "result": None}
+_backfill_lock = threading.Lock()
+
+
+def request_backfill(days: int):
+    """Called from HTTP thread to request a backfill. Non-blocking."""
+    with _backfill_lock:
+        if _backfill_request["status"] == "running":
+            return {"ok": False, "error": "Backfill already running"}
+        _backfill_request["days"] = days
+        _backfill_request["status"] = "pending"
+        _backfill_request["result"] = None
+        return {"ok": True, "message": f"Backfill {days} days queued. Check /admin/scraper-status for progress."}
+
+
+def get_backfill_status():
+    """Called from HTTP thread to check backfill progress."""
+    with _backfill_lock:
+        return dict(_backfill_request)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
 #  MAIN LOOP — realtime listener + scheduled backfill
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -568,7 +593,28 @@ async def scraper_main():
                     log.error(f"❌ Backfill error: {e}")
                     backfill_done_today = True  # don't retry endlessly
 
-            await asyncio.sleep(60)  # check every minute
+            # Check for manual backfill request (from HTTP endpoint)
+            with _backfill_lock:
+                pending_days = None
+                if _backfill_request["status"] == "pending":
+                    pending_days = _backfill_request["days"]
+                    _backfill_request["status"] = "running"
+
+            if pending_days:
+                try:
+                    log.info(f"📋 Manual backfill requested: {pending_days} days")
+                    from scraper_weekly import run_weekly_backfill
+                    result = await run_weekly_backfill(client, conn, days=pending_days)
+                    with _backfill_lock:
+                        _backfill_request["status"] = "done"
+                        _backfill_request["result"] = result
+                except Exception as e:
+                    log.error(f"❌ Manual backfill error: {e}")
+                    with _backfill_lock:
+                        _backfill_request["status"] = "error"
+                        _backfill_request["result"] = str(e)
+
+            await asyncio.sleep(5)  # check every 5 seconds
 
     except Exception as e:
         log.error(f"❌ Scraper fatal error: {e}")

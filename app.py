@@ -1102,28 +1102,34 @@ def scraper_status():
     except:
         sm = bm = mfp = mfm = "?"
         sm_count = bm_count = mfp_count = mfm_count = 0
+    try:
+        from scraper_daily import get_backfill_status
+        bf_status = get_backfill_status()
+    except:
+        bf_status = {}
     return jsonify({
         "scraper_enabled": SCRAPER_ENABLED,
         "thread_alive": alive,
         "latest_data": {"SM": sm, "BM": bm, "MF+": mfp, "MF-": mfm},
         "row_counts": {"SM": sm_count, "BM": bm_count, "MF+": mfp_count, "MF-": mfm_count},
+        "backfill": bf_status,
     })
 
 
 @app.route("/admin/scraper-weekly")
 def trigger_weekly():
-    """Trigger weekly backfill manually via HTTP."""
+    """Queue a weekly backfill request — runs in scraper thread, not HTTP thread."""
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "7"))
     try:
-        import asyncio
-        from scraper_weekly import run_weekly_backfill
-        loop = asyncio.new_event_loop()
-        result = loop.run_until_complete(run_weekly_backfill(days=days))
-        loop.close()
-        return jsonify({"ok": True, "days": days, **result})
+        from scraper_daily import request_backfill, get_backfill_status
+        # If just checking status
+        if request.args.get("status"):
+            return jsonify(get_backfill_status())
+        result = request_backfill(days)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
