@@ -43,6 +43,16 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 
 .footer{text-align:center;padding:24px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:auto}
 
+/* Spotlight onboarding */
+.spotlight-overlay{position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0);pointer-events:none;transition:background .4s ease}
+.spotlight-overlay.active{background:rgba(0,0,0,.75);pointer-events:all}
+.spotlight-target{position:relative;z-index:1001!important;pointer-events:all!important}
+.spotlight-target::after{content:'';position:absolute;inset:-8px;border-radius:50%;box-shadow:0 0 0 4px var(--accent),0 0 0 9999px rgba(0,0,0,.75);animation:spotPulse 1.5s ease-in-out infinite;pointer-events:none}
+@keyframes spotPulse{0%,100%{box-shadow:0 0 0 4px var(--accent),0 0 0 9999px rgba(0,0,0,.75)}50%{box-shadow:0 0 0 8px rgba(0,232,162,.5),0 0 0 9999px rgba(0,0,0,.75)}}
+.onboard-bubble{position:fixed;z-index:1002;background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;font-family:'Space Mono',monospace;font-size:11px;color:var(--text);line-height:1.5;max-width:220px;opacity:0;transform:translateY(4px);transition:opacity .3s ease,transform .3s ease;pointer-events:none}
+.onboard-bubble.visible{opacity:1;transform:translateY(0)}
+.onboard-bubble::before{content:'';position:absolute;top:-6px;right:20px;width:10px;height:6px;background:var(--accent);clip-path:polygon(50% 0%,0% 100%,100% 100%)}
+
 .info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:24px;height:24px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .info-btn:hover{border-color:var(--accent);color:var(--accent)}
 .info-backdrop{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -165,6 +175,32 @@ async function init(){
   tick();setInterval(tick,1000);
 }
 window.addEventListener('DOMContentLoaded',init);
+window.addEventListener('DOMContentLoaded',initOnboarding);
+
+function initOnboarding(){
+  if(localStorage.getItem('zenith_onboarded'))return;
+  setTimeout(()=>{
+    const overlay=document.getElementById('spotlightOverlay');
+    const bubble=document.getElementById('onboardBubble');
+    const infoBtn=document.querySelector('.info-btn');
+    if(!infoBtn)return;
+    overlay.classList.add('active');
+    infoBtn.classList.add('spotlight-target');
+    const rect=infoBtn.getBoundingClientRect();
+    bubble.style.top=(rect.bottom+12)+'px';
+    bubble.style.right=(window.innerWidth-rect.right-10)+'px';
+    setTimeout(()=>bubble.classList.add('visible'),200);
+    infoBtn._origOnclick=infoBtn.onclick;
+    infoBtn.onclick=function(){dismissSpotlight();openInfoModal()};
+  },800);
+}
+function dismissSpotlight(){
+  document.getElementById('spotlightOverlay').classList.remove('active');
+  document.getElementById('onboardBubble').classList.remove('visible');
+  const infoBtn=document.querySelector('.info-btn');
+  if(infoBtn){infoBtn.classList.remove('spotlight-target');if(infoBtn._origOnclick)infoBtn.onclick=infoBtn._origOnclick}
+  localStorage.setItem('zenith_onboarded','1');
+}
 
 
 const INFO_CONTENT=`
@@ -235,6 +271,12 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
     </div>
     <div class="info-body" id="infoBody"></div>
   </div>
+</div>
+
+<div class="spotlight-overlay" id="spotlightOverlay" onclick="dismissSpotlight()"></div>
+<div class="onboard-bubble" id="onboardBubble">
+  👋 Hei! Pertama kali di sini?<br>
+  Klik tombol <strong style="color:var(--accent)">?</strong> ini dulu buat baca panduan singkat Smart Money!
 </div>
 
 </body>

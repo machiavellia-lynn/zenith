@@ -761,6 +761,14 @@ def ohlcv():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/admin")
+def admin_page():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Access denied", 403
+    return render_template("admin.html")
+
+
 @app.route("/admin/upload-db", methods=["GET", "POST"])
 def upload_db():
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
