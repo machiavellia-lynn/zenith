@@ -632,37 +632,59 @@ td:first-child { text-align: left; }
 .info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
 
 
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media(max-width:768px){
-  header{flex-wrap:wrap;gap:8px;padding:10px 12px}
-  .logo{font-size:10px}
-  .nav-btn{padding:4px 10px;font-size:10px}
+  header{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .logo{font-size:11px;letter-spacing:.12em}
   .nav-divider{display:none}
-  .ticker-search-wrap{order:10;flex:1 1 100%}
-  .stats-bar{flex-wrap:wrap;gap:4px;padding:8px 12px}
-  .stat-item{padding:6px 10px}
-  .s-label{font-size:8px}
-  .s-val{font-size:11px}
-  .toolbar{flex-wrap:wrap;gap:8px;padding:8px 12px}
-  .date-input{width:90px;font-size:10px;padding:5px 6px}
-  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  .flow-table{min-width:900px}
-  .flow-table thead th{padding:6px 8px;font-size:8px}
-  .flow-table td{padding:6px 8px;font-size:10px}
-  .modal{width:100%;max-width:100%;height:100vh;border-radius:0}
-  .modal-header{flex-wrap:wrap;gap:8px;padding:10px 12px}
-  .modal-tfs{gap:4px}
-  .mtf-btn{padding:3px 8px;font-size:10px}
-  .ovl-btn{padding:2px 6px;font-size:9px}
-  .modal-chart-wrap{height:360px}
+  .nav-btn{padding:4px 10px;font-size:10px}
+  .ticker-search-wrap{order:10;flex:1 1 100%;margin-top:2px}
+  .ticker-search-wrap input{font-size:11px}
+  .stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:0}
+  .stat-item{padding:8px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .stat-item:nth-child(3n){border-right:none}
+  .s-label{font-size:7px;letter-spacing:.08em}
+  .s-val{font-size:12px}
+  .toolbar{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .date-input{width:88px;font-size:10px;padding:5px 6px}
+  .date-arrow{width:24px;height:24px;font-size:11px}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 12px}
+  .flow-table{min-width:920px}
+  .flow-table thead th{padding:7px 8px;font-size:8px}
+  .flow-table td{padding:7px 8px}
+  .td-ticker{font-size:11px}
+  .td-num{font-size:10px}
+  .cm-val{font-size:10px}
+  .gain-val{font-size:10px}
+  .rsm-val{font-size:10px}
+  /* Modal responsive */
+  .modal{width:100%!important;max-width:100%!important;height:100vh!important;border-radius:0!important}
+  .modal-header{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .modal-ticker{font-size:14px}
+  .modal-tfs{gap:3px}
+  .mtf-btn{padding:3px 8px;font-size:9px}
+  .overlay-toggles{gap:3px}
+  .ovl-btn{padding:2px 6px;font-size:8px}
+  .modal-scale-btns{gap:3px}
+  .modal-chart-wrap{height:340px}
+  .m-hover-tooltip{font-size:8px;gap:5px;padding:3px 6px}
+  .mht-lbl{font-size:7px}
+  .mht-v{font-size:9px}
+  .mht-sep{height:18px}
+  .trx-toolbar{flex-direction:column;align-items:flex-start;gap:6px}
   .trx-grid{grid-template-columns:1fr}
-  .trx-box{height:220px}
-  .m-hover-tooltip{font-size:9px;gap:6px;padding:4px 8px}
+  .trx-box{height:200px}
+  .trx-date-input{width:88px;font-size:9px}
 }
-@media(max-width:440px){
+@media(max-width:420px){
+  header{gap:4px;padding:6px 10px}
   .logo span{display:none}
-  .stat-item{padding:4px 8px}
-  .modal-chart-wrap{height:300px}
+  .nav-btn{padding:3px 7px;font-size:9px}
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+  .stat-item{padding:6px 8px}
+  .s-val{font-size:11px}
+  .modal-chart-wrap{height:280px}
 }
 </style>
 </head>

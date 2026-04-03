@@ -148,33 +148,48 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 .info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
 
 
+
 /* ── RESPONSIVE ──────────────────────────── */
 @media(max-width:768px){
-  header{flex-wrap:wrap;gap:8px;padding:10px 12px}
-  .logo{font-size:10px}
-  .nav-btn{padding:4px 10px;font-size:10px}
+  header{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .logo{font-size:11px;letter-spacing:.12em}
   .nav-divider{display:none}
-  .search-wrap{order:10;flex:1 1 100%;max-width:none}
-  .search-wrap input{width:100%}
-  .ticker-info{font-size:10px}
-  .t-price{font-size:12px}
-  .nav-right{gap:6px}
+  .nav-btn{padding:4px 10px;font-size:10px}
+  .search-wrap{order:5;flex:0 1 auto;min-width:0}
+  .search-wrap input{width:60px}
+  .search-btn{padding:4px 10px;font-size:9px}
+  .ticker-info{gap:6px}
+  .t-name{font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .t-price{font-size:13px}
+  .nav-right{margin-left:auto;gap:8px}
   .ihsg-wrap{display:none}
-  main{padding:8px 12px;gap:8px}
-  .tf-row{flex-wrap:wrap;gap:6px}
+  main{padding:8px 10px;gap:6px}
+  .tf-row{gap:4px}
+  .tf-label{font-size:9px;margin-right:0}
   .tf-btn{padding:4px 8px;font-size:10px}
-  .ovl-btn{padding:2px 6px;font-size:9px}
-  .chart-card{height:max(400px,calc(100vh - 240px))}
-  .hover-tooltip{font-size:9px;gap:8px;padding:4px 8px}
-  .trx-section{padding:12px}
-  .trx-grid{grid-template-columns:1fr}
-  .trx-box{height:220px}
-}
-@media(max-width:440px){
-  .logo span{display:none}
-  .tf-btn{padding:3px 6px;font-size:9px}
-  .chart-card{height:max(320px,calc(100vh - 200px))}
+  .ovl-btn{padding:3px 7px;font-size:9px}
+  .chart-card{height:max(420px,calc(100vh - 220px))}
+  .hover-tooltip{font-size:9px;gap:6px;padding:4px 8px;top:8px}
+  .ht-label{font-size:7px}
+  .ht-val{font-size:10px}
+  .ht-sep{height:20px}
   .m-overlay-vals{font-size:9px}
+  .trx-section{padding:10px}
+  .trx-toolbar{flex-direction:column;align-items:flex-start;gap:6px}
+  .trx-grid{grid-template-columns:1fr}
+  .trx-box{height:200px}
+  .trx-date-input{width:88px;font-size:9px}
+}
+@media(max-width:420px){
+  header{gap:4px;padding:6px 10px}
+  .logo span{display:none}
+  .nav-btn{padding:3px 7px;font-size:9px}
+  .search-wrap input{width:50px;font-size:11px}
+  .t-name{max-width:80px;font-size:9px}
+  .t-price{font-size:11px}
+  .tf-btn{padding:3px 6px;font-size:9px}
+  .ovl-btn{padding:2px 5px;font-size:8px}
+  .chart-card{height:max(360px,calc(100vh - 200px))}
 }
 </style>
 </head>
