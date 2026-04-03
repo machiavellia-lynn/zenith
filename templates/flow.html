@@ -631,6 +631,39 @@ td:first-child { text-align: left; }
 .info-scenario-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:var(--text);letter-spacing:.06em;margin-bottom:6px}
 .info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
 
+
+/* ── RESPONSIVE ──────────────────────────── */
+@media(max-width:768px){
+  header{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .logo{font-size:10px}
+  .nav-btn{padding:4px 10px;font-size:10px}
+  .nav-divider{display:none}
+  .ticker-search-wrap{order:10;flex:1 1 100%}
+  .stats-bar{flex-wrap:wrap;gap:4px;padding:8px 12px}
+  .stat-item{padding:6px 10px}
+  .s-label{font-size:8px}
+  .s-val{font-size:11px}
+  .toolbar{flex-wrap:wrap;gap:8px;padding:8px 12px}
+  .date-input{width:90px;font-size:10px;padding:5px 6px}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .flow-table{min-width:900px}
+  .flow-table thead th{padding:6px 8px;font-size:8px}
+  .flow-table td{padding:6px 8px;font-size:10px}
+  .modal{width:100%;max-width:100%;height:100vh;border-radius:0}
+  .modal-header{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .modal-tfs{gap:4px}
+  .mtf-btn{padding:3px 8px;font-size:10px}
+  .ovl-btn{padding:2px 6px;font-size:9px}
+  .modal-chart-wrap{height:360px}
+  .trx-grid{grid-template-columns:1fr}
+  .trx-box{height:220px}
+  .m-hover-tooltip{font-size:9px;gap:6px;padding:4px 8px}
+}
+@media(max-width:440px){
+  .logo span{display:none}
+  .stat-item{padding:4px 8px}
+  .modal-chart-wrap{height:300px}
+}
 </style>
 </head>
 <body>
@@ -1647,7 +1680,7 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
     <div class="info-header">
       <div>
         <div class="info-title">PANDUAN MEMBACA DATA</div>
-        <div class="info-sub">Smart Money Intelligence — Zenith</div>
+        <div class="info-sub">Smart Money Analysis — Zenith</div>
       </div>
       <button class="close-btn" onclick="closeInfoModal()">✕</button>
     </div>

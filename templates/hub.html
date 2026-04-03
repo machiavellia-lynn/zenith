@@ -85,6 +85,30 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 .info-scenario-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:var(--text);letter-spacing:.06em;margin-bottom:6px}
 .info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
 
+
+/* ── RESPONSIVE ──────────────────────────── */
+@media(max-width:700px){
+  header{flex-wrap:wrap;gap:8px;padding:10px 16px}
+  .logo{font-size:11px}
+  .nav-btn{padding:4px 10px;font-size:10px}
+  .nav-right{gap:8px}
+  .ihsg-price{font-size:11px}
+  .hero{padding:32px 16px 0}
+  .hero-logo{font-size:24px;letter-spacing:.2em}
+  .hero-tag{font-size:9px}
+  .stats-row{flex-wrap:wrap;gap:12px;padding:16px}
+  .sr-sep{display:none}
+  .sr-val{font-size:12px}
+  .cards{padding:16px;gap:16px}
+  .card{padding:20px}
+  .footer{padding:16px}
+}
+@media(max-width:400px){
+  .hero-logo{font-size:20px}
+  .cards{padding:12px}
+  .card{padding:16px}
+  .card-title{font-size:12px}
+}
 </style>
 </head>
 <body>
@@ -104,7 +128,7 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 
 <div class="hero">
   <div class="hero-logo">ZENITH</div>
-  <div class="hero-tag">Smart Money Intelligence Platform</div>
+  <div class="hero-tag">Smart Money Analysis Platform</div>
 </div>
 
 <div class="stats-row">
@@ -119,7 +143,7 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
   <a href="/chart" class="card">
     <div class="card-icon">⬡</div>
     <div class="card-title">Chart</div>
-    <div class="card-sub">Real-time Candlestick IDX</div>
+    <div class="card-sub">End-of-Day Candlestick IDX</div>
     <div class="card-desc">Analisis pergerakan harga saham IDX dengan timeframe 5m hingga 1D. Dilengkapi overlay CM, SM, dan BM langsung di atas candlestick.</div>
   </a>
   <a href="/flow" class="card primary">
@@ -265,7 +289,7 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
     <div class="info-header">
       <div>
         <div class="info-title">PANDUAN MEMBACA DATA</div>
-        <div class="info-sub">Smart Money Intelligence — Zenith</div>
+        <div class="info-sub">Smart Money Analysis — Zenith</div>
       </div>
       <button class="close-btn" onclick="closeInfoModal()">✕</button>
     </div>

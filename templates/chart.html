@@ -147,6 +147,35 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 .info-scenario-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:var(--text);letter-spacing:.06em;margin-bottom:6px}
 .info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
 
+
+/* ── RESPONSIVE ──────────────────────────── */
+@media(max-width:768px){
+  header{flex-wrap:wrap;gap:8px;padding:10px 12px}
+  .logo{font-size:10px}
+  .nav-btn{padding:4px 10px;font-size:10px}
+  .nav-divider{display:none}
+  .search-wrap{order:10;flex:1 1 100%;max-width:none}
+  .search-wrap input{width:100%}
+  .ticker-info{font-size:10px}
+  .t-price{font-size:12px}
+  .nav-right{gap:6px}
+  .ihsg-wrap{display:none}
+  main{padding:8px 12px;gap:8px}
+  .tf-row{flex-wrap:wrap;gap:6px}
+  .tf-btn{padding:4px 8px;font-size:10px}
+  .ovl-btn{padding:2px 6px;font-size:9px}
+  .chart-card{height:max(400px,calc(100vh - 240px))}
+  .hover-tooltip{font-size:9px;gap:8px;padding:4px 8px}
+  .trx-section{padding:12px}
+  .trx-grid{grid-template-columns:1fr}
+  .trx-box{height:220px}
+}
+@media(max-width:440px){
+  .logo span{display:none}
+  .tf-btn{padding:3px 6px;font-size:9px}
+  .chart-card{height:max(320px,calc(100vh - 200px))}
+  .m-overlay-vals{font-size:9px}
+}
 </style>
 </head>
 <body>
@@ -488,7 +517,7 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
     <div class="info-header">
       <div>
         <div class="info-title">PANDUAN MEMBACA DATA</div>
-        <div class="info-sub">Smart Money Intelligence — Zenith</div>
+        <div class="info-sub">Smart Money Analysis — Zenith</div>
       </div>
       <button class="close-btn" onclick="closeInfoModal()">✕</button>
     </div>

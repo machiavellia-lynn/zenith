@@ -27,6 +27,15 @@ body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradi
 .msg.success{color:var(--accent)}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 .footer{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.06em;z-index:1}
+
+/* ── RESPONSIVE ──────────────────────────── */
+@media(max-width:440px){
+  .card{width:calc(100vw - 40px);padding:0 4px}
+  .logo{font-size:22px;letter-spacing:.2em}
+  .tagline{font-size:9px;letter-spacing:.12em}
+  .form-input{font-size:12px;padding:10px 12px}
+  .form-btn{font-size:11px;padding:10px}
+}
 </style>
 </head>
 <body>
