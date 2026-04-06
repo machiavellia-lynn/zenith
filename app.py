@@ -359,40 +359,84 @@ def flow():
 
     placeholders = ",".join("?" for _ in dates)
 
-    try:
-        conn = get_db()
+    # Check flow DB cache
+    cache_key = f"{date_from}|{date_to}"
+    with _flow_cache_lock:
+        cached = _flow_cache.get(cache_key)
+        if cached and (time.time() - cached["ts"]) < FLOW_CACHE_TTL:
+            rows_sm_bm = cached["sm_bm"]
+            rows_mf = cached["mf"]
+            # Skip DB query, use cached
+            conn = None
+        else:
+            cached = None
 
-        # Read from pre-aggregated eod_summary (fast: ~500 rows per day)
-        rows = conn.execute(f"""
-            SELECT ticker,
-                   SUM(sm_val)   AS sm_val,
-                   SUM(bm_val)   AS bm_val,
-                   SUM(tx_count) AS tx,
-                   SUM(mf_plus)  AS mf_plus,
-                   SUM(mf_minus) AS mf_minus
-            FROM eod_summary
-            WHERE date IN ({placeholders})
-            GROUP BY ticker
-        """, dates).fetchall()
+    if cached is None:
+        try:
+            conn = get_db()
 
-    except Exception as e:
-        return jsonify({"error": f"DB error: {e}"}), 500
+            rows_sm_bm = conn.execute(f"""
+                SELECT
+                    ticker,
+                    channel,
+                    SUM(mf_delta_numeric) AS mf,
+                    COUNT(*) AS tx_total
+                FROM raw_messages
+                WHERE date IN ({placeholders})
+                GROUP BY ticker, channel
+            """, dates).fetchall()
 
-    # Build data dict per ticker
+            rows_mf = conn.execute(f"""
+                SELECT
+                    ticker,
+                    channel,
+                    SUM(mf_numeric)       AS mf,
+                    SUM(mft_numeric)      AS mft,
+                    SUM(cm_delta_numeric) AS cm_delta
+                FROM raw_mf_messages
+                WHERE date IN ({placeholders})
+                GROUP BY ticker, channel
+            """, dates).fetchall()
+
+            # Convert to plain dicts for caching (sqlite3.Row not picklable)
+            rows_sm_bm = [dict(r) for r in rows_sm_bm]
+            rows_mf = [dict(r) for r in rows_mf]
+
+            with _flow_cache_lock:
+                _flow_cache[cache_key] = {"sm_bm": rows_sm_bm, "mf": rows_mf, "ts": time.time()}
+
+        except Exception as e:
+            return jsonify({"error": f"DB error: {e}"}), 500
+
+    # Agregasi SM/BM per ticker
     data = {}
-    for row in rows:
+    for row in rows_sm_bm:
         t = row["ticker"]
-        data[t] = {
-            "sm_val":  row["sm_val"] or 0,
-            "bm_val":  row["bm_val"] or 0,
-            "tx":      row["tx"] or 0,
-            "mf_plus": row["mf_plus"],
-            "mf_minus": row["mf_minus"],
-            "net_mf":  None,
-        }
-        d = data[t]
+        if t not in data:
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0}
+        if row["channel"] == "smart":
+            data[t]["sm_val"] += row["mf"] or 0
+            data[t]["tx"] = (data[t].get("tx") or 0) + (row.get("tx_total") or 0)
+        else:
+            data[t]["bm_val"] += abs(row["mf"] or 0)
+            data[t]["tx"] = (data[t].get("tx") or 0) + (row.get("tx_total") or 0)
+
+    # Agregasi MF+/MF- per ticker dari raw_mf_messages
+    for row in rows_mf:
+        t = row["ticker"]
+        if t not in data:
+            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0}
+        if row["channel"] == "mf_plus":
+            data[t]["mf_plus"] = (data[t]["mf_plus"] or 0) + (row["mf"] or 0)
+        elif row["channel"] == "mf_minus":
+            data[t]["mf_minus"] = (data[t]["mf_minus"] or 0) + abs(row["mf"] or 0)
+
+    # Hitung net_mf per ticker
+    for t, d in data.items():
         if d["mf_plus"] is not None or d["mf_minus"] is not None:
-            d["net_mf"] = round((d["mf_plus"] or 0) - (d["mf_minus"] or 0), 2)
+            mfp = d["mf_plus"]  or 0
+            mfm = d["mf_minus"] or 0
+            data[t]["net_mf"] = round(mfp - mfm, 2)
 
     if not data:
         # If sector param given, still need to return sector tickers with gains
@@ -859,32 +903,44 @@ def sector_api():
     all_tickers = list(all_tickers)
 
     placeholders_d = ",".join("?" for _ in dates)
+    placeholders_t = ",".join("?" for _ in all_tickers)
 
     try:
         conn = get_db()
-        rows = conn.execute(f"""
-            SELECT ticker,
-                   SUM(sm_val)   AS sm,
-                   SUM(bm_val)   AS bm,
-                   SUM(mf_plus)  AS mfp,
-                   SUM(mf_minus) AS mfm
-            FROM eod_summary
-            WHERE date IN ({placeholders_d})
-            GROUP BY ticker
-        """, dates).fetchall()
+        rows_sm_bm = conn.execute(f"""
+            SELECT ticker, channel, SUM(mf_delta_numeric) AS mf
+            FROM raw_messages
+            WHERE ticker IN ({placeholders_t}) AND date IN ({placeholders_d})
+            GROUP BY ticker, channel
+        """, all_tickers + dates).fetchall()
+
+        rows_mf = conn.execute(f"""
+            SELECT ticker, channel, SUM(mf_numeric) AS mf
+            FROM raw_mf_messages
+            WHERE ticker IN ({placeholders_t}) AND date IN ({placeholders_d})
+            GROUP BY ticker, channel
+        """, all_tickers + dates).fetchall()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
     # Per-ticker data
     tdata = {}
-    for row in rows:
+    for row in rows_sm_bm:
         t = row["ticker"]
-        tdata[t] = {
-            "sm":  row["sm"] or 0,
-            "bm":  row["bm"] or 0,
-            "mfp": row["mfp"] or 0,
-            "mfm": abs(row["mfm"] or 0),
-        }
+        if t not in tdata:
+            tdata[t] = {"sm": 0, "bm": 0, "mfp": 0, "mfm": 0}
+        if row["channel"] == "smart":
+            tdata[t]["sm"] += row["mf"] or 0
+        else:
+            tdata[t]["bm"] += abs(row["mf"] or 0)
+    for row in rows_mf:
+        t = row["ticker"]
+        if t not in tdata:
+            tdata[t] = {"sm": 0, "bm": 0, "mfp": 0, "mfm": 0}
+        if row["channel"] == "mf_plus":
+            tdata[t]["mfp"] += row["mf"] or 0
+        elif row["channel"] == "mf_minus":
+            tdata[t]["mfm"] += abs(row["mf"] or 0)
 
     # Gain batch
     gains = get_gains_batch(all_tickers, date_from, date_to)
@@ -1043,17 +1099,22 @@ def scraper_status():
     alive = _scraper_thread is not None and _scraper_thread.is_alive()
     try:
         conn = get_db()
-        sm = conn.execute("SELECT MAX(date) FROM raw_messages WHERE channel='smart'").fetchone()[0]
-        bm = conn.execute("SELECT MAX(date) FROM raw_messages WHERE channel='bad'").fetchone()[0]
-        mfp = conn.execute("SELECT MAX(date) FROM raw_mf_messages WHERE channel='mf_plus'").fetchone()[0]
-        mfm = conn.execute("SELECT MAX(date) FROM raw_mf_messages WHERE channel='mf_minus'").fetchone()[0]
+        _dsql = "SELECT date FROM {t} WHERE channel=? ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2) DESC LIMIT 1"
+        sm = conn.execute(_dsql.format(t="raw_messages"), ["smart"]).fetchone()[0]
+        bm = conn.execute(_dsql.format(t="raw_messages"), ["bad"]).fetchone()[0]
+        mfp = conn.execute(_dsql.format(t="raw_mf_messages"), ["mf_plus"]).fetchone()[0]
+        mfm = conn.execute(_dsql.format(t="raw_mf_messages"), ["mf_minus"]).fetchone()[0]
         sm_count = conn.execute("SELECT COUNT(*) FROM raw_messages WHERE channel='smart'").fetchone()[0]
         bm_count = conn.execute("SELECT COUNT(*) FROM raw_messages WHERE channel='bad'").fetchone()[0]
         mfp_count = conn.execute("SELECT COUNT(*) FROM raw_mf_messages WHERE channel='mf_plus'").fetchone()[0]
         mfm_count = conn.execute("SELECT COUNT(*) FROM raw_mf_messages WHERE channel='mf_minus'").fetchone()[0]
+        try:
+            summary_count = conn.execute("SELECT COUNT(*) FROM eod_summary").fetchone()[0]
+        except:
+            summary_count = 0
     except:
         sm = bm = mfp = mfm = "?"
-        sm_count = bm_count = mfp_count = mfm_count = 0
+        sm_count = bm_count = mfp_count = mfm_count = summary_count = 0
     try:
         from scraper_daily import get_backfill_status
         bf_status = get_backfill_status()
@@ -1063,7 +1124,7 @@ def scraper_status():
         "scraper_enabled": SCRAPER_ENABLED,
         "thread_alive": alive,
         "latest_data": {"SM": sm, "BM": bm, "MF+": mfp, "MF-": mfm},
-        "row_counts": {"SM": sm_count, "BM": bm_count, "MF+": mfp_count, "MF-": mfm_count},
+        "row_counts": {"SM": sm_count, "BM": bm_count, "MF+": mfp_count, "MF-": mfm_count, "summary": summary_count},
         "backfill": bf_status.get("backfill", {}),
         "rebuild": bf_status.get("rebuild", {}),
     })
@@ -1089,16 +1150,83 @@ def trigger_weekly():
 
 @app.route("/admin/rebuild-summary")
 def rebuild_summary():
-    """Queue summary rebuild — runs in scraper thread, not HTTP thread."""
+    """Queue summary rebuild — runs in scraper thread."""
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     try:
-        from scraper_daily import request_rebuild, get_backfill_status
+        from scraper_daily import request_rebuild
         result = request_rebuild()
         return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/download-db")
+def download_db():
+    """Download zenith.db for local backup."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+    from flask import send_file
+    if not os.path.exists(DB_PATH):
+        return "❌ DB not found", 404
+    return send_file(DB_PATH, as_attachment=True, download_name="zenith.db")
+
+
+# ── Analytics ────────────────────────────────────────────────────────────
+_analytics_lock = threading.Lock()
+_analytics = {
+    "page_views": {},       # {"2026-04-01": {"total": 50, "/hub": 10, "/flow": 30, ...}}
+    "active_sessions": {},  # {session_id: last_seen_timestamp}
+    "total_views": 0,
+}
+
+@app.before_request
+def track_analytics():
+    """Track page views and active sessions for authenticated users."""
+    if not is_authed():
+        return
+    # Only track page routes, not API/admin
+    path = request.path
+    if path.startswith("/api/") or path.startswith("/admin"):
+        return
+
+    today = datetime.now(WIB).strftime("%Y-%m-%d")
+    sid = session.get("_id", id(session))
+
+    with _analytics_lock:
+        _analytics["total_views"] += 1
+        if today not in _analytics["page_views"]:
+            _analytics["page_views"][today] = {"total": 0}
+        _analytics["page_views"][today]["total"] += 1
+        _analytics["page_views"][today][path] = _analytics["page_views"][today].get(path, 0) + 1
+        _analytics["active_sessions"][str(sid)] = time.time()
+
+        # Clean stale sessions (inactive > 10 min)
+        cutoff = time.time() - 600
+        _analytics["active_sessions"] = {
+            k: v for k, v in _analytics["active_sessions"].items() if v > cutoff
+        }
+
+
+@app.route("/admin/analytics")
+def analytics():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+    with _analytics_lock:
+        active_count = len(_analytics["active_sessions"])
+        # Last 14 days of page views
+        recent = {}
+        for d in sorted(_analytics["page_views"].keys())[-14:]:
+            recent[d] = _analytics["page_views"][d]
+    return jsonify({
+        "total_views": _analytics["total_views"],
+        "active_users": active_count,
+        "daily_views": recent,
+    })
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

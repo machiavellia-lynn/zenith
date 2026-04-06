@@ -122,6 +122,12 @@ header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:
       <div class="progress-wrap" id="pullProgress"><div class="progress-bar indeterminate" id="pullBar"></div></div>
       <div class="status" id="pullStatus"></div>
     </div>
+    <div class="card-row">
+      <div class="row-label">Download Backup</div>
+      <div class="btn-row">
+        <button class="btn outline" onclick="downloadDB()">Download zenith.db</button>
+      </div>
+    </div>
   </div>
 
   <!-- SESSION -->
@@ -157,6 +163,7 @@ header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:
         <div class="stat-box"><div class="stat-label">BM Rows</div><div class="stat-val" id="stBMc">—</div></div>
         <div class="stat-box"><div class="stat-label">MF+ Rows</div><div class="stat-val" id="stMFPc">—</div></div>
         <div class="stat-box"><div class="stat-label">MF- Rows</div><div class="stat-val" id="stMFMc">—</div></div>
+        <div class="stat-box"><div class="stat-label">EOD Summary</div><div class="stat-val" id="stEOD" style="color:var(--accent)">—</div></div>
       </div>
     </div>
     <div class="card-row">
@@ -168,6 +175,30 @@ header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:
       </div>
       <div class="progress-wrap" id="bfProgress"><div class="progress-bar indeterminate" id="bfBar"></div></div>
       <div class="status" id="bfStatus"></div>
+    </div>
+    <div class="card-row">
+      <div class="row-label">Rebuild EOD Summary</div>
+      <div class="btn-row">
+        <button class="btn outline" id="rbBtn" onclick="triggerRebuild()">Rebuild Summary</button>
+      </div>
+      <div class="progress-wrap" id="rbProgress"><div class="progress-bar indeterminate" id="rbBar"></div></div>
+      <div class="status" id="rbStatus"></div>
+    </div>
+  </div>
+
+  <!-- ANALYTICS -->
+  <div class="card">
+    <div class="card-title">Analytics</div>
+    <div class="card-sub">Visitor tracking (since deploy)</div>
+    <div class="card-row">
+      <div class="stat-grid">
+        <div class="stat-box"><div class="stat-label">Active Users</div><div class="stat-val up" id="anActive">—</div></div>
+        <div class="stat-box"><div class="stat-label">Total Views</div><div class="stat-val" id="anTotal">—</div></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="row-label">Daily Page Views (14 days)</div>
+        <canvas id="analyticsChart" height="120" style="width:100%;margin-top:8px"></canvas>
+      </div>
     </div>
   </div>
 </div>
@@ -301,6 +332,53 @@ function triggerBackfill(){
     });
 }
 
+// Download DB
+function downloadDB(){
+  window.open(`/admin/download-db?secret=${encodeURIComponent(SECRET)}`,'_blank');
+}
+
+// Rebuild Summary
+let rbPolling=null;
+function triggerRebuild(){
+  const btn=document.getElementById('rbBtn');
+  const pw=document.getElementById('rbProgress');
+  const st=document.getElementById('rbStatus');
+  btn.disabled=true;btn.textContent='Running...';
+  pw.classList.add('active');
+  st.className='status';st.textContent='Rebuild queued...';
+  setBubble('Rebuilding summary table... 📊');
+  fetch(`/admin/rebuild-summary?secret=${encodeURIComponent(SECRET)}`)
+    .then(r=>r.json()).then(d=>{
+      st.textContent=d.message||d.error||JSON.stringify(d);
+      rbPolling=setInterval(()=>{
+        fetch(`/admin/scraper-status?secret=${encodeURIComponent(SECRET)}`)
+          .then(r=>r.json()).then(s=>{
+            const rb=s.rebuild||{};
+            if(rb.status==='done'){
+              clearInterval(rbPolling);rbPolling=null;
+              pw.classList.remove('active');
+              btn.disabled=false;btn.textContent='Rebuild Summary';
+              const r=rb.result||{};
+              st.className='status ok';st.textContent=`✅ Done! ${r.dates||0} dates, ${r.ticker_rows||0} rows`;
+              setBubble('Rebuild selesai! Nice~ 🎉');
+              refreshStatus();
+            }else if(rb.status==='error'){
+              clearInterval(rbPolling);rbPolling=null;
+              pw.classList.remove('active');
+              btn.disabled=false;btn.textContent='Rebuild Summary';
+              st.className='status err';st.textContent='❌ '+rb.result;
+              setBubble('Aduh, ada yang error... 😅');
+            }else{
+              st.textContent='Rebuilding... '+rb.status;
+            }
+          }).catch(()=>{});
+      },3000);
+    }).catch(e=>{
+      pw.classList.remove('active');btn.disabled=false;btn.textContent='Rebuild Summary';
+      st.className='status err';st.textContent='Error: '+e.message;
+    });
+}
+
 // Auto-refresh scraper status
 function refreshStatus(){
   fetch(`/admin/scraper-status?secret=${encodeURIComponent(SECRET)}`)
@@ -317,15 +395,65 @@ function refreshStatus(){
       document.getElementById('stBMc').textContent=rc.BM?rc.BM.toLocaleString():'—';
       document.getElementById('stMFPc').textContent=rc['MF+']?rc['MF+'].toLocaleString():'—';
       document.getElementById('stMFMc').textContent=rc['MF-']?rc['MF-'].toLocaleString():'—';
+      document.getElementById('stEOD').textContent=rc.summary?rc.summary.toLocaleString()+' rows':'—';
       const bf=d.backfill||{};
-      document.getElementById('stBackfill').textContent=bf.status?bf.status.toUpperCase():'IDLE';
+      const rb=d.rebuild||{};
+      document.getElementById('stBackfill').textContent=(bf.status||'idle').toUpperCase()+(rb.status&&rb.status!=='idle'?' / RB:'+(rb.status).toUpperCase():'');
     }).catch(()=>{});
+}
+
+// Analytics
+function loadAnalytics(){
+  fetch(`/admin/analytics?secret=${encodeURIComponent(SECRET)}`)
+    .then(r=>r.json()).then(d=>{
+      document.getElementById('anActive').textContent=d.active_users||0;
+      document.getElementById('anTotal').textContent=d.total_views?d.total_views.toLocaleString():'0';
+      drawChart(d.daily_views||{});
+    }).catch(()=>{});
+}
+function drawChart(data){
+  const canvas=document.getElementById('analyticsChart');
+  if(!canvas)return;
+  const ctx=canvas.getContext('2d');
+  const dpr=window.devicePixelRatio||1;
+  const w=canvas.offsetWidth;
+  const h=120;
+  canvas.width=w*dpr;canvas.height=h*dpr;
+  canvas.style.width=w+'px';canvas.style.height=h+'px';
+  ctx.scale(dpr,dpr);
+
+  const days=Object.keys(data).sort();
+  const vals=days.map(d=>(data[d]||{}).total||0);
+  const max=Math.max(...vals,1);
+  const barW=Math.max(4,Math.floor((w-20)/Math.max(days.length,1))-4);
+  const pad=10;
+
+  ctx.clearRect(0,0,w,h);
+  // Grid lines
+  ctx.strokeStyle='#1a2230';ctx.lineWidth=0.5;
+  for(let i=0;i<4;i++){const y=pad+((h-pad*2)/3)*i;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}
+
+  days.forEach((d,i)=>{
+    const v=vals[i];
+    const bh=(v/max)*(h-pad*3);
+    const x=pad+i*(barW+4);
+    const y=h-pad-bh;
+    ctx.fillStyle='#00e8a2';
+    ctx.fillRect(x,y,barW,bh);
+    // Date label (show day only)
+    if(days.length<=14){
+      ctx.fillStyle='#4a6070';ctx.font='8px "Space Mono"';ctx.textAlign='center';
+      ctx.fillText(d.slice(8,10)+'/'+d.slice(5,7),x+barW/2,h-1);
+    }
+    // Value on top
+    if(v>0){ctx.fillStyle='#c8d8e8';ctx.font='8px "Space Mono"';ctx.textAlign='center';ctx.fillText(v,x+barW/2,y-3)}
+  });
 }
 
 // Refresh every 5s, pause when tab hidden
 let statusInterval;
-function startPolling(){statusInterval=setInterval(()=>{if(!document.hidden)refreshStatus()},5000)}
-document.addEventListener('DOMContentLoaded',()=>{refreshStatus();startPolling()});
+function startPolling(){statusInterval=setInterval(()=>{if(!document.hidden){refreshStatus();loadAnalytics()}},5000)}
+document.addEventListener('DOMContentLoaded',()=>{refreshStatus();loadAnalytics();startPolling()});
 </script>
 </body>
 </html>
