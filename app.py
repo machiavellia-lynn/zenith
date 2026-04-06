@@ -1058,13 +1058,14 @@ def scraper_status():
         from scraper_daily import get_backfill_status
         bf_status = get_backfill_status()
     except:
-        bf_status = {}
+        bf_status = {"backfill": {}, "rebuild": {}}
     return jsonify({
         "scraper_enabled": SCRAPER_ENABLED,
         "thread_alive": alive,
         "latest_data": {"SM": sm, "BM": bm, "MF+": mfp, "MF-": mfm},
         "row_counts": {"SM": sm_count, "BM": bm_count, "MF+": mfp_count, "MF-": mfm_count},
-        "backfill": bf_status,
+        "backfill": bf_status.get("backfill", {}),
+        "rebuild": bf_status.get("rebuild", {}),
     })
 
 
@@ -1088,17 +1089,14 @@ def trigger_weekly():
 
 @app.route("/admin/rebuild-summary")
 def rebuild_summary():
-    """Rebuild eod_summary from all raw data. Run once after deploy."""
+    """Queue summary rebuild — runs in scraper thread, not HTTP thread."""
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     try:
-        from scraper_daily import rebuild_all_summaries, ensure_summary_table, get_scraper_db
-        conn = get_scraper_db()
-        ensure_summary_table(conn)
-        result = rebuild_all_summaries(conn)
-        conn.close()
-        return jsonify({"ok": True, **result})
+        from scraper_daily import request_rebuild, get_backfill_status
+        result = request_rebuild()
+        return jsonify(result)
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 

@@ -623,6 +623,7 @@ async def run_backfill(client, conn):
 # ══════════════════════════════════════════════════════════════════════════════
 
 _backfill_request = {"days": None, "status": "idle", "result": None}
+_rebuild_request = {"status": "idle", "result": None}
 _backfill_lock = threading.Lock()
 
 
@@ -637,10 +638,20 @@ def request_backfill(days: int):
         return {"ok": True, "message": f"Backfill {days} days queued. Check /admin/scraper-status for progress."}
 
 
+def request_rebuild():
+    """Called from HTTP thread to request a full summary rebuild. Non-blocking."""
+    with _backfill_lock:
+        if _rebuild_request["status"] == "running":
+            return {"ok": False, "error": "Rebuild already running"}
+        _rebuild_request["status"] = "pending"
+        _rebuild_request["result"] = None
+        return {"ok": True, "message": "Summary rebuild queued. Check /admin/scraper-status for progress."}
+
+
 def get_backfill_status():
     """Called from HTTP thread to check backfill progress."""
     with _backfill_lock:
-        return dict(_backfill_request)
+        return {"backfill": dict(_backfill_request), "rebuild": dict(_rebuild_request)}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -737,6 +748,26 @@ async def scraper_main():
                     with _backfill_lock:
                         _backfill_request["status"] = "error"
                         _backfill_request["result"] = str(e)
+
+            # Check for summary rebuild request (from HTTP endpoint)
+            with _backfill_lock:
+                do_rebuild = _rebuild_request["status"] == "pending"
+                if do_rebuild:
+                    _rebuild_request["status"] = "running"
+
+            if do_rebuild:
+                try:
+                    log.info("📋 Summary rebuild requested")
+                    ensure_summary_table(conn)
+                    result = rebuild_all_summaries(conn)
+                    with _backfill_lock:
+                        _rebuild_request["status"] = "done"
+                        _rebuild_request["result"] = result
+                except Exception as e:
+                    log.error(f"❌ Rebuild error: {e}")
+                    with _backfill_lock:
+                        _rebuild_request["status"] = "error"
+                        _rebuild_request["result"] = str(e)
 
             await asyncio.sleep(5)  # check every 5 seconds
 
