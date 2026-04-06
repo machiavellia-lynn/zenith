@@ -320,6 +320,7 @@ def parse_mf_message(text: str, fallback_channel: str) -> list[dict]:
 def get_scraper_db():
     """Dedicated DB connection for scraper thread (separate from Flask)."""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
+    conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA busy_timeout=10000")  # wait up to 10s on lock
