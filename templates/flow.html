@@ -1,0 +1,1714 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Flow</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>if (typeof LightweightCharts === 'undefined') document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
+<style>
+:root {
+  --bg:       #080c10;
+  --surface:  #0e1318;
+  --surface2: #121920;
+  --border:   #1a2230;
+  --border2:  #243040;
+  --accent:   #00e8a2;
+  --accent2:  #4d9fff;
+  --danger:   #ff4d6a;
+  --text:     #c8d8e8;
+  --muted:    #4a6070;
+  --up:       #00e8a2;
+  --down:     #ff4d6a;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+}
+
+/* ── HEADER ─────────────────────────────────────── */
+header {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky; top: 0; z-index: 200;
+}
+.logo {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: .18em; color: var(--accent);
+  text-transform: uppercase; white-space: nowrap;
+}
+.logo span { color: var(--muted); }
+.nav-divider { width: 1px; height: 20px; background: var(--border); }
+.nav-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 5px;
+  padding: 5px 14px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .06em;
+  text-decoration: none; transition: all .15s;
+}
+.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.nav-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* search */
+.ticker-search-wrap {
+  display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px;
+  margin-left: auto; transition: border-color .2s;
+}
+.ticker-search-wrap:focus-within { border-color: var(--accent); }
+.ticker-search-wrap input {
+  background: none; border: none; outline: none;
+  color: var(--text); font-family: 'DM Sans', sans-serif;
+  font-size: 12px; width: 160px;
+}
+.ticker-search-wrap input::placeholder { color: var(--muted); }
+
+/* IHSG display */
+.ihsg-wrap {
+  margin-left: auto; display: flex; align-items: center; gap: 8px;
+  font-family: 'Space Mono', monospace;
+}
+.ihsg-label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.ihsg-price { font-size: 13px; font-weight: 700; color: var(--text); }
+.ihsg-gain { font-size: 11px; font-weight: 700; }
+
+/* Sector filter badge */
+.sector-badge {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Space Mono', monospace;
+}
+.sector-badge-label {
+  font-size: 9px; color: var(--muted); letter-spacing: .06em;
+}
+.sector-badge-name {
+  font-size: 11px; font-weight: 700; color: var(--accent);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+
+/* ── STATS BAR ───────────────────────────────────── */
+.stats-bar {
+  display: flex; align-items: center; gap: 0;
+  padding: 0 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.stat-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 20px 10px 0; margin-right: 20px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.stat-item:last-child { border-right: none; }
+.stat-item .s-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .12em;
+  color: var(--muted); text-transform: uppercase;
+}
+.stat-item .s-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px; font-weight: 700;
+  color: var(--text);
+}
+.stat-item .s-val.up   { color: var(--up); }
+.stat-item .s-val.down { color: var(--down); }
+.stat-item .s-val.bm   { color: #ff8c42; }
+.stat-item .s-val.neutral { color: var(--accent2); }
+.stat-item[title] { cursor: help; }
+.stat-item[title]:hover .s-label { color: var(--text); }
+
+/* ── TOOLBAR ─────────────────────────────────────── */
+.toolbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+}
+
+/* Date range picker */
+.date-range {
+  display: flex; align-items: center; gap: 8px;
+}
+.date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 6px 10px; font-family: 'Space Mono', monospace;
+  font-size: 11px; outline: none; width: 108px;
+  letter-spacing: .04em;
+  transition: border-color .2s;
+}
+.date-input:focus { border-color: var(--accent); }
+.date-input::placeholder { color: var(--muted); }
+.date-arrow {
+  width: 28px; height: 28px;
+  background: var(--border); border: 1px solid var(--border2);
+  border-radius: 5px; display: flex; align-items: center;
+  justify-content: center; color: var(--muted); font-size: 13px;
+}
+.load-btn {
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: 5px;
+  padding: 6px 16px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: .06em; transition: opacity .15s;
+}
+.load-btn:hover { opacity: .85; }
+
+.row-count {
+  margin-left: auto;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--muted);
+  letter-spacing: .06em;
+}
+
+/* ── TABLE ───────────────────────────────────────── */
+.table-wrap {
+  flex: 1; overflow: auto;
+  padding: 0 24px 24px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  margin-top: 12px;
+}
+thead th {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border2);
+  padding: 9px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; font-weight: 700;
+  letter-spacing: .12em; color: var(--muted);
+  text-align: right; text-transform: uppercase;
+  white-space: nowrap; cursor: pointer;
+  user-select: none;
+  transition: color .15s;
+}
+thead th:first-child { text-align: left; }
+thead th:hover { color: var(--text); }
+thead th.sorted { color: var(--accent); }
+thead th .sort-icon { margin-left: 4px; font-size: 8px; }
+
+tbody tr {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .1s;
+  animation: rowIn .3s ease both;
+}
+tbody tr:hover { background: rgba(255,255,255,.03); }
+@keyframes rowIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+td {
+  padding: 9px 12px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+td:first-child { text-align: left; }
+
+/* Ticker cell */
+.td-ticker {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  color: var(--text); letter-spacing: .04em;
+}
+.td-ticker:hover { color: var(--accent); }
+
+/* Clean money cell with bar */
+.cm-cell {
+  position: relative;
+  min-width: 130px;
+}
+.cm-bar {
+  position: absolute; top: 0; bottom: 0;
+  left: 50%; width: 0;
+  transition: width .4s ease;
+  opacity: .18; border-radius: 2px;
+}
+.cm-bar.pos { background: var(--up);   transform-origin: left; margin-left: 0; }
+.cm-bar.neg { background: var(--down); transform-origin: right; }
+.cm-val {
+  position: relative; z-index: 1;
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+}
+.cm-val.pos { color: var(--up); }
+.cm-val.neg { color: var(--down); }
+
+/* Numeric cells */
+.td-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; color: var(--text);
+}
+.td-num.sm  { color: var(--accent2); }
+.td-num.bm  { color: #ff8c42; }
+.td-num.mfp { color: var(--up); }
+.td-num.mfm { color: var(--down); }
+.td-num.net-pos { color: var(--up); font-weight: 700; }
+.td-num.net-neg { color: var(--down); font-weight: 700; }
+
+/* RSM cell */
+.rsm-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+}
+
+/* Gain cell */
+.gain-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+}
+.gain-val.pos { color: var(--up); }
+.gain-val.neg { color: var(--down); }
+.gain-val.zero { color: var(--muted); }
+
+/* Loading / empty */
+.state-row td {
+  text-align: center; padding: 60px;
+  color: var(--muted); font-size: 13px;
+}
+.spinner-inline {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── MODAL ───────────────────────────────────────── */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.82);
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  opacity: 0; pointer-events: none;
+  transition: opacity .2s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  width: 100%;
+  max-width: 1100px;
+  height: 92vh;
+  max-height: 92vh;
+  display: flex; flex-direction: column;
+  transform: scale(.97); transition: transform .2s;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.modal-backdrop.open .modal { transform: scale(1); }
+
+.modal-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-ticker {
+  font-family: 'Space Mono', monospace;
+  font-size: 16px; font-weight: 700;
+  color: var(--text);
+}
+.modal-name { font-size: 12px; color: var(--muted); }
+.modal-price {
+  font-family: 'Space Mono', monospace;
+  font-size: 18px; font-weight: 700; color: var(--text);
+  margin-left: auto;
+}
+
+/* modal tf tabs */
+.modal-tfs { display: flex; gap: 6px; }
+.mtf-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+}
+.mtf-btn:hover { border-color: var(--accent); color: var(--accent); }
+.mtf-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+/* fit/log buttons */
+.modal-scale-btns { display: flex; gap: 4px; }
+
+.close-btn {
+  background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 20px; line-height: 1;
+  padding: 2px 6px; transition: color .15s;
+}
+.close-btn:hover { color: var(--danger); }
+
+/* modal hover tooltip */
+.m-hover-tooltip {
+  position: absolute; top: 12px; left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: flex; align-items: center; gap: 14px;
+  background: rgba(14,19,24,.92);
+  border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 12px;
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  pointer-events: none; opacity: 0; transition: opacity .15s;
+  white-space: nowrap;
+}
+.m-hover-tooltip.visible { opacity: 1; }
+.mht-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.mht-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.mht-v { font-size: 11px; font-weight: 700; color: var(--text); }
+.mht-v.up { color: var(--up); }
+.mht-v.down { color: var(--down); }
+.mht-sep { width: 1px; height: 26px; background: var(--border); }
+
+.modal-scroll {
+  flex: 1 1 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+  /* custom scrollbar — tipis & nempel di ujung kanan */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.modal-scroll::-webkit-scrollbar { width: 6px; }
+.modal-scroll::-webkit-scrollbar-track { background: transparent; }
+.modal-scroll::-webkit-scrollbar-thumb {
+  background: var(--border2); border-radius: 3px;
+}
+.modal-scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+.modal-chart-wrap {
+  position: relative;
+  height: 480px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+#modalChart { width: 100%; height: 100%; display: block; position: relative; overflow: visible; }
+/* Paksa LWC internal div tidak clip time axis */
+#modalChart > div { overflow: visible !important; }
+
+
+/* ── MODAL TRANSACTIONS ──────────────────────────────── */
+.modal-body {
+  padding: 16px 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.trx-section-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .14em; font-weight: 700;
+  color: var(--muted); text-transform: uppercase;
+  display: flex; align-items: center; gap: 12px;
+  white-space: nowrap;
+}
+.trx-section-title::after {
+  content: ''; flex: 1; height: 1px;
+  background: var(--border);
+}
+.trx-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.trx-date-range {
+  display: flex; align-items: center; gap: 6px;
+}
+.trx-date-input {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 5px;
+  padding: 5px 8px; font-family: 'Space Mono', monospace;
+  font-size: 10px; outline: none; width: 96px;
+  letter-spacing: .04em; transition: border-color .2s;
+}
+.trx-date-input:focus { border-color: var(--accent); }
+.trx-date-input::placeholder { color: var(--muted); }
+.trx-date-arrow {
+  color: var(--muted); font-size: 11px; padding: 0 2px;
+}
+.trx-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.trx-box {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  height: 260px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.trx-box-header {
+  padding: 6px 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  display: flex; gap: 8px; align-items: center;
+  flex-shrink: 0;
+  background: var(--bg);
+  z-index: 1;
+}
+.trx-box-header.sm { color: var(--accent2); }
+.trx-box-header.bm { color: #ff8c42; }
+.trx-box-header .trx-count {
+  color: var(--muted); font-size: 8px;
+}
+.trx-table-wrap {
+  flex: 1 1 0;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border2) transparent;
+}
+.trx-table-wrap::-webkit-scrollbar { width: 5px; }
+.trx-table-wrap::-webkit-scrollbar-track { background: transparent; }
+.trx-table-wrap::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+.trx-table-wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+.trx-table { width: 100%; border-collapse: collapse; }
+.trx-table thead th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--bg);
+}
+.trx-table th {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+  text-align: right; border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.trx-table th:first-child { text-align: left; }
+.trx-table td {
+  padding: 5px 10px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--text);
+  text-align: right;
+  border-bottom: 1px solid rgba(26,34,48,.5);
+  white-space: nowrap;
+}
+.trx-table td:first-child { text-align: left; color: var(--muted); }
+.trx-table tbody tr:last-child td { border-bottom: none; }
+.trx-table tbody tr:hover { background: rgba(255,255,255,.02); }
+.trx-gain-pos { color: var(--up); }
+.trx-gain-neg { color: var(--down); }
+.trx-mf-sm { color: var(--accent2); }
+.trx-mf-bm { color: #ff8c42; }
+/* ── OVERLAY TOGGLES ─────────────────────────────── */
+.overlay-toggles { display: flex; gap: 4px; margin-left: 8px; }
+.ovl-btn {
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 4px;
+  padding: 3px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: .06em;
+  transition: all .15s;
+  display: flex; align-items: center; gap: 5px;
+}
+.ovl-btn .ovl-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  opacity: .4; transition: opacity .15s;
+}
+.ovl-btn:hover { border-color: var(--text); color: var(--text); }
+.ovl-btn.active { border-color: currentColor; }
+.ovl-btn.active .ovl-dot { opacity: 1; }
+.ovl-btn.active.cm { color: #00e8a2; }
+.ovl-btn.active.sm { color: #4d9fff; }
+.ovl-btn.active.bm { color: #ff8c42; }
+
+/* overlay value panel top-left */
+.m-overlay-vals {
+  position: absolute; top: 12px; left: 14px;
+  z-index: 10; display: flex; flex-direction: column; gap: 2px;
+  pointer-events: none;
+}
+.m-ovl-row {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700;
+  opacity: 0; transition: opacity .15s;
+}
+.m-ovl-row.visible { opacity: 1; }
+.m-ovl-row .m-ovl-label {
+  font-size: 9px; font-weight: 400;
+  letter-spacing: .08em; margin-right: 6px;
+}
+
+.trx-empty { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
+.trx-loading { padding: 20px; text-align: center; color: var(--muted); font-size: 11px; }
+/* ── PIKADAY DARK THEME ──────────────────────── */
+.pika-single {
+  background: var(--surface2) !important;
+  border: 1px solid var(--border2) !important;
+  border-radius: 8px !important;
+  font-family: 'DM Sans', sans-serif !important;
+  color: var(--text) !important;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5) !important;
+}
+.pika-title { padding: 8px 10px !important; }
+.pika-label {
+  background: transparent !important;
+  color: var(--text) !important;
+  font-family: 'Space Mono', monospace !important;
+  font-size: 12px !important;
+}
+.pika-prev, .pika-next { color: var(--muted) !important; opacity: 1 !important; }
+.pika-prev:hover, .pika-next:hover { color: var(--accent) !important; }
+.pika-table th {
+  color: var(--muted) !important;
+  font-size: 10px !important;
+  font-family: 'Space Mono', monospace !important;
+}
+.pika-button {
+  background: transparent !important;
+  color: var(--text) !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  text-align: center !important;
+}
+.pika-button:hover, .is-selected .pika-button {
+  background: var(--accent) !important;
+  color: var(--bg) !important;
+}
+.is-today .pika-button { color: var(--accent) !important; font-weight: 700 !important; }
+.is-disabled .pika-button { color: var(--muted) !important; opacity: .4 !important; }
+.modal .pika-single { z-index: 600 !important; }
+.pika-select {
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--border) !important;
+}
+
+.info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:24px;height:24px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.info-btn:hover{border-color:var(--accent);color:var(--accent)}
+.info-backdrop{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.info-backdrop.open{opacity:1;pointer-events:all}
+.info-modal{background:var(--surface);border:1px solid var(--border2);border-radius:10px;width:min(90vw,760px);max-height:85vh;display:flex;flex-direction:column;transform:scale(.97);transition:transform .2s;overflow:hidden}
+.info-backdrop.open .info-modal{transform:scale(1)}
+.info-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0}
+.info-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--accent)}
+.info-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.info-body{overflow-y:auto;padding:20px;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+.info-body::-webkit-scrollbar{width:5px}
+.info-body::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+.info-section{margin-bottom:24px;padding-bottom:24px;border-bottom:1px solid var(--border)}
+.info-section:last-child{border-bottom:none;margin-bottom:0}
+.info-section-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.14em;color:var(--accent);text-transform:uppercase;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+.info-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+.info-p{font-size:12px;color:var(--text);line-height:1.65;margin-bottom:8px}
+.info-p:last-child{margin-bottom:0}
+.info-highlight{background:rgba(0,232,162,.07);border-left:3px solid var(--accent);border-radius:0 4px 4px 0;padding:10px 14px;margin:10px 0;font-family:'Space Mono',monospace;font-size:11px;color:var(--text);line-height:1.6}
+.info-highlight.danger{background:rgba(255,77,106,.07);border-left-color:var(--danger)}
+.info-highlight.neutral{background:rgba(77,159,255,.07);border-left-color:var(--accent2)}
+.info-glossary{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+@media(max-width:560px){.info-glossary{grid-template-columns:1fr}}
+.info-term{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.info-term-label{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;margin-bottom:4px}
+.info-term-label.cm{color:var(--up)}.info-term-label.sm{color:var(--accent2)}.info-term-label.bm{color:#ff8c42}.info-term-label.muted{color:var(--muted)}
+.info-term-desc{font-size:11px;color:var(--muted);line-height:1.5}
+.info-scenarios{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.info-scenario{background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:12px 14px}
+.info-scenario-title{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;color:var(--text);letter-spacing:.06em;margin-bottom:6px}
+.info-scenario-desc{font-size:11px;color:var(--muted);line-height:1.5}
+
+
+
+/* ── RESPONSIVE ──────────────────────────── */
+@media(max-width:768px){
+  header{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .logo{font-size:11px;letter-spacing:.12em}
+  .nav-divider{display:none}
+  .nav-btn{padding:4px 10px;font-size:10px}
+  .ticker-search-wrap{order:10;flex:1 1 100%;margin-top:2px}
+  .ticker-search-wrap input{font-size:11px}
+  .stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:0}
+  .stat-item{padding:8px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+  .stat-item:nth-child(3n){border-right:none}
+  .s-label{font-size:7px;letter-spacing:.08em}
+  .s-val{font-size:12px}
+  .toolbar{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .date-input{width:88px;font-size:10px;padding:5px 6px}
+  .date-arrow{width:24px;height:24px;font-size:11px}
+  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 12px}
+  .flow-table{min-width:920px}
+  .flow-table thead th{padding:7px 8px;font-size:8px}
+  .flow-table td{padding:7px 8px}
+  .td-ticker{font-size:11px}
+  .td-num{font-size:10px}
+  .cm-val{font-size:10px}
+  .gain-val{font-size:10px}
+  .rsm-val{font-size:10px}
+  /* Modal responsive */
+  .modal{width:100%!important;max-width:100%!important;height:100vh!important;border-radius:0!important}
+  .modal-header{flex-wrap:wrap;gap:6px;padding:8px 12px}
+  .modal-ticker{font-size:14px}
+  .modal-tfs{gap:3px}
+  .mtf-btn{padding:3px 8px;font-size:9px}
+  .overlay-toggles{gap:3px}
+  .ovl-btn{padding:2px 6px;font-size:8px}
+  .modal-scale-btns{gap:3px}
+  .modal-chart-wrap{height:340px}
+  .m-hover-tooltip{font-size:8px;gap:5px;padding:3px 6px}
+  .mht-lbl{font-size:7px}
+  .mht-v{font-size:9px}
+  .mht-sep{height:18px}
+  .trx-toolbar{flex-direction:column;align-items:flex-start;gap:6px}
+  .trx-grid{grid-template-columns:1fr}
+  .trx-box{height:200px}
+  .trx-date-input{width:88px;font-size:9px}
+}
+@media(max-width:420px){
+  header{gap:4px;padding:6px 10px}
+  .logo span{display:none}
+  .nav-btn{padding:3px 7px;font-size:9px}
+  .stats-bar{grid-template-columns:repeat(2,1fr)}
+  .stat-item{padding:6px 8px}
+  .s-val{font-size:11px}
+  .modal-chart-wrap{height:280px}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">ZENITH <span>/ flow</span></div>
+  <div class="nav-divider"></div>
+  <a href="/chart" class="nav-btn">⬡ Chart</a>
+  <a href="/flow" class="nav-btn active">⊞ Flow</a>
+  <a href="/sector" class="nav-btn">◈ Sector</a>
+  <div class="nav-divider"></div>
+  <div class="ticker-search-wrap">
+    <span style="color:var(--muted);font-size:12px">⌕</span>
+    <input type="text" id="tickerFilter" placeholder="Filter ticker..."/>
+  </div>
+  <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data">?</button>
+</header>
+
+<!-- STATS BAR -->
+<div class="stats-bar" id="statsBar">
+  <div class="stat-item" title="Smart Money">
+    <span class="s-label">SM</span>
+    <span class="s-val neutral" id="sSM">—</span>
+  </div>
+  <div class="stat-item" title="Bad Money">
+    <span class="s-label">BM</span>
+    <span class="s-val bm" id="sBM">—</span>
+  </div>
+  <div class="stat-item" title="Money Inflow">
+    <span class="s-label">MF+</span>
+    <span class="s-val up" id="sMFP">—</span>
+  </div>
+  <div class="stat-item" title="Money Outflow">
+    <span class="s-label">MF−</span>
+    <span class="s-val down" id="sMFM">—</span>
+  </div>
+  <div class="stat-item" title="Net Clean Money">
+    <span class="s-label">NET CM</span>
+    <span class="s-val" id="sNCM">—</span>
+  </div>
+  <div class="stat-item" title="Net Money Flow">
+    <span class="s-label">NET MF</span>
+    <span class="s-val" id="sNMF">—</span>
+  </div>
+  <div class="stat-item">
+    <span class="s-label">Tickers</span>
+    <span class="s-val neutral" id="sCount">—</span>
+  </div>
+  <div class="stat-item" style="margin-left:auto" title="IHSG Composite">
+    <span class="s-label">IHSG</span>
+    <span class="s-val" id="sIHSG" style="color:var(--text)">—</span>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div id="sectorBackWrap" style="display:none">
+    <a href="/sector" class="nav-btn" style="font-size:10px">← Sector</a>
+  </div>
+  <div id="sectorBadgeWrap" class="sector-badge" style="display:none">
+    <span class="sector-badge-label">Menampilkan:</span>
+    <span class="sector-badge-name" id="sectorBadgeName"></span>
+  </div>
+  <div class="date-range">
+    <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+    <div class="date-arrow">→</div>
+    <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+  </div>
+  <span class="row-count" id="rowCount"></span>
+</div>
+
+<!-- TABLE -->
+<div class="table-wrap">
+  <table id="flowTable">
+    <thead>
+      <tr>
+        <th onclick="sortBy('ticker',event)"       data-col="ticker">TICKER <span class="sort-icon"></span></th>
+        <th onclick="sortBy('price',event)"         data-col="price" title="Harga terakhir">PRICE <span class="sort-icon"></span></th>
+        <th onclick="sortBy('tx',event)"             data-col="tx" title="Total transaksi">TX <span class="sort-icon"></span></th>
+        <th onclick="sortBy('clean_money',event)"  data-col="clean_money">CLEAN MONEY <span class="sort-icon">▼</span></th>
+        <th onclick="sortBy('sm_val',event)"       data-col="sm_val" title="Smart Money">SM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('bm_val',event)"       data-col="bm_val" title="Bad Money">BM VAL <span class="sort-icon"></span></th>
+        <th onclick="sortBy('rsm',event)"          data-col="rsm" title="Smart Money Ratio">RSM <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_plus',event)"      data-col="mf_plus" title="Money Inflow">MF+ <span class="sort-icon"></span></th>
+        <th onclick="sortBy('mf_minus',event)"     data-col="mf_minus" title="Money Outflow">MF− <span class="sort-icon"></span></th>
+        <th onclick="sortBy('net_mf',event)"       data-col="net_mf" title="Net Money Flow">NET MF <span class="sort-icon"></span></th>
+        <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="% perubahan harga">GAIN% <span class="sort-icon"></span></th>
+      </tr>
+    </thead>
+    <tbody id="flowBody">
+      <tr class="state-row"><td colspan="11"><span class="spinner-inline"></span>Memuat data...</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- MODAL -->
+<div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
+  <div class="modal" id="modalBox">
+    <div class="modal-header">
+      <div>
+        <div class="modal-ticker" id="mTicker">—</div>
+        <div class="modal-name" id="mName">—</div>
+      </div>
+      <div class="modal-tfs">
+        <button class="mtf-btn" data-tf="5m"  onclick="setModalTF('5m')">5m</button>
+        <button class="mtf-btn" data-tf="15m" onclick="setModalTF('15m')">15m</button>
+        <button class="mtf-btn" data-tf="30m" onclick="setModalTF('30m')">30m</button>
+        <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
+        <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
+      </div>
+      <div class="overlay-toggles">
+        <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
+        <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')" title="Smart Money"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
+        <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
+      </div>
+      <div style="flex:1"></div>
+      <div class="modal-scale-btns">
+        <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
+        <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
+      </div>
+      <button class="close-btn" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-scroll">
+    <div class="modal-chart-wrap">
+      <div class="m-hover-tooltip" id="mHoverTooltip">
+        <div class="mht-item"><span class="mht-lbl">GAIN</span><span class="mht-v" id="mHtGain">—</span></div>
+        <div class="mht-sep"></div>
+        <div class="mht-item"><span class="mht-lbl">O</span><span class="mht-v" id="mHtO">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">H</span><span class="mht-v up" id="mHtH">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">L</span><span class="mht-v down" id="mHtL">—</span></div>
+        <div class="mht-item"><span class="mht-lbl">C</span><span class="mht-v" id="mHtC">—</span></div>
+        <div class="mht-sep"></div>
+        <div class="mht-item"><span class="mht-lbl">Vol</span><span class="mht-v" id="mHtVol">—</span></div>
+      </div>
+      <div class="m-overlay-vals" id="mOverlayVals">
+        <div class="m-ovl-row" id="mOvlCM" style="color:#00e8a2"><span class="m-ovl-label">CM</span><span id="mOvlCMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlSM" style="color:#4d9fff"><span class="m-ovl-label">SM</span><span id="mOvlSMv">—</span></div>
+        <div class="m-ovl-row" id="mOvlBM" style="color:#ff8c42"><span class="m-ovl-label">BM</span><span id="mOvlBMv">—</span></div>
+      </div>
+      <div id="modalChart"></div>
+    </div>
+
+    <!-- TRANSAKSI SECTION -->
+    <div class="modal-body" id="modalBody">
+      <div>
+        <div class="trx-toolbar">
+          <div class="trx-section-title">Transaksi SM &amp; BM</div>
+          <div class="trx-date-range">
+            <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+            <span class="trx-date-arrow">→</span>
+            <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+          </div>
+        </div>
+        <div class="trx-grid">
+          <div class="trx-box">
+            <div class="trx-box-header sm">
+              Smart Money <span class="trx-count" id="smCount"></span>
+            </div>
+            <div class="trx-table-wrap">
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="smBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+          <div class="trx-box">
+            <div class="trx-box-header bm">
+              Bad Money <span class="trx-count" id="bmCount"></span>
+            </div>
+            <div class="trx-table-wrap">
+            <table class="trx-table">
+              <thead><tr>
+                <th>WAKTU</th><th>PRICE</th><th>GAIN</th><th>MF</th><th>VOLX</th>
+              </tr></thead>
+              <tbody id="bmBody"><tr><td colspan="5" class="trx-loading">Memuat...</td></tr></tbody>
+            </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div><!-- end modal-scroll -->
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────
+let allRows      = [];
+let sortCols     = [{ col: 'clean_money', asc: false }]; // multi-sort
+let filterText   = '';
+let modalChart   = null;
+let modalCandle  = null;
+let modalVolume  = null;
+let modalTF      = '1d';
+let modalTicker  = '';
+let modalIsLog   = false;
+let modalIsAuto  = true;
+const INIT_CANDLES = 150;
+
+// Overlay state
+let ovlSeriesCM = null, ovlSeriesSM = null, ovlSeriesBM = null;
+let ovlShowCM = true, ovlShowSM = false, ovlShowBM = false;
+let overlayDataCache = []; // [{time, sm, bm, cm}]
+let modalPrevCloseMap = {}; // time → prev candle close
+
+// ── Sector filter ────────────────────────────────────────────────────
+const SECTORS = {
+  "Energy": ["ABMM", "MEDC", "SGER", "AKRA", "MTFN", "UNIQ", "APEX", "MYOH", "MCOL", "ARII", "PGAS", "GTSI", "ARTI", "PKPK", "RMKE", "BBRM", "PTBA", "BSML", "BIPI", "PTIS", "ADMR", "BSSR", "PTRO", "SEMA", "BULL", "RAJA", "SICO", "BUMI", "RIGS", "COAL", "BYAN", "RUIS", "SUNI", "CANI", "SMMT", "CBRE", "CNKO", "SMRU", "HILL", "DEWA", "SOCI", "CUAN", "DOID", "BUMA", "SUGI", "MAHA", "DSSA", "TOBA", "RMKO", "ELSA", "TPMA", "HUMI", "ENRG", "TRAM", "RGAS", "GEMS", "WINS", "ALII", "GTBO", "SHIP", "MKAP", "HITS", "TAMU", "ATLA", "HRUM", "FIRE", "BOAT", "IATA", "PSSI", "AADI", "INDY", "DWGL", "RATU", "ITMA", "BOSS", "PSAT", "ITMG", "JSKY", "BESS", "KKGI", "INPS", "CGAS", "KOPI", "TCPI", "ADRO", "LEAD", "SURE", "AIMS", "MBAP", "WOWS", "MBSS", "TEBE"],
+  "Basic Materials": ["AKPI", "MDKA", "ESIP", "ALDO", "NIKL", "IFSH", "ALKA", "OKAS", "IFII", "ALMI", "PICO", "SAMF", "ANTM", "PSAB", "EPAC", "APLI", "SIMA", "BEBS", "BAJA", "SMBR", "NPGF", "BMSR", "SMCB", "ARCI", "BRMS", "SMGR", "NICL", "BRNA", "SPMA", "SBMA", "BRPT", "SQMI", "CMNT", "BTON", "SRSN", "OBMD", "CITA", "SULI", "AVIA", "CLPI", "TALF", "CHEM", "CTBN", "TBMS", "KKES", "DKFT", "TINS", "PDPP", "DPNS", "TIRT", "FWCT", "EKAD", "TKIM", "PACK", "ESSA", "TPIA", "AMMN", "ETWA", "TRST", "PPRI", "FASW", "UNIC", "SMGA", "FPNI", "WTON", "SOLA", "GDST", "YPAS", "BATR", "IGAR", "INCF", "BLES", "INAI", "WSBP", "PTMR", "INCI", "KMTR", "DAAZ", "INCO", "MDKI", "DGWG", "INKP", "ZINC", "MINE", "INRU", "PBID", "ASPR", "INTD", "TDPM", "EMAS", "INTP", "SWAT", "AYLS", "IPOL", "MOLI", "NCKL", "ISSP", "HKMU", "MBMA", "KBRI", "KAYU", "NICE", "KDSI", "SMKL", "SMLE", "KRAS", "GGRP", "ADMG", "LMSH", "OPMS", "AGII", "LTLS", "PURE"],
+  "Industrials": ["AMFG", "KIAS", "ARKA", "AMIN", "KOBX", "SINI", "APII", "KOIN", "HOPE", "ARNA", "KONI", "LABA", "ASGR", "LION", "GPSO", "ASII", "MDRN", "KUAS", "BHIT", "MFMI", "BINO", "BNBR", "MLIA", "NTBK", "CTTH", "SCCO", "PADA", "DYAN", "TIRA", "KING", "HEXA", "TOTO", "PTMP", "IBFN", "TRIL", "SMIL", "ICON", "UNTR", "CRSN", "IKAI", "VOKS", "WIDI", "IKBI", "ZBRA", "FOLK", "IMPC", "MARK", "MUTU", "INDX", "SPTO", "HYGN", "INTA", "SKRN", "VISI", "JECC", "CAKK", "MHKI", "JTPE", "SOSS", "NAIK", "KBLI", "CCSI", "PIPA", "KBLM", "BLUE"],
+  "Consumer Non-Cyclicals": ["AALI", "SIPD", "FLMC", "ADES", "SKBM", "OILS", "AISA", "SKLT", "BOBA", "ALTO", "SMAR", "CMRY", "AMRT", "SSMS", "TAYS", "ANJT", "STTP", "WMPP", "BISI", "TBLA", "IPPE", "BTEK", "TCID", "NASI", "BUDI", "TGKA", "STAA", "BWPT", "ULTJ", "NANO", "CEKA", "UNSP", "TLDN", "CPIN", "UNVR", "IBOS", "CPRO", "WAPO", "ASHA", "DLTA", "WICO", "TRGU", "DSFI", "WIIM", "DEWI", "DSNG", "DAYA", "GULA", "EPMT", "DPUM", "JARR", "FISH", "KINO", "AMMS", "GGRM", "CLEO", "EURO", "GOLL", "HOKI", "BUAH", "GZCO", "CAMP", "CRAB", "HERO", "PCAR", "CBUT", "HMSP", "MGRO", "MKTR", "ICBP", "ANDI", "SOUL", "INDF", "GOOD", "BEER", "JAWA", "FOOD", "WINE", "JPFA", "BEEF", "NAYZ", "LAPD", "COCO", "NSSS", "LSIP", "ITIC", "MAXI", "MAGP", "KEJU", "GRPM", "MAIN", "PSGO", "TGUK", "MBTO", "AGAR", "PTPS", "MIDI", "UCID", "STRK", "MLBI", "CSRA", "UDNG", "MLPL", "DMND", "AYAM", "MPPA", "IKAN", "ISEA", "MRAT", "PGUN", "GUNA", "MYOR", "PNGO", "NEST", "PSDN", "KMDS", "BRRC", "RANC", "ENZO", "RLCO", "ROTI", "VICI", "YUPI", "SDPC", "PMMP", "FORE", "SGRO", "WMUU", "MSJA", "SIMP", "TAPG", "FAPA"],
+  "Consumer Cyclicals": ["ABBA", "PTSP", "SCNP", "ACES", "RALS", "PLAN", "AKKU", "RICY", "SNLK", "ARGO", "SCMA", "LFLO", "ARTA", "SHID", "LUCY", "AUTO", "SMSM", "MGLV", "BATA", "SONA", "IDEA", "BAYU", "SRIL", "DEPO", "BIMA", "SSTM", "DRMA", "BLTZ", "TELE", "ASLC", "BMTR", "TFCO", "NETV", "MDTV", "BOLT", "TMPO", "BAUT", "BRAM", "TRIO", "ENAK", "BUVA", "TRIS", "BIKE", "CINT", "UNIT", "OLIV", "CNTX", "VIVA", "SWID", "CSAP", "JGLE", "RAFI", "ECII", "MARI", "KLIN", "ERAA", "MKNT", "TOOL", "ERTX", "BOGA", "KDTN", "ESTI", "CARS", "ZATA", "FAST", "MINA", "ISAP", "FORU", "MAPB", "BMBL", "GDYR", "WOOD", "FUTR", "GEMA", "HRTA", "HAJJ", "GJTL", "MABA", "TYRE", "GLOB", "BELL", "VKTR", "GWSA", "DFAM", "CNMA", "HOME", "PZZA", "ERAL", "HOTL", "MSIN", "LMAX", "IIKP", "MAPA", "BABY", "IMAS", "NUSA", "AEGS", "INDR", "FILM", "GRPH", "INDS", "DIGI", "UNTD", "JIHD", "DUCK", "MEJA", "JSPT", "YELO", "LIVE", "KICI", "SOTS", "BAIK", "KPIG", "ZONE", "SPRE", "LMPI", "CLAY", "PART", "LPIN", "NATO", "GOLF", "LPPF", "HRME", "DOSS", "MAPI", "FITT", "VERN", "MDIA", "BOLA", "MDIY", "MGNA", "POLU", "MERI", "MICE", "IPTV", "PMUI", "MNCN", "EAST", "KAQI", "MPMX", "KOTA", "ESTA", "MSKY", "INOV", "RAAM", "MYTX", "SLIS", "DOOH", "PANR", "PMJS", "ACRO", "PBRX", "SBAT", "UFOE", "PDES", "CBMF", "PNSE", "PGLI", "CSMI", "POLY", "PJAA", "SOFA", "PSKT", "TOYS"],
+  "Healthcare": ["DVLA", "PRDA", "PEVE", "INAF", "PRIM", "HALO", "KAEF", "HEAL", "RSCH", "KLBF", "PEHA", "IKPM", "MERK", "IRRA", "SURI", "MIKA", "SOHO", "LABS", "PYFA", "BMHS", "OBAT", "SAME", "RSGK", "CHEK", "SCPI", "MTMH", "MDLA", "SIDO", "MEDS", "DKHH", "SILO", "PRAY", "CARE", "SRAJ", "OMED", "DGNS", "TSPC", "MMIX"],
+  "Financials": ["ABDA", "BPFI", "TIFA", "AMAG", "BPII", "TRIM", "APIC", "BSIM", "TRUS", "ARTO", "BSWD", "VICO", "ASBI", "BTPN", "SMBC", "VINS", "ASDM", "BVIC", "VRNA", "ASJT", "CFIN", "WOMF", "ASMI", "DEFI", "YULE", "ASRM", "DNAR", "CASA", "BABP", "DNET", "BRIS", "BACA", "GSMF", "MTWI", "BBCA", "HDFA", "JMAS", "BBHI", "INPC", "NICK", "BBKP", "LPGI", "BTPS", "BBLD", "LPPS", "TUGU", "BBMD", "MAYA", "POLA", "BBNI", "MCOR", "SFAN", "BBRI", "MEGA", "LIFE", "MSIG", "BBTN", "MREI", "FUJI", "BBYB", "NISP", "OCBC", "AMAR", "BCAP", "NOBU", "AMOR", "BCIC", "OCAP", "BHAT", "BDMN", "PADI", "BBSI", "BEKS", "PALM", "BANK", "BFIN", "PANS", "MASB", "BGTG", "PEGE", "VTNY", "BINA", "PLAS", "YOII", "BJBR", "PNBN", "COIN", "BJTM", "PNBS", "SUPA", "BKSW", "PNIN", "ADMF", "BMAS", "PNLF", "AGRO", "BMRI", "RELI", "AGRS", "BNBA", "SDRA", "AHAP", "BNGA", "CIMB", "SMMA", "POOL", "BNII", "SRTG", "BNLI", "STAR"],
+  "Property": ["APLN", "MMLP", "NZIA", "ASRI", "MTLA", "REAL", "BAPA", "MTSM", "INDO", "BCIP", "NIRO", "TRIN", "BEST", "OMRE", "KBAG", "BIKA", "PLIN", "BBSS", "BIPP", "PUDP", "UANG", "BKDP", "PWON", "PURI", "BKSL", "RBMS", "HOMI", "BSDE", "RDTX", "ROCK", "COWL", "RIMO", "ATAP", "CTRA", "RODA", "ADCP", "DART", "SMDM", "TRUE", "DILD", "SMRA", "IPAC", "DMAS", "TARA", "WINR", "DUTI", "CSIS", "BSBK", "ELTY", "ARMY", "CBPE", "EMDE", "NASA", "VAST", "FMII", "RISE", "SAGE", "GAMA", "POLL", "RELF", "GMTD", "LAND", "HBAT", "GPRA", "PANI", "GRIA", "INPP", "CITY", "MSIE", "JRPT", "MPRO", "KOCI", "KIJA", "SATU", "KSIX", "LCGP", "URBN", "CBDK", "LPCK", "POLI", "DADA", "LPKR", "CPRI", "ASPI", "LPLI", "POSA", "AMAN", "MDLN", "PAMG", "PPRO", "MKPI", "BAPI"],
+  "Technology": ["ATIC", "DMMX", "ELIT", "EMTK", "GLVA", "IRSX", "KREN", "PGJO", "CHIP", "LMAS", "CASH", "TRON", "MLPT", "TECH", "JATI", "MTDL", "EDGE", "CYBR", "PTSN", "ZYRX", "IOTF", "SKYB", "UVCR", "MSTI", "KIOS", "BUKA", "TOSK", "MCAS", "RUNS", "MPIX", "NFCX", "WGSH", "AREA", "DIVA", "WIRG", "ASIA", "MENN", "LUCK", "GOTO", "AWAN", "ENVY", "AXIO", "WIFI", "HDIT", "BELI", "DCII", "TFAS", "NINE"],
+  "Infrastructure": ["ACST", "TBIG", "JAST", "ADHI", "TLKM", "KEEN", "BALI", "TOTL", "PTPW", "BTEL", "TOWR", "TAMA", "BUKK", "WIKA", "RONY", "CASS", "WSKT", "PTDU", "CENT", "IDPR", "FIMP", "CMNP", "MTRA", "MTEL", "DGIK", "OASA", "SMKM", "EXCL", "POWR", "ARKO", "GOLD", "PBSA", "KRYA", "HADE", "PORT", "PGEO", "IBST", "TGRA", "BDKR", "ISAT", "TOPS", "INET", "JKON", "MPOW", "BREN", "JSMR", "GMFI", "KOKA", "KARW", "PPRE", "ASLI", "KBLV", "WEGE", "LINK", "MORA", "HGII", "META", "IPCM", "CDIA", "NRCA", "LCKM", "MANG", "PTPP", "GHON", "KETR", "SSIA", "IPCC", "SUPR", "MTPS"],
+  "Transport": ["AKSI", "SMDR", "PPGL", "ASSA", "TAXI", "TRJA", "BIRD", "TMAS", "HAIS", "BLTA", "WEHA", "HATM", "CMPP", "HELI", "RCCC", "GIAA", "TRUK", "ELPI", "IMJS", "TNCA", "LAJU", "LRNA", "BPTR", "GTRA", "MIRA", "SAPX", "MPXL", "MITI", "DEAL", "KLAS", "NELY", "JAYA", "LOPI", "SAFE", "KJEN", "BLOG", "SDMU", "PURA", "PJHB"],
+};
+const _urlParams = new URLSearchParams(location.search);
+const activeSector = _urlParams.get('sector');
+let sectorTickers = null; // Set of allowed tickers when sector filter active
+if (activeSector && SECTORS[activeSector]) {
+  sectorTickers = new Set(SECTORS[activeSector]);
+  document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('sectorBackWrap').style.display = '';
+    document.getElementById('sectorBadgeWrap').style.display = '';
+    document.getElementById('sectorBadgeName').textContent = activeSector;
+  });
+}
+
+// ── Date helpers ──────────────────────────────────────────────────────
+// Input/display: DD/MM/YYYY
+// API: DD-MM-YYYY
+
+function displayToApi(ddslashmmslashyyyy) {
+  // DD/MM/YYYY → DD-MM-YYYY
+  return ddslashmmslashyyyy.replace(/\//g, '-');
+}
+function todayDDMMYYYY() {
+  // Pakai WIB (UTC+7)
+  const now = new Date(Date.now() + 7 * 3600 * 1000);
+  const d   = String(now.getUTCDate()).padStart(2, '0');
+  const m   = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const y   = now.getUTCFullYear();
+  return `${d}/${m}/${y}`;
+}
+function isValidDate(s) {
+  // Validasi DD/MM/YYYY
+  if (!/^\d{2}\/\d{2}\/\d{4}$/.test(s)) return false;
+  const [d, m, y] = s.split('/').map(Number);
+  const dt = new Date(y, m - 1, d);
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d;
+}
+function autoFormatDate(input) {
+  // Auto-insert slash saat mengetik
+  let v = input.value.replace(/\D/g, '');
+  if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  if (v.length >= 6) v = v.slice(0,5) + '/' + v.slice(5);
+  input.value = v.slice(0, 10);
+}
+
+// ── Init dates & Pikaday ─────────────────────────────────────────────
+let pickerFrom, pickerTo;
+let trxPickerFrom, trxPickerTo;
+
+window.addEventListener('DOMContentLoaded', async () => {
+  // Ambil tanggal terakhir yang ada data di DB
+  let initDateStr = todayDDMMYYYY();
+  try {
+    const res = await fetch('/api/last-date');
+    const d   = await res.json();
+    if (d.date) initDateStr = d.date; // DD/MM/YYYY
+  } catch (_) {}
+
+  const [dd, mm, yyyy] = initDateStr.split('/').map(Number);
+  const initDate = new Date(yyyy, mm - 1, dd);
+
+  const pikadayOpts = {
+    format:     'DD/MM/YYYY',
+    toString:   date => {
+      const d = String(date.getDate()).padStart(2,'0');
+      const m = String(date.getMonth()+1).padStart(2,'0');
+      return `${d}/${m}/${date.getFullYear()}`;
+    },
+    parse: str => {
+      const [d,m,y] = str.split('/').map(Number);
+      return new Date(y, m-1, d);
+    },
+    i18n: {
+      previousMonth: '‹', nextMonth: '›',
+      months: ['Januari','Februari','Maret','April','Mei','Juni',
+               'Juli','Agustus','September','Oktober','November','Desember'],
+      weekdays: ['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],
+      weekdaysShort: ['Min','Sen','Sel','Rab','Kam','Jum','Sab'],
+    },
+    maxDate: new Date(),
+  };
+
+  pickerFrom = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('dateFrom'),
+    defaultDate: initDate,
+    setDefaultDate: true,
+    onSelect: date => {
+      if (pickerTo && date > pickerTo.getDate()) {
+        pickerTo.setDate(date);
+      }
+      loadFlow();
+    },
+  });
+
+  pickerTo = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('dateTo'),
+    defaultDate: initDate,
+    setDefaultDate: true,
+    onSelect: () => loadFlow(),
+  });
+
+  // ── Modal transaction date pickers ──
+  trxPickerFrom = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('trxDateFrom'),
+    defaultDate: initDate,
+    setDefaultDate: true,
+    container:   document.getElementById('modalBox'),
+    onSelect: date => {
+      if (trxPickerTo && date > trxPickerTo.getDate()) {
+        trxPickerTo.setDate(date);
+      }
+      loadTransactions();
+    },
+  });
+
+  trxPickerTo = new Pikaday({
+    ...pikadayOpts,
+    field:       document.getElementById('trxDateTo'),
+    defaultDate: initDate,
+    setDefaultDate: true,
+    container:   document.getElementById('modalBox'),
+    onSelect: () => loadTransactions(),
+  });
+
+  // date mask for trx inputs
+  document.querySelectorAll('.trx-date-input').forEach(el => {
+    el.addEventListener('input', () => autoFormatDate(el));
+  });
+
+  loadFlow();
+
+  // Load IHSG
+  fetch('/api/ihsg').then(r => r.json()).then(d => {
+    const el = document.getElementById('sIHSG');
+    if (d.price) {
+      const priceStr = d.price.toLocaleString('id-ID', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      const gainStr = (d.gain_pct !== null && d.gain_pct !== undefined)
+        ? ` (${d.gain_pct > 0 ? '+' : ''}${d.gain_pct.toFixed(2)}%)`
+        : '';
+      el.textContent = priceStr + gainStr;
+      if (d.gain_pct !== null) {
+        el.style.color = d.gain_pct >= 0 ? 'var(--up)' : 'var(--down)';
+      }
+    }
+  }).catch(() => {});
+
+  document.getElementById('tickerFilter').addEventListener('input', e => {
+    filterText = e.target.value.trim().toUpperCase();
+    renderTable();
+  });
+});
+
+// ── Load flow data ────────────────────────────────────────────────────
+async function loadFlow() {
+  const df = document.getElementById('dateFrom').value.trim();
+  const dt = document.getElementById('dateTo').value.trim();
+
+  if (!isValidDate(df) || !isValidDate(dt)) {
+    showError('Format tanggal salah. Gunakan DD/MM/YYYY');
+    return;
+  }
+
+  showLoading();
+  try {
+    let url = `/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&skip_gains=1`;
+    if (activeSector) url += `&sector=${encodeURIComponent(activeSector)}`;
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    allRows = data.tickers || [];
+    updateStats(data.totals || {});
+    renderTable();
+    // Async: fetch gains separately then update table
+    loadGainsAsync(displayToApi(df), displayToApi(dt));
+  } catch (e) {
+    showError(e.message);
+  }
+}
+
+async function loadGainsAsync(dateFrom, dateTo) {
+  if (!allRows.length) return;
+  const tickers = allRows.map(r => r.ticker).join(',');
+  try {
+    const res = await fetch(`/api/gains?tickers=${encodeURIComponent(tickers)}&date_from=${dateFrom}&date_to=${dateTo}`);
+    const gains = await res.json();
+    if (gains.error) return;
+    for (const r of allRows) {
+      const g = gains[r.ticker];
+      if (g) {
+        r.gain_pct = g.gain;
+        if (g.price !== null && g.price !== undefined) r.price = g.price;
+      }
+    }
+    renderTable(); // re-render with gains filled in
+  } catch (_) {}
+}
+
+// ── Stats bar ─────────────────────────────────────────────────────────
+function fmtM(v){if(v===null||v===undefined)return'—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1000)return s+(a/1000).toFixed(1)+'B';if(a>=1)return s+a.toFixed(1)+'M';if(a>0)return s+(a*1000).toFixed(0)+'K';return'0'}
+function updateStats(t) {
+  const setV = (id, v, cls) => {
+    const el = document.getElementById(id);
+    el.textContent = (v !== null && v !== undefined) ? fmtM(v) : '—';
+    el.className = 's-val ' + (cls || (v !== null && v >= 0 ? 'up' : 'down'));
+  };
+  const set = (id, v, cls) => {
+    const el = document.getElementById(id);
+    el.textContent = fmtM(v);
+    el.className = 's-val ' + (cls || (v >= 0 ? 'up' : 'down'));
+  };
+  set('sSM',  t.sm,     'neutral');
+  set('sBM',  t.bm,     'bm');
+  setV('sMFP', t.mf_plus,  'up');
+  setV('sMFM', t.mf_minus, 'down');
+  set('sNCM', t.net_cm);
+  setV('sNMF', t.net_mf);
+  document.getElementById('sCount').textContent = t.count || '—';
+}
+
+// ── Sort ──────────────────────────────────────────────────────────────
+// Klik biasa   → primary sort (reset semua sort lain)
+// Shift+klik   → tambah/toggle kolom sort sekunder
+function sortBy(col, event) {
+  if (event) event.stopPropagation();
+  const shift = event && event.shiftKey;
+
+  if (shift) {
+    // Shift+klik: tambah/toggle kolom sort sekunder
+    const idx = sortCols.findIndex(s => s.col === col);
+    if (idx >= 0) {
+      sortCols[idx].asc = !sortCols[idx].asc;
+    } else {
+      sortCols.push({ col, asc: col === 'ticker' });
+    }
+  } else {
+    // Klik biasa: primary sort
+    const idx = sortCols.findIndex(s => s.col === col);
+    if (idx === 0 && sortCols.length === 1) {
+      sortCols[0].asc = !sortCols[0].asc;
+    } else {
+      sortCols.length = 0;
+      sortCols.push({ col, asc: col === 'ticker' });
+    }
+  }
+
+  // Update header icons
+  document.querySelectorAll('thead th[data-col]').forEach(th => {
+    const c  = th.dataset.col;
+    const si = th.querySelector('.sort-icon');
+    const i  = sortCols.findIndex(s => s.col === c);
+    th.classList.toggle('sorted', i >= 0);
+    if (i >= 0) {
+      si.textContent = (sortCols[i].asc ? '▲' : '▼') + (sortCols.length > 1 ? (i+1) : '');
+    } else {
+      si.textContent = '';
+    }
+  });
+
+  renderTable();
+}
+
+// ── Render table ──────────────────────────────────────────────────────
+function renderTable() {
+  let rows = allRows.filter(r =>
+    !filterText || r.ticker.includes(filterText)
+  );
+  // Sector filter
+  if (sectorTickers) rows = rows.filter(r => sectorTickers.has(r.ticker));
+
+  // Multi-sort
+  rows.sort((a, b) => {
+    for (const { col, asc } of sortCols) {
+      let av = a[col], bv = b[col];
+      if (av === null || av === undefined) av = asc ? Infinity : -Infinity;
+      if (bv === null || bv === undefined) bv = asc ? Infinity : -Infinity;
+      let cmp;
+      if (typeof av === 'string') cmp = asc ? av.localeCompare(bv) : bv.localeCompare(av);
+      else cmp = asc ? av - bv : bv - av;
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
+
+  document.getElementById('rowCount').textContent = `${rows.length} ticker`;
+
+  const maxCM = Math.max(...rows.map(r => Math.abs(r.clean_money || 0)), 1);
+
+  const tbody = document.getElementById('flowBody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr class="state-row"><td colspan="11">Tidak ada data untuk tanggal ini</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map((r, i) => {
+    const cm = r.clean_money || 0;
+    const barPct  = Math.min(Math.abs(cm) / maxCM * 48, 48);
+    const barPos  = cm >= 0;
+    const barStyle = barPos
+      ? `left:50%; width:${barPct}%;`
+      : `right:50%; width:${barPct}%;`;
+
+    const rsmColor = rsmToColor(r.rsm || 0);
+    const gainCls  = r.gain_pct === null ? 'zero' : r.gain_pct > 0 ? 'pos' : r.gain_pct < 0 ? 'neg' : 'zero';
+    const gainStr  = r.gain_pct === null ? '—' : (r.gain_pct > 0 ? '+' : '') + r.gain_pct.toFixed(2) + '%';
+    const rsmStr   = r.rsm !== null && r.rsm !== undefined ? r.rsm.toFixed(1) + '%' : '—';
+
+    return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
+      <td><span class="td-ticker">${r.ticker}</span></td>
+      <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
+      <td><span class="td-num" style="color:var(--muted)">${r.tx ? r.tx.toLocaleString('id-ID') : '—'}</span></td>
+      <td class="cm-cell">
+        <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
+        <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
+      </td>
+      <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
+      <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
+      <td><span class="rsm-val" style="color:${rsmColor}">${rsmStr}</span></td>
+      <td><span class="td-num mfp">${r.mf_plus  !== null ? fmtM(r.mf_plus)  : '—'}</span></td>
+      <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
+      <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? fmtM(r.net_mf) : '—'}</span></td>
+      <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function rsmToColor(rsm) {
+  // 0% = merah, 50% = kuning, 100% = hijau
+  if (rsm >= 70) return '#00e8a2';
+  if (rsm >= 50) return `hsl(${(rsm - 50) * 3.6 + 50}, 80%, 55%)`;
+  if (rsm >= 30) return `hsl(${rsm * 1.2}, 80%, 55%)`;
+  return '#ff4d6a';
+}
+
+function showLoading() {
+  document.getElementById('flowBody').innerHTML =
+    `<tr class="state-row"><td colspan="11"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+}
+function showError(msg) {
+  document.getElementById('flowBody').innerHTML =
+    `<tr class="state-row"><td colspan="11">⚠ ${msg}</td></tr>`;
+}
+
+// ── MODAL ─────────────────────────────────────────────────────────────
+function openModal(ticker) {
+  modalTicker = ticker;
+  modalTF     = '1d';
+  modalIsLog  = false;
+  modalIsAuto = true;
+  document.getElementById('mBtnLog').classList.remove('active');
+  document.getElementById('mBtnAuto').classList.add('active');
+  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tf === '1d')
+  );
+  document.getElementById('mTicker').textContent = ticker;
+  document.getElementById('mName').textContent   = '—';
+  // Sync overlay buttons
+  document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+  document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+  document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+  // Sync trx date pickers from main toolbar
+  const mainFrom = document.getElementById('dateFrom').value;
+  const mainTo   = document.getElementById('dateTo').value;
+  document.getElementById('trxDateFrom').value = mainFrom;
+  document.getElementById('trxDateTo').value   = mainTo;
+  if (trxPickerFrom && mainFrom) {
+    const [d,m,y] = mainFrom.split('/').map(Number);
+    trxPickerFrom.setDate(new Date(y, m-1, d), true);
+  }
+  if (trxPickerTo && mainTo) {
+    const [d,m,y] = mainTo.split('/').map(Number);
+    trxPickerTo.setDate(new Date(y, m-1, d), true);
+  }
+  document.getElementById('modalBackdrop').classList.add('open');
+  // Defer agar modal selesai render dulu, baru init chart
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      initModalChart();
+      loadModalChart();
+      loadTransactions();
+    });
+  });
+}
+function closeModal() {
+  document.getElementById('modalBackdrop').classList.remove('open');
+  if (window._modalChartRO) { window._modalChartRO.disconnect(); window._modalChartRO = null; }
+  if (modalChart) { modalChart.remove(); modalChart = null; modalCandle = null; modalVolume = null; }
+  ovlSeriesCM = null; ovlSeriesSM = null; ovlSeriesBM = null;
+  overlayDataCache = [];
+}
+function handleBackdropClick(e) {
+  if (e.target === document.getElementById('modalBackdrop')) closeModal();
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+function initModalChart() {
+  if (modalChart) { modalChart.remove(); modalChart = null; }
+  const container = document.getElementById('modalChart');
+  const rect = container.getBoundingClientRect();
+  modalChart = LightweightCharts.createChart(container, {
+    width: Math.floor(rect.width),
+    height: Math.floor(rect.height),
+    layout: { background: { color: '#0e1318' }, textColor: '#4a6070' },
+    grid:   { vertLines: { color: '#1a2230' }, horzLines: { color: '#1a2230' } },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+      horzLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+    },
+    rightPriceScale: { borderColor: '#1a2230' },
+    timeScale: {
+      borderColor: '#1a2230', timeVisible: true, secondsVisible: false,
+      tickMarkFormatter: t => {
+        const d = new Date(t * 1000);
+        const h = String(d.getUTCHours()).padStart(2,'0');
+        const m = String(d.getUTCMinutes()).padStart(2,'0');
+        const day = d.getUTCDate();
+        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+        return modalTF === '1d' ? `${day} ${mon}` : `${h}:${m}`;
+      },
+    },
+    localization: { priceFormatter: p => Math.round(p).toLocaleString('id-ID') },
+  });
+
+  modalCandle = modalChart.addCandlestickSeries({
+    upColor: '#00e8a2', downColor: '#ff4d6a',
+    borderUpColor: '#00e8a2', borderDownColor: '#ff4d6a',
+    wickUpColor:   '#00e8a2', wickDownColor:   '#ff4d6a',
+  });
+  modalVolume = modalChart.addHistogramSeries({
+    color: '#1a2230', priceFormat: { type: 'volume' },
+    priceScaleId: 'vol', scaleMargins: { top: 0.85, bottom: 0 },
+  });
+  modalChart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+
+  // Apply auto scale default
+  modalChart.priceScale('right').applyOptions({ autoScale: true, scaleMargins: { top: 0.1, bottom: 0.2 } });
+
+  // ── Overlay line series (separate scale) ──
+  modalChart.priceScale('overlay').applyOptions({
+    scaleMargins: { top: 0.05, bottom: 0.2 },
+    visible: false,        // hide overlay Y axis
+    autoScale: true,
+  });
+
+  ovlSeriesCM = modalChart.addLineSeries({
+    color: '#00e8a2', lineWidth: 2, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 4,
+  });
+  ovlSeriesSM = modalChart.addLineSeries({
+    color: '#4d9fff', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+  ovlSeriesBM = modalChart.addLineSeries({
+    color: '#ff8c42', lineWidth: 1.5, lineStyle: 0, priceScaleId: 'overlay',
+    lastValueVisible: false, priceLineVisible: false,
+    crosshairMarkerRadius: 3,
+  });
+
+  // Apply initial visibility
+  ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+
+  // Update overlay value panel visibility
+  updateOvlValVisibility();
+
+  // Hover tooltip
+  modalChart.subscribeCrosshairMove(param => {
+    const tt = document.getElementById('mHoverTooltip');
+    if (!param.time || !param.seriesData) { tt.classList.remove('visible'); return; }
+    const bar = param.seriesData.get(modalCandle);
+    if (!bar) { tt.classList.remove('visible'); return; }
+    const fmt = v => Math.round(v).toLocaleString('id-ID');
+    const fmtV = v => {
+      if (!v) return '—';
+      if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+      if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+      if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+      return String(v);
+    };
+    const d = new Date(param.time * 1000);
+    // Gain% vs prev candle close (Yahoo-style)
+    const prevClose = modalPrevCloseMap[param.time] || bar.open;
+    const gainPct = prevClose > 0 ? ((bar.close - prevClose) / prevClose * 100) : 0;
+    const gainEl = document.getElementById('mHtGain');
+    gainEl.textContent = (gainPct > 0 ? '+' : '') + gainPct.toFixed(2) + '%';
+    gainEl.className = 'mht-v ' + (gainPct >= 0 ? 'up' : 'down');
+    document.getElementById('mHtO').textContent    = fmt(bar.open);
+    document.getElementById('mHtH').textContent    = fmt(bar.high);
+    document.getElementById('mHtL').textContent    = fmt(bar.low);
+    const cEl = document.getElementById('mHtC');
+    cEl.textContent = fmt(bar.close);
+    cEl.className   = 'mht-v ' + (bar.close >= bar.open ? 'up' : 'down');
+    const vb = param.seriesData.get(modalVolume);
+    document.getElementById('mHtVol').textContent = vb ? fmtV(vb.value) : '—';
+    tt.classList.add('visible');
+
+    // Overlay values — find matching overlay point for this candle time
+    const fmtMf = v => {
+      if (v === null || v === undefined) return '—';
+      const sign = v > 0 ? '+' : '';
+      const a = Math.abs(v);
+      if (a >= 1000) return sign + (v/1000).toFixed(1) + 'B';
+      if (a >= 1) return sign + v.toFixed(1) + 'M';
+      if (a > 0) return sign + (v*1000).toFixed(0) + 'K';
+      return '0';
+    };
+    const ovlPoint = overlayDataCache.find(p => p.time === param.time);
+    document.getElementById('mOvlCMv').textContent = ovlPoint ? fmtMf(ovlPoint.cm) : '—';
+    document.getElementById('mOvlSMv').textContent = ovlPoint ? fmtMf(ovlPoint.sm) : '—';
+    document.getElementById('mOvlBMv').textContent = ovlPoint ? fmtMf(ovlPoint.bm) : '—';
+    document.getElementById('mOvlCM').classList.toggle('visible', ovlShowCM && !!ovlPoint);
+    document.getElementById('mOvlSM').classList.toggle('visible', ovlShowSM && !!ovlPoint);
+    document.getElementById('mOvlBM').classList.toggle('visible', ovlShowBM && !!ovlPoint);
+  });
+
+  // ResizeObserver — handle resize tanpa autoSize
+  if (window._modalChartRO) window._modalChartRO.disconnect();
+  window._modalChartRO = new ResizeObserver(entries => {
+    for (const e of entries) {
+      if (modalChart) {
+        modalChart.applyOptions({
+          width: Math.floor(e.contentRect.width),
+          height: Math.floor(e.contentRect.height),
+        });
+      }
+    }
+  });
+  window._modalChartRO.observe(container);
+}
+
+async function loadModalChart() {
+  if (!modalChart || !modalCandle) return;
+  try {
+    const res  = await fetch(`/api/ohlcv?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error) return;
+    const candles = data.candles || [];
+    if (!candles.length) return;
+    // Build prev close map for gain% calculation (Yahoo-style: vs prev candle close)
+    modalPrevCloseMap = {};
+    for (let i = 0; i < candles.length; i++) {
+      modalPrevCloseMap[candles[i].time] = i > 0 ? candles[i - 1].close : candles[i].open;
+    }
+    modalCandle.setData(candles);
+    modalVolume.setData(candles.map(c => ({
+      time: c.time, value: c.volume,
+      color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
+    })));
+    // Double rAF ensures chart has processed new data before setting range
+    requestAnimationFrame(() => { requestAnimationFrame(() => {
+      if (candles.length > INIT_CANDLES) {
+        modalChart.timeScale().setVisibleLogicalRange({
+          from: candles.length - INIT_CANDLES,
+          to:   candles.length - 1,
+        });
+      } else {
+        modalChart.timeScale().fitContent();
+      }
+    }); });
+    if (data.name) document.getElementById('mName').textContent = data.name;
+    // Load overlay data after candles
+    loadOverlayData(candles);
+  } catch (_) {}
+}
+
+async function loadOverlayData(candles) {
+  if (!modalChart || !ovlSeriesCM) return;
+  try {
+    const res  = await fetch(`/api/overlay?ticker=${modalTicker}&tf=${modalTF}`);
+    const data = await res.json();
+    if (data.error || !data.points || !data.points.length) {
+      overlayDataCache = [];
+      ovlSeriesCM.setData([]);
+      ovlSeriesSM.setData([]);
+      ovlSeriesBM.setData([]);
+      return;
+    }
+
+    const candleArr = candles.map(c => c.time).sort((a,b) => a - b);
+    const candleTimes = new Set(candleArr);
+
+    // Snap overlay point to nearest candle time
+    function snapTime(t) {
+      if (candleTimes.has(t)) return t;
+      let best = null, bestDist = Infinity;
+      for (const ct of candleArr) {
+        const dist = Math.abs(ct - t);
+        if (dist < bestDist) { bestDist = dist; best = ct; }
+        if (ct > t) break;
+      }
+      return best;
+    }
+
+    // Build overlay map: snapped candle time → overlay point
+    const ovlMap = {};
+    for (const p of data.points) {
+      const st = snapTime(p.time);
+      if (st && !ovlMap[st]) ovlMap[st] = p;
+    }
+
+    // Fill ALL candle times with carry-forward cumulative
+    const cmData = [], smData = [], bmData = [];
+    overlayDataCache = [];
+    let lastCum = { cm: 0, sm: 0, bm: 0 };
+
+    for (const ct of candleArr) {
+      // Detect new day for intraday (overnight gap > 8h)
+      const ovl = ovlMap[ct];
+      if (ovl) {
+        lastCum = { cm: ovl.cum_cm, sm: ovl.cum_sm, bm: ovl.cum_bm };
+        overlayDataCache.push({ time: ct, cm: ovl.cm, sm: ovl.sm, bm: ovl.bm });
+      } else {
+        overlayDataCache.push({ time: ct, cm: 0, sm: 0, bm: 0 });
+      }
+
+      cmData.push({ time: ct, value: lastCum.cm });
+      smData.push({ time: ct, value: lastCum.sm });
+      bmData.push({ time: ct, value: lastCum.bm });
+    }
+
+    ovlSeriesCM.setData(cmData);
+    ovlSeriesSM.setData(smData);
+    ovlSeriesBM.setData(bmData);
+  } catch (_) {
+    overlayDataCache = [];
+  }
+}
+
+function toggleOverlay(which) {
+  if (which === 'cm') {
+    ovlShowCM = !ovlShowCM;
+    document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
+    if (ovlSeriesCM) ovlSeriesCM.applyOptions({ visible: ovlShowCM });
+  } else if (which === 'sm') {
+    ovlShowSM = !ovlShowSM;
+    document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
+    if (ovlSeriesSM) ovlSeriesSM.applyOptions({ visible: ovlShowSM });
+  } else if (which === 'bm') {
+    ovlShowBM = !ovlShowBM;
+    document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+    if (ovlSeriesBM) ovlSeriesBM.applyOptions({ visible: ovlShowBM });
+  }
+  updateOvlValVisibility();
+}
+
+function updateOvlValVisibility() {
+  document.getElementById('mOvlCM').style.display = ovlShowCM ? '' : 'none';
+  document.getElementById('mOvlSM').style.display = ovlShowSM ? '' : 'none';
+  document.getElementById('mOvlBM').style.display = ovlShowBM ? '' : 'none';
+}
+
+
+async function loadTransactions() {
+  const df = document.getElementById('trxDateFrom').value.trim();
+  const dt = document.getElementById('trxDateTo').value.trim();
+  if (!df || !dt) return;
+  const url = `/api/transactions?ticker=${modalTicker}&date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}`;
+
+  const fmtGain = g => {
+    if (g === null || g === undefined) return '—';
+    const cls = g > 0 ? 'trx-gain-pos' : g < 0 ? 'trx-gain-neg' : '';
+    return `<span class="${cls}">${g > 0 ? '+' : ''}${g.toFixed(2)}%</span>`;
+  };
+
+  const buildRows = (rows, mfCls) => {
+    if (!rows.length) return `<tr><td colspan="5" class="trx-empty">Tidak ada data</td></tr>`;
+    return rows.map(r => `<tr>
+      <td>${r.time}</td>
+      <td>${r.price ? r.price.toLocaleString('id-ID') : '—'}</td>
+      <td>${fmtGain(r.gain_pct)}</td>
+      <td><span class="${mfCls}">${fmtM(r.mf_num)}</span></td>
+      <td>${r.vol_x ? r.vol_x.toFixed(1) + 'x' : '—'}</td>
+    </tr>`).join('');
+  };
+
+  try {
+    const res  = await fetch(url);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    document.getElementById('smCount').textContent = `(${data.sm_count}TX)`;
+    document.getElementById('bmCount').textContent = `(${data.bm_count}TX)`;
+    document.getElementById('smBody').innerHTML = buildRows(data.sm, 'trx-mf-sm');
+    document.getElementById('bmBody').innerHTML = buildRows(data.bm, 'trx-mf-bm');
+  } catch (e) {
+    const err = `<tr><td colspan="5" class="trx-empty">⚠ ${e.message}</td></tr>`;
+    document.getElementById('smBody').innerHTML = err;
+    document.getElementById('bmBody').innerHTML = err;
+  }
+}
+
+function setModalTF(tf) {
+  modalTF = tf;
+  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
+    b.classList.toggle('active', b.dataset.tf === tf)
+  );
+  initModalChart();
+  loadModalChart();
+}
+function modalToggleLog() {
+  if (!modalChart) return;
+  modalIsLog = !modalIsLog;
+  modalChart.priceScale('right').applyOptions({ mode: modalIsLog ? 1 : 0 });
+  document.getElementById('mBtnLog').classList.toggle('active', modalIsLog);
+}
+
+function modalToggleAuto() {
+  if (!modalChart) return;
+  modalIsAuto = !modalIsAuto;
+  modalChart.priceScale('right').applyOptions({
+    autoScale: modalIsAuto,
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  });
+  modalChart.applyOptions({
+    handleScale: {
+      axisPressedMouseMove: {
+        price: !modalIsAuto,
+        time: true,
+      },
+    },
+  });
+  document.getElementById('mBtnAuto').classList.toggle('active', modalIsAuto);
+}
+
+// ── Escape tutup modal ────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+
+const INFO_CONTENT=`
+<div class="info-section">
+  <div class="info-section-title">Glossary Kolom Dashboard</div>
+  <div class="info-glossary">
+    <div class="info-term"><div class="info-term-label sm">SM VAL — Smart Money</div><div class="info-term-desc">Total dana besar yang masuk ke saham dari pemain institusional, fund manager, atau bandar besar. Semakin besar = potensi akumulasi.</div></div>
+    <div class="info-term"><div class="info-term-label bm">BM VAL — Bad Money</div><div class="info-term-desc">Total dana besar yang keluar dari saham. Dominan Bad Money = distribusi / penjualan besar. Perlu waspada.</div></div>
+    <div class="info-term"><div class="info-term-label cm">CM — Clean Money</div><div class="info-term-desc">SM Val − BM Val. Positif besar = dana masuk dominan. Negatif = distribusi lebih dominan dari akumulasi.</div></div>
+    <div class="info-term"><div class="info-term-label muted">RSM — Rasio Smart Money</div><div class="info-term-desc">SM / (SM + BM) × 100%. Makin tinggi = makin dominan Smart Money. Di atas 70% = sinyal kuat akumulasi.</div></div>
+    <div class="info-term"><div class="info-term-label cm">MF+ — Money Flow Plus</div><div class="info-term-desc">Akumulasi Money Flow positif dari sub-channel MF. Mengukur tekanan beli agregat di pasar.</div></div>
+    <div class="info-term"><div class="info-term-label bm">MF− — Money Flow Minus</div><div class="info-term-desc">Akumulasi Money Flow negatif. Mengukur tekanan jual agregat. Bandingkan dengan MF+ untuk lihat dominasi.</div></div>
+    <div class="info-term"><div class="info-term-label muted">NET MF</div><div class="info-term-desc">MF+ dikurangi MF−. Positif = tekanan beli lebih dominan. Negatif = tekanan jual lebih dominan.</div></div>
+    <div class="info-term"><div class="info-term-label muted">TX — Jumlah Transaksi</div><div class="info-term-desc">Total akumulasi frekuensi trigger Smart/Bad Money yang muncul. Makin banyak TX = aktivitas lebih konsisten dan signifikan.</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Memahami Smart Money</div>
+  <div class="info-p">Smart Money adalah aktivitas transaksi dari pemain besar di pasar saham: institusi, fund manager, market maker, dan bandar besar. Mereka memiliki modal besar dan biasanya membeli saham secara bertahap agar tidak langsung menggerakkan harga — proses ini disebut <strong>akumulasi</strong>.</div>
+  <div class="info-highlight">Clean Money = Smart Money − Bad Money<br>Positif → dana masuk lebih dominan<br>Negatif → distribusi lebih dominan</div>
+  <div class="info-p">Trigger Smart Money dibuat untuk membantu trader mendeteksi aktivitas ini lebih awal sebelum harga bergerak signifikan.</div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Skenario Pembacaan</div>
+  <div class="info-scenarios">
+    <div class="info-scenario"><div class="info-scenario-title">📈 SKENARIO 1 — Akumulasi Awal</div><div class="info-scenario-desc">SM muncul, Clean Money positif, harga belum naik jauh, volume mulai meningkat. Makna: Bandar sedang mengumpulkan saham secara diam-diam. Strategi: masukkan ke watchlist atau entry bertahap.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🔁 SKENARIO 2 — Akumulasi Berulang</div><div class="info-scenario-desc">SM muncul berkali-kali dalam satu hari (TX tinggi). Makna: terjadi akumulasi bertahap oleh pemain besar. Semakin sering muncul = semakin signifikan.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🚀 SKENARIO 3 — Breakout Momentum</div><div class="info-scenario-desc">SM sangat besar, volume 5–10× rata-rata, harga menembus resistance. Makna: pemain besar mulai mendorong harga naik. Strategi: momentum buy.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">⚠️ SKENARIO 4 — Distribusi</div><div class="info-scenario-desc">Bad Money dominan, Clean Money negatif, volume tinggi, harga mulai turun. Makna: bandar mulai menjual saham ke pasar. Strategi: hindari entry atau lakukan take profit.</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Smart Money Asli vs False Signal</div>
+  <div class="info-glossary">
+    <div class="info-term"><div class="info-term-label cm">✅ Smart Money Asli</div><div class="info-term-desc">Muncul berulang (TX tinggi) · Clean Money positif · Volume meningkat konsisten · Harga tidak langsung turun setelah trigger</div></div>
+    <div class="info-term"><div class="info-term-label bm">⚠️ Fake Smart Money</div><div class="info-term-desc">Hanya muncul sekali (TX rendah) · Volume tidak stabil · Harga langsung turun setelah trigger · Clean Money kecil atau negatif</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Kesalahan Umum Trader</div>
+  <div class="info-highlight danger">❌ Langsung buy saat trigger pertama muncul tanpa konfirmasi<br>❌ Tidak melihat Clean Money — hanya fokus ke SM saja<br>❌ Tidak memperhatikan volume dan arah harga<br>❌ Mengabaikan TX — satu trigger tidak cukup untuk konfirmasi</div>
+  <div class="info-p">Smart Money sebaiknya dijadikan alat <strong>konfirmasi</strong>, bukan satu-satunya indikator. Gunakan bersama: Support/Resistance, Volume, Trend harga, dan Breakout level.</div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Waktu Penting Smart Money</div>
+  <div class="info-highlight neutral">Pagi: 09:30 – 10:30 WIB → sering terjadi aktivitas institusi pembuka<br>Siang: 13:30 – 15:00 WIB → sesi sore, sering ada dorongan akhir hari</div>
+  <div class="info-p">Trigger yang muncul di luar jam-jam ini tetap valid, namun perlu konfirmasi tambahan dari volume dan pergerakan harga.</div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Kesimpulan</div>
+  <div class="info-highlight">SM besar + CM positif + TX tinggi = Potensi kenaikan harga<br>BM besar + CM negatif = Potensi penurunan harga<br>RSM > 70% = Smart Money mendominasi hari itu</div>
+</div>
+`;
+function openInfoModal(){document.getElementById('infoBody').innerHTML=INFO_CONTENT;document.getElementById('infoBackdrop').classList.add('open');document.body.style.overflow='hidden'}
+function closeInfoModal(){document.getElementById('infoBackdrop').classList.remove('open');document.body.style.overflow=''}
+function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdrop'))closeInfoModal()}
+
+</script>
+
+<div class="info-backdrop" id="infoBackdrop" onclick="handleInfoBackdrop(event)">
+  <div class="info-modal" id="infoModal">
+    <div class="info-header">
+      <div>
+        <div class="info-title">PANDUAN MEMBACA DATA</div>
+        <div class="info-sub">Smart Money Analysis — Zenith</div>
+      </div>
+      <button class="close-btn" onclick="closeInfoModal()">✕</button>
+    </div>
+    <div class="info-body" id="infoBody"></div>
+  </div>
+</div>
+
+</body>
+</html>

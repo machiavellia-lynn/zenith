@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Zenith — Chart Preview</title>
+<script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script>
+  // Fallback jika unpkg gagal
+  if (typeof LightweightCharts === 'undefined') {
+    document.write('<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"><\/script>');
+  }
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:        #080c10;
+    --surface:   #0e1318;
+    --border:    #1a2230;
+    --accent:    #00e8a2;
+    --accent2:   #4d9fff;
+    --danger:    #ff4d6a;
+    --text:      #c8d8e8;
+    --muted:     #4a6070;
+    --up:        #00e8a2;
+    --down:      #ff4d6a;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Sans', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ── HEADER ───────────────────────────────── */
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    position: sticky; top: 0; z-index: 100;
+  }
+
+  .logo {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--muted); }
+
+  .divider { width: 1px; height: 20px; background: var(--border); }
+
+  /* search */
+  .search-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    flex: 1; max-width: 260px;
+    transition: border-color .2s;
+  }
+  .search-wrap:focus-within { border-color: var(--accent); }
+  .search-wrap input {
+    background: none; border: none; outline: none;
+    color: var(--text); font-family: 'Space Mono', monospace;
+    font-size: 13px; font-weight: 700; letter-spacing: .08em;
+    text-transform: uppercase; width: 100%;
+  }
+  .search-wrap input::placeholder { color: var(--muted); text-transform: none; font-weight: 400; }
+
+  .search-btn {
+    background: var(--accent); color: var(--bg);
+    border: none; border-radius: 4px; padding: 6px 14px;
+    font-family: 'Space Mono', monospace; font-size: 11px;
+    font-weight: 700; letter-spacing: .1em; cursor: pointer;
+    text-transform: uppercase; transition: opacity .15s;
+  }
+  .search-btn:hover { opacity: .85; }
+
+  /* ticker info */
+  .ticker-info {
+    display: flex; align-items: center; gap: 16px;
+    margin-left: auto;
+  }
+  .t-name { font-size: 12px; color: var(--muted); }
+  .t-price {
+    font-family: 'Space Mono', monospace; font-size: 18px;
+    font-weight: 700; color: var(--text);
+  }
+  .t-price.up { color: var(--up); }
+  .t-price.down { color: var(--down); }
+
+  .status-dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--muted);
+  }
+  .status-dot.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1}50%{opacity:.4} }
+
+  /* ── MAIN ─────────────────────────────────── */
+  main { flex: 1; display: flex; flex-direction: column; padding: 20px 24px; gap: 16px; }
+
+  /* timeframe tabs */
+  .tf-row { display: flex; align-items: center; gap: 8px; }
+  .tf-label { font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-right: 4px; }
+
+  .tf-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); border-radius: 4px;
+    padding: 4px 12px; font-family: 'Space Mono', monospace;
+    font-size: 11px; cursor: pointer; transition: all .15s;
+    letter-spacing: .06em;
+  }
+  .tf-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .tf-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+
+  /* chart container */
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    height: 500px;
+  }
+
+  #chart { width: 100%; height: 500px; }
+
+  .chart-overlay-title {
+    position: absolute; top: 16px; left: 16px; z-index: 10;
+    font-family: 'Space Mono', monospace; font-size: 13px;
+    color: var(--text); letter-spacing: .06em;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .tf-badge {
+    font-size: 10px; background: var(--border);
+    padding: 2px 7px; border-radius: 3px; color: var(--muted);
+  }
+
+  /* loading / error state */
+  .state-overlay {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 12px; z-index: 20;
+    background: var(--surface);
+  }
+  .state-overlay.hidden { display: none; }
+
+  .spinner {
+    width: 32px; height: 32px; border: 2px solid var(--border);
+    border-top-color: var(--accent); border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .state-msg { font-size: 13px; color: var(--muted); }
+  .state-err { font-size: 13px; color: var(--danger); }
+
+  /* footer note */
+  .footer-note {
+    text-align: center; font-size: 11px; color: var(--muted);
+    padding-bottom: 16px;
+  }
+  .footer-note span { color: var(--accent); }
+
+  /* ── HOVER TOOLTIP ───────────────────────── */
+  .hover-tooltip {
+    position: absolute;
+    top: 14px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 15;
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(14,19,24,0.92);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .15s;
+    white-space: nowrap;
+  }
+  .hover-tooltip.visible { opacity: 1; }
+  .ht-date { color: var(--muted); font-size: 10px; letter-spacing: .05em; }
+  .ht-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+  .ht-label { font-size: 9px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .ht-val { font-size: 12px; font-weight: 700; color: var(--text); }
+  .ht-val.up   { color: var(--up); }
+  .ht-val.down { color: var(--down); }
+  .ht-sep { width: 1px; height: 28px; background: var(--border); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">ZENITH <span>/ chart test</span></div>
+  <div class="divider"></div>
+  <div class="search-wrap">
+    <input type="text" id="tickerInput" placeholder="Cari ticker... (BBRI, EMAS, BBCA)" value="BBRI" maxlength="8"/>
+  </div>
+  <button class="search-btn" onclick="loadChart()">Load</button>
+  <div class="divider"></div>
+  <div class="ticker-info">
+    <div>
+      <div class="t-name" id="tName">—</div>
+      <div class="t-price" id="tPrice">—</div>
+    </div>
+    <div class="status-dot" id="statusDot"></div>
+  </div>
+</header>
+
+<main>
+  <div class="tf-row">
+    <span class="tf-label">Timeframe</span>
+    <button class="tf-btn" data-tf="5m"  onclick="setTF('5m')">5m</button>
+    <button class="tf-btn active" data-tf="15m" onclick="setTF('15m')">15m</button>
+    <button class="tf-btn" data-tf="30m" onclick="setTF('30m')">30m</button>
+    <button class="tf-btn" data-tf="1h"  onclick="setTF('1h')">1h</button>
+    <button class="tf-btn" data-tf="1d"  onclick="setTF('1d')">1D</button>
+    <div style="flex:1"></div>
+    <button class="tf-btn" id="btnLog"  onclick="setScale('log')"  title="Logarithmic scale">L</button>
+    <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')" title="Auto scale (TradingView style)">A</button>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-overlay-title">
+      <span id="chartLabel">BBRI</span>
+      <span class="tf-badge" id="chartTFBadge">15m</span>
+    </div>
+
+    <!-- Hover tooltip -->
+    <div class="hover-tooltip" id="hoverTooltip">
+      <span class="ht-date" id="htDate">—</span>
+      <div class="ht-sep"></div>
+      <div class="ht-item"><span class="ht-label">O</span><span class="ht-val" id="htOpen">—</span></div>
+      <div class="ht-item"><span class="ht-label">H</span><span class="ht-val up" id="htHigh">—</span></div>
+      <div class="ht-item"><span class="ht-label">L</span><span class="ht-val down" id="htLow">—</span></div>
+      <div class="ht-item"><span class="ht-label">C</span><span class="ht-val" id="htClose">—</span></div>
+      <div class="ht-sep"></div>
+      <div class="ht-item"><span class="ht-label">Vol</span><span class="ht-val" id="htVol">—</span></div>
+    </div>
+
+    <!-- loading overlay -->
+    <div class="state-overlay" id="loadingOverlay">
+      <div class="spinner"></div>
+      <div class="state-msg" id="stateMsg">Mengambil data dari Yahoo Finance...</div>
+    </div>
+
+    <div id="chart"></div>
+  </div>
+
+  <div class="footer-note">
+    Data source: <span>Yahoo Finance (.JK)</span> · Chart: <span>Lightweight Charts v4</span> · Zenith Project
+  </div>
+</main>
+
+<script>
+let chart = null;
+let candleSeries = null;
+let volumeSeries = null;
+let currentTF = '15m';
+let currentTicker = 'BBRI';
+
+function initChart() {
+  const container = document.getElementById('chart');
+  chart = LightweightCharts.createChart(container, {
+    layout: {
+      background:  { color: '#0e1318' },
+      textColor:   '#4a6070',
+    },
+    grid: {
+      vertLines: { color: '#1a2230' },
+      horzLines: { color: '#1a2230' },
+    },
+    crosshair: {
+      mode: LightweightCharts.CrosshairMode.Normal,
+      vertLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+      horzLine: { color: '#4a6070', labelBackgroundColor: '#1a2230' },
+    },
+    rightPriceScale: { borderColor: '#1a2230' },
+    timeScale: {
+      borderColor: '#1a2230',
+      timeVisible: true,
+      secondsVisible: false,
+      tickMarkFormatter: (t) => {
+        // Timestamp sudah di-shift +7h dari backend, pakai getUTC* langsung
+        const d = new Date(t * 1000);
+        const h   = String(d.getUTCHours()).padStart(2,'0');
+        const m   = String(d.getUTCMinutes()).padStart(2,'0');
+        const day = d.getUTCDate();
+        const mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][d.getUTCMonth()];
+        if (currentTF === '1d') return `${day} ${mon}`;
+        return `${h}:${m}`;
+      },
+    },
+    localization: {
+      priceFormatter: p => Math.round(p).toLocaleString('id-ID'),
+    },
+    handleScroll: true,
+    handleScale: true,
+    width:  container.clientWidth || 800,
+    height: 500,
+  });
+
+  // Candlestick series
+  candleSeries = chart.addCandlestickSeries({
+    upColor:   '#00e8a2',
+    downColor: '#ff4d6a',
+    borderUpColor:   '#00e8a2',
+    borderDownColor: '#ff4d6a',
+    wickUpColor:   '#00e8a2',
+    wickDownColor: '#ff4d6a',
+  });
+
+  // Volume series (scaled at bottom 20%)
+  volumeSeries = chart.addHistogramSeries({
+    color: '#1a2230',
+    priceFormat: { type: 'volume' },
+    priceScaleId: 'volume',
+    scaleMargins: { top: 0.85, bottom: 0 },
+  });
+  chart.priceScale('volume').applyOptions({
+    scaleMargins: { top: 0.85, bottom: 0 },
+  });
+
+  // Crosshair hover → update tooltip
+  chart.subscribeCrosshairMove(param => {
+    const tooltip = document.getElementById('hoverTooltip');
+    if (!param.time || !param.seriesData) {
+      tooltip.classList.remove('visible');
+      return;
+    }
+    const bar = param.seriesData.get(candleSeries);
+    if (!bar) { tooltip.classList.remove('visible'); return; }
+
+    const fmt = v => Math.round(parseFloat(v)).toLocaleString('id-ID');
+    const fmtVol = v => {
+      if (!v) return '—';
+      if (v >= 1e9) return (v/1e9).toFixed(1)+'B';
+      if (v >= 1e6) return (v/1e6).toFixed(1)+'M';
+      if (v >= 1e3) return (v/1e3).toFixed(1)+'K';
+      return v.toString();
+    };
+
+    // Timestamp sudah di-shift +7h dari backend, pakai getUTC* langsung
+    const d = new Date(param.time * 1000);
+    const pad = n => String(n).padStart(2,'0');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    let dateStr;
+    if (currentTF === '1d') {
+      dateStr = `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    } else {
+      dateStr = `${d.getUTCDate()} ${months[d.getUTCMonth()]} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+    }
+
+    const closeEl = document.getElementById('htClose');
+    closeEl.className = 'ht-val ' + (bar.close >= bar.open ? 'up' : 'down');
+
+    document.getElementById('htDate').textContent  = dateStr;
+    document.getElementById('htOpen').textContent  = fmt(bar.open);
+    document.getElementById('htHigh').textContent  = fmt(bar.high);
+    document.getElementById('htLow').textContent   = fmt(bar.low);
+    closeEl.textContent                            = fmt(bar.close);
+
+    const volBar = param.seriesData.get(volumeSeries);
+    document.getElementById('htVol').textContent = volBar ? fmtVol(volBar.value) : '—';
+
+    tooltip.classList.add('visible');
+  });
+
+  // Apply auto scale default ON (seperti TradingView)
+  applyAutoScale(true);
+
+  // Resize
+  const ro = new ResizeObserver(() => {
+    chart.applyOptions({ width: container.clientWidth });
+  });
+  ro.observe(container);
+}
+
+let isLogScale  = false;
+let isAutoScale = true;  // default ON seperti TradingView
+
+function applyAutoScale(on) {
+  if (!chart) return;
+  chart.priceScale('right').applyOptions({
+    autoScale:   on,   // true = harga otomatis fit ke candle yang terlihat
+    scaleMargins: { top: 0.1, bottom: 0.2 },
+  });
+  // Kalau auto ON: matikan drag vertikal (persis TradingView)
+  chart.applyOptions({
+    handleScale: {
+      axisPressedMouseMove: {
+        price: !on,  // false = price axis tidak bisa di-drag manual
+        time:  true,
+      },
+    },
+  });
+}
+
+function setScale(mode) {
+  if (mode === 'auto') {
+    isAutoScale = !isAutoScale;
+    applyAutoScale(isAutoScale);
+    document.getElementById('btnAuto').classList.toggle('active', isAutoScale);
+  } else if (mode === 'log') {
+    isLogScale = !isLogScale;
+    if (chart) {
+      chart.priceScale('right').applyOptions({
+        mode: isLogScale ? 1 : 0,
+      });
+    }
+    document.getElementById('btnLog').classList.toggle('active', isLogScale);
+  }
+}
+
+function setTF(tf) {
+  currentTF = tf;
+  document.querySelectorAll('.tf-btn[data-tf]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tf === tf);
+  });
+  document.getElementById('chartTFBadge').textContent = tf;
+  loadChart();
+}
+
+async function loadChart() {
+  const input = document.getElementById('tickerInput').value.trim().toUpperCase();
+  if (!input) return;
+  currentTicker = input;
+
+  document.getElementById('chartLabel').textContent = currentTicker;
+  const msg = currentTF === '1d' ? 'Mengambil data historis (mungkin butuh beberapa detik)...' : 'Mengambil data dari Yahoo Finance...';
+  showLoading(msg);
+  document.getElementById('statusDot').className = 'status-dot';
+
+  // Reinit jika series belum siap
+  if (!candleSeries || !volumeSeries) {
+    if (chart) { chart.remove(); chart = null; }
+    initChart();
+  }
+
+  try {
+    const res  = await fetch(`/api/ohlcv?ticker=${currentTicker}&tf=${currentTF}`);
+    const data = await res.json();
+
+    if (data.error) throw new Error(data.error);
+
+    const candles = data.candles;
+    if (!candles || candles.length === 0) throw new Error('Data kosong — ticker tidak ditemukan di Yahoo Finance');
+
+    candleSeries.setData(candles);
+    volumeSeries.setData(candles.map(c => ({
+      time:  c.time,
+      value: c.volume,
+      color: c.close >= c.open ? '#00e8a240' : '#ff4d6a40',
+    })));
+
+    // Tampilkan 181 candle terakhir saat pertama load
+    const INIT_CANDLES = 181;
+    if (candles.length > INIT_CANDLES) {
+      const from = candles[candles.length - INIT_CANDLES].time;
+      const to   = candles[candles.length - 1].time;
+      chart.timeScale().setVisibleRange({ from, to });
+    } else {
+      chart.timeScale().fitContent();
+    }
+    applyAutoScale(isAutoScale);  // reapply after data load
+    hideLoading();
+
+    document.getElementById('statusDot').className = 'status-dot live';
+    fetchInfo(currentTicker);
+
+  } catch (err) {
+    showError(err.message);
+  }
+}
+
+async function fetchInfo(ticker) {
+  try {
+    const res  = await fetch(`/api/info?ticker=${ticker}`);
+    const info = await res.json();
+    if (!info.error) {
+      document.getElementById('tName').textContent  = info.name || ticker;
+      const price = info.price;
+      const el    = document.getElementById('tPrice');
+      if (price) {
+        el.textContent = price.toLocaleString('id-ID');
+        el.className   = 't-price';
+      }
+    }
+  } catch (_) {}
+}
+
+function showLoading(msg) {
+  const ov = document.getElementById('loadingOverlay');
+  ov.classList.remove('hidden');
+  ov.innerHTML = `<div class="spinner"></div><div class="state-msg">${msg}</div>`;
+}
+
+function showError(msg) {
+  const ov = document.getElementById('loadingOverlay');
+  ov.classList.remove('hidden');
+  ov.innerHTML = `<div class="state-err">⚠ ${msg}</div><div class="state-msg" style="font-size:11px">Coba ticker lain atau cek koneksi</div>`;
+}
+
+function hideLoading() {
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+// Enter key support
+document.getElementById('tickerInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadChart();
+});
+
+// Init setelah DOM siap
+window.addEventListener('DOMContentLoaded', () => {
+  initChart();
+  loadChart();
+});
+</script>
+</body>
+</html>
