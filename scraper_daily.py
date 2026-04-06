@@ -466,7 +466,14 @@ def process_message(conn, message) -> int:
 # ══════════════════════════════════════════════════════════════════════════════
 
 def ensure_summary_table(conn):
-    """Create eod_summary table if not exists."""
+    """Create eod_summary table. Drops old schema if columns don't match."""
+    # Check if table exists with correct schema
+    try:
+        conn.execute("SELECT sm_val FROM eod_summary LIMIT 1")
+    except Exception:
+        # Table missing or wrong schema — recreate
+        conn.execute("DROP TABLE IF EXISTS eod_summary")
+    
     conn.execute("""
         CREATE TABLE IF NOT EXISTS eod_summary (
             date        TEXT NOT NULL,
