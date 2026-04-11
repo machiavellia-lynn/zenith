@@ -604,23 +604,35 @@ def enrich_daily_prices(conn, date_str: str):
 # ── Wyckoff analytics computation ────────────────────────────────────────
 
 def _classify_phase(sri, mes, volx_gap, rpr, cm, pchg, price, low5):
+    """Classify Wyckoff phase. Works with or without price data."""
+    # ── With price data ──
     if price and low5 and price <= low5 and cm > 0 and volx_gap < -1:
         return "SPRING"
-    if sri > 1.5 and mes < 0.2 and cm > 0:
+    if sri > 1.5 and cm > 0 and pchg is not None and abs(pchg) < 1:
         return "ABSORB"
     if pchg is not None and pchg > 2 and sri > 1.5 and cm > 0:
         return "SOS"
-    if pchg is not None and pchg > 2 and cm < 0 and rpr > 0.6:
+    if pchg is not None and pchg > 2 and cm < 0 and rpr > 0.5:
         return "UPTHRUST"
-    if cm < 0 and pchg is not None and pchg < 0 and sri > 1.0:
+    if cm < 0 and pchg is not None and pchg < -0.5 and sri > 0.8:
+        return "DISTRI"
+    # ── Fallback without price ──
+    if cm < 0 and sri > 1.0 and rpr > 0.5:
+        return "DISTRI"
+    if cm < 0 and rpr > 0.65:
+        return "UPTHRUST"
+    if cm > 0 and sri > 2.0:
+        return "ABSORB"
+    if cm < 0 and sri > 0.8:
         return "DISTRI"
     return None
 
 
 def _get_action(phase, cm_3d):
+    """Derive trading action from phase + 3-day CM trend."""
     if phase in ("SPRING", "ABSORB") and cm_3d > 0:
         return "BUY"
-    if phase == "SOS":
+    if phase in ("ABSORB", "SOS"):
         return "HOLD"
     if phase in ("UPTHRUST", "DISTRI"):
         return "SELL"
