@@ -1704,6 +1704,36 @@ const INFO_CONTENT=`
   <div class="info-p">Trigger yang muncul di luar jam-jam ini tetap valid, namun perlu konfirmasi tambahan dari volume dan pergerakan harga.</div>
 </div>
 <div class="info-section">
+  <div class="info-section-title">Metrik Analitik Lanjutan</div>
+  <div class="info-glossary">
+    <div class="info-term"><div class="info-term-label sm">SRI — SM Relative Intensity</div><div class="info-term-desc">Mengukur agresivitas bandar hari ini vs rata-rata 10 hari. SRI = SM hari ini ÷ rata-rata SM 10 hari. SRI > 2.0 = bandar 2× lebih aktif dari biasanya.</div></div>
+    <div class="info-term"><div class="info-term-label muted">MES — Market Efficiency</div><div class="info-term-desc">Effort vs Result. MES = |perubahan harga%| ÷ SRI. MES < 0.2 = bandar belanja besar tapi harga gak gerak (absorption). MES > 2.0 = harga gerak liar tanpa dukungan bandar.</div></div>
+    <div class="info-term"><div class="info-term-label cm">Volx Gap</div><div class="info-term-desc">Selisih harga penutupan vs rata-rata harga belanja bandar. Gap < -1.5% = harga di bawah basis beli bandar (discount). Gap > 1.5% = harga sudah di atas harga beli bandar (premium).</div></div>
+    <div class="info-term"><div class="info-term-label bm">RPR — Retail Participation</div><div class="info-term-desc">Rasio aktivitas ritel vs total. RPR = TX BM ÷ (TX SM + TX BM). RPR > 0.65 = ritel mendominasi (hati-hati jebakan). RPR < 0.35 = bandar mendominasi.</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Phase — Fase Wyckoff</div>
+  <div class="info-scenarios">
+    <div class="info-scenario"><div class="info-scenario-title">🟢 SPRING — Pegas Siap Mental</div><div class="info-scenario-desc">Harga jatuh ke titik terendah 5 hari, tapi bandar justru BELI (CM positif). Seperti pegas yang ditekan — siap mental ke atas. Ini sinyal akumulasi di harga bawah.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🔵 ABSORB — Bandar Nyerap Barang</div><div class="info-scenario-desc">Bandar belanja besar-besaran (SRI tinggi) tapi harga dijaga flat. Mereka sengaja beli pelan-pelan supaya gak ketahuan. Fase sebelum harga breakout naik.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🟢 SOS — Sign of Strength</div><div class="info-scenario-desc">Harga naik > 2% DENGAN dukungan bandar (CM positif + SRI tinggi). Kenaikan yang sehat dan berpotensi lanjut. Konfirmasi momentum.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🟠 UPTHRUST — Jebakan Naik</div><div class="info-scenario-desc">Harga naik > 2% tapi bandar JUALAN (CM negatif), ritel yang beli (RPR tinggi). Jebakan — harga kemungkinan turun setelah ini. Hindari beli di sini.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🔴 DISTRI — Distribusi</div><div class="info-scenario-desc">Bandar sedang buang barang (CM negatif + bandar aktif). Harga kemungkinan turun. Fase jual/take profit.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🟢 ACCUM — Akumulasi Ringan</div><div class="info-scenario-desc">Ada pembelian bandar (CM positif) tapi belum cukup agresif untuk ABSORB atau SPRING. Masih tahap awal pengumpulan barang.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">⚪ NEUTRAL — Netral</div><div class="info-scenario-desc">Tidak ada aktivitas signifikan. CM mendekati nol. Tidak ada sinyal arah yang jelas.</div></div>
+  </div>
+</div>
+<div class="info-section">
+  <div class="info-section-title">Action — Sinyal Eksekusi</div>
+  <div class="info-glossary">
+    <div class="info-term"><div class="info-term-label cm">🚀 BUY</div><div class="info-term-desc">Phase SPRING/ABSORB/ACCUM + CM 3 hari terakhir konsisten positif. Bandar akumulasi + tren beli terkonfirmasi.</div></div>
+    <div class="info-term"><div class="info-term-label muted">⌛ HOLD</div><div class="info-term-desc">Phase SOS/ABSORB/ACCUM tapi CM 3 hari belum konsisten. Ada sinyal bagus tapi belum cukup kuat untuk entry. Tunggu konfirmasi.</div></div>
+    <div class="info-term"><div class="info-term-label bm">⚠️ SELL</div><div class="info-term-desc">Phase UPTHRUST/DISTRI. Bandar jualan atau jebakan naik terdeteksi. Hindari entry baru atau lakukan take profit.</div></div>
+  </div>
+  <div class="info-highlight neutral">💡 Hover di kolom ACTION untuk melihat detail metrik: SRI, MES, RPR, dan Volx Gap per emiten.</div>
+</div>
+<div class="info-section">
   <div class="info-section-title">Kesimpulan</div>
   <div class="info-highlight">SM besar + CM positif + TX tinggi = Potensi kenaikan harga<br>BM besar + CM negatif = Potensi penurunan harga<br>RSM > 70% = Smart Money mendominasi hari itu</div>
 </div>

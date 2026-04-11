@@ -446,6 +446,24 @@ def flow():
 
         g = gains.get(t, {})
         a = analytics_map.get(t, {})
+        gain = g.get("gain")
+        phase = a.get("phase")
+        action = a.get("action")
+        sri = a.get("sri") or 0
+        rpr_val = a.get("rpr") or 0
+
+        # ── Phase refinement: use Yahoo gain% when DB price_change is NULL ──
+        if gain is not None and cm is not None:
+            if gain > 2 and cm > 0 and sri > 1.0 and phase not in ("SPRING",):
+                phase = "SOS"
+                action = "HOLD"
+            elif gain > 2 and cm is not None and cm < 0 and rpr_val > 0.5:
+                phase = "UPTHRUST"
+                action = "SELL"
+            elif gain < -2 and cm is not None and cm < 0 and phase not in ("DISTRI",):
+                phase = "DISTRI"
+                action = "SELL"
+
         tickers.append({
             "ticker":      t,
             "clean_money": cm,
@@ -455,11 +473,11 @@ def flow():
             "mf_plus":     mfp,
             "mf_minus":    mfm,
             "net_mf":      net,
-            "gain_pct":    g.get("gain"),
+            "gain_pct":    gain,
             "price":       g.get("price") or a.get("price_close"),
             "tx":          int(d.get("tx") or 0),
-            "phase":       a.get("phase"),
-            "action":      a.get("action"),
+            "phase":       phase,
+            "action":      action,
             "sri":         a.get("sri"),
             "mes":         a.get("mes"),
             "volx_gap":    a.get("volx_gap"),
