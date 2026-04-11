@@ -96,7 +96,7 @@ def parse_volx(s: str) -> float | None:
 #  SM/BM PARSER (from scraper_history.py)
 # ══════════════════════════════════════════════════════════════════════════════
 
-TX_EMOJI = r"[💦🌟💧🔥🥵]"
+TX_EMOJI = r"[💦🌟💧🔥🥵⭐]\uFE0F?"
 
 # FORMAT A: has Freq column (Nov 2025+)
 ROW_PATTERN_A = re.compile(
