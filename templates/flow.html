@@ -1143,7 +1143,7 @@ function applyFilter() {
 }
 
 function clearFilters() {
-  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = true);
+  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = false);
   phaseFilter = null; actionFilter = null;
   document.getElementById('filterCount').style.display = 'none';
   document.querySelector('#filterDropdown .filter-btn').classList.remove('active');
