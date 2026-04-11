@@ -1064,9 +1064,26 @@ ensure_indexes()
 SCRAPER_ENABLED = os.environ.get("SCRAPER_ENABLED", "1") == "1"
 _scraper_thread = None
 if SCRAPER_ENABLED:
+    # Ensure only ONE gunicorn worker starts the scraper
+    _lock_path = "/tmp/zenith_scraper.lock"
     try:
+        # Clean stale lock from previous deploy
+        if os.path.exists(_lock_path):
+            try:
+                with open(_lock_path) as f:
+                    old_pid = int(f.read().strip())
+                # Check if old process is still alive
+                os.kill(old_pid, 0)
+            except (ValueError, ProcessLookupError, PermissionError):
+                os.remove(_lock_path)  # stale — remove
+
+        _lock_fd = os.open(_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(_lock_fd, str(os.getpid()).encode())
+        os.close(_lock_fd)
         from scraper_daily import start_scraper_thread
         _scraper_thread = start_scraper_thread()
+    except FileExistsError:
+        pass  # Another worker already owns the scraper
     except Exception as e:
         print(f"⚠️ Scraper failed to start: {e}")
 
