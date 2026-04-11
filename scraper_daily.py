@@ -604,8 +604,8 @@ def enrich_daily_prices(conn, date_str: str):
 # ── Wyckoff analytics computation ────────────────────────────────────────
 
 def _classify_phase(sri, mes, volx_gap, rpr, cm, pchg, price, low5):
-    """Classify Wyckoff phase. Works with or without price data."""
-    # ── With price data ──
+    """Classify Wyckoff phase. Every ticker gets a label."""
+    # ── Tier 1: Strong signals (with price data) ──
     if price and low5 and price <= low5 and cm > 0 and volx_gap < -1:
         return "SPRING"
     if sri > 1.5 and cm > 0 and pchg is not None and abs(pchg) < 1:
@@ -616,7 +616,7 @@ def _classify_phase(sri, mes, volx_gap, rpr, cm, pchg, price, low5):
         return "UPTHRUST"
     if cm < 0 and pchg is not None and pchg < -0.5 and sri > 0.8:
         return "DISTRI"
-    # ── Fallback without price ──
+    # ── Tier 2: Clear signals (without price) ──
     if cm < 0 and sri > 1.0 and rpr > 0.5:
         return "DISTRI"
     if cm < 0 and rpr > 0.65:
@@ -625,7 +625,12 @@ def _classify_phase(sri, mes, volx_gap, rpr, cm, pchg, price, low5):
         return "ABSORB"
     if cm < 0 and sri > 0.8:
         return "DISTRI"
-    return None
+    # ── Tier 3: Catch-all (every ticker gets a label) ──
+    if cm > 0:
+        return "ACCUM"
+    if cm < 0:
+        return "DISTRI"
+    return "NEUTRAL"
 
 
 def _get_action(phase, cm_3d):
@@ -634,9 +639,13 @@ def _get_action(phase, cm_3d):
         return "BUY"
     if phase in ("ABSORB", "SOS"):
         return "HOLD"
+    if phase == "ACCUM" and cm_3d > 0:
+        return "BUY"
+    if phase == "ACCUM":
+        return "HOLD"
     if phase in ("UPTHRUST", "DISTRI"):
         return "SELL"
-    return None
+    return "HOLD"
 
 
 def compute_analytics_for_date(conn, date_str: str):
