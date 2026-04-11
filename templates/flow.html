@@ -686,6 +686,20 @@ td:first-child { text-align: left; }
   .s-val{font-size:11px}
   .modal-chart-wrap{height:280px}
 }
+/* Dropdown filter */
+.filter-dropdown{position:relative;display:inline-block}
+.filter-btn{background:var(--bg);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent)}
+.filter-btn .arrow{font-size:7px;transition:transform .2s}
+.filter-btn.open .arrow{transform:rotate(180deg)}
+.filter-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:6px 0;min-width:140px;z-index:50;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
+.filter-menu.show{display:block}
+.filter-opt{display:flex;align-items:center;gap:8px;padding:5px 12px;font-family:'Space Mono',monospace;font-size:10px;color:var(--text);cursor:pointer;transition:background .1s;white-space:nowrap}
+.filter-opt:hover{background:rgba(255,255,255,.04)}
+.filter-opt input[type="checkbox"]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
+.filter-opt .dot-sm{width:6px;height:6px;border-radius:50%;display:inline-block}
+.filter-count{background:var(--accent);color:var(--bg);border-radius:8px;padding:0 5px;font-size:8px;font-weight:700;margin-left:2px}
+
 /* Phase & Action badges */
 .phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
 .phase-badge.spring{background:rgba(0,232,162,.15);color:#00e8a2}
@@ -767,6 +781,26 @@ td:first-child { text-align: left; }
     <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
     <div class="date-arrow">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
+  </div>
+  <div class="filter-dropdown" id="phaseDropdown">
+    <button class="filter-btn" onclick="toggleDropdown('phase')">PHASE <span class="arrow">▼</span><span class="filter-count" id="phaseCount" style="display:none"></span></button>
+    <div class="filter-menu" id="phaseMenu">
+      <label class="filter-opt"><input type="checkbox" value="SPRING" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SPRING</label>
+      <label class="filter-opt"><input type="checkbox" value="ABSORB" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4d9fff"></span>ABSORB</label>
+      <label class="filter-opt"><input type="checkbox" value="SOS" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SOS</label>
+      <label class="filter-opt"><input type="checkbox" value="ACCUM" checked onchange="applyFilter()"><span class="dot-sm" style="background:#5abf8e"></span>ACCUM</label>
+      <label class="filter-opt"><input type="checkbox" value="UPTHRUST" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff8c42"></span>UPTHRUST</label>
+      <label class="filter-opt"><input type="checkbox" value="DISTRI" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff4d6a"></span>DISTRI</label>
+      <label class="filter-opt"><input type="checkbox" value="NEUTRAL" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4a6070"></span>NEUTRAL</label>
+    </div>
+  </div>
+  <div class="filter-dropdown" id="actionDropdown">
+    <button class="filter-btn" onclick="toggleDropdown('action')">ACTION <span class="arrow">▼</span><span class="filter-count" id="actionCount" style="display:none"></span></button>
+    <div class="filter-menu" id="actionMenu">
+      <label class="filter-opt"><input type="checkbox" value="BUY" checked onchange="applyFilter()"><span style="font-size:11px">🚀</span>BUY</label>
+      <label class="filter-opt"><input type="checkbox" value="HOLD" checked onchange="applyFilter()"><span style="font-size:11px">⌛</span>HOLD</label>
+      <label class="filter-opt"><input type="checkbox" value="SELL" checked onchange="applyFilter()"><span style="font-size:11px">⚠️</span>SELL</label>
+    </div>
   </div>
   <span class="row-count" id="rowCount"></span>
 </div>
@@ -894,6 +928,8 @@ td:first-child { text-align: left; }
 let allRows      = [];
 let sortCols     = [{ col: 'clean_money', asc: false }]; // multi-sort
 let filterText   = '';
+let phaseFilter  = null; // null = all, Set = selected phases
+let actionFilter = null; // null = all, Set = selected actions
 let modalChart   = null;
 let modalCandle  = null;
 let modalVolume  = null;
@@ -1076,6 +1112,62 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
+// ── Dropdown filters ─────────────────────────────────────────────────
+function toggleDropdown(type) {
+  const menu = document.getElementById(type + 'Menu');
+  const btn = menu.previousElementSibling;
+  const isOpen = menu.classList.contains('show');
+  // Close all
+  document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('show'));
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('open'));
+  if (!isOpen) {
+    menu.classList.add('show');
+    btn.classList.add('open');
+  }
+}
+
+function applyFilter() {
+  // Phase filter
+  const pChecked = [...document.querySelectorAll('#phaseMenu input:checked')].map(i => i.value);
+  const pAll = document.querySelectorAll('#phaseMenu input').length;
+  if (pChecked.length === pAll || pChecked.length === 0) {
+    phaseFilter = null;
+    document.getElementById('phaseCount').style.display = 'none';
+    document.querySelector('#phaseDropdown .filter-btn').classList.remove('active');
+  } else {
+    phaseFilter = new Set(pChecked);
+    const ct = document.getElementById('phaseCount');
+    ct.textContent = pChecked.length;
+    ct.style.display = 'inline';
+    document.querySelector('#phaseDropdown .filter-btn').classList.add('active');
+  }
+
+  // Action filter
+  const aChecked = [...document.querySelectorAll('#actionMenu input:checked')].map(i => i.value);
+  const aAll = document.querySelectorAll('#actionMenu input').length;
+  if (aChecked.length === aAll || aChecked.length === 0) {
+    actionFilter = null;
+    document.getElementById('actionCount').style.display = 'none';
+    document.querySelector('#actionDropdown .filter-btn').classList.remove('active');
+  } else {
+    actionFilter = new Set(aChecked);
+    const ct = document.getElementById('actionCount');
+    ct.textContent = aChecked.length;
+    ct.style.display = 'inline';
+    document.querySelector('#actionDropdown .filter-btn').classList.add('active');
+  }
+
+  renderTable();
+}
+
+// Close dropdown on outside click
+document.addEventListener('click', e => {
+  if (!e.target.closest('.filter-dropdown')) {
+    document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('show'));
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('open'));
+  }
+});
+
 // ── Load flow data ────────────────────────────────────────────────────
 async function loadFlow() {
   const df = document.getElementById('dateFrom').value.trim();
@@ -1192,6 +1284,9 @@ function renderTable() {
   );
   // Sector filter
   if (sectorTickers) rows = rows.filter(r => sectorTickers.has(r.ticker));
+  // Phase & Action filter
+  if (phaseFilter) rows = rows.filter(r => phaseFilter.has(r.phase || 'NEUTRAL'));
+  if (actionFilter) rows = rows.filter(r => actionFilter.has(r.action || 'HOLD'));
 
   // Multi-sort
   rows.sort((a, b) => {
