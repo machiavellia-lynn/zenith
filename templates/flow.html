@@ -782,24 +782,24 @@ td:first-child { text-align: left; }
     <div class="date-arrow">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
   </div>
-  <div class="filter-dropdown" id="phaseDropdown">
-    <button class="filter-btn" onclick="toggleDropdown('phase')">PHASE <span class="arrow">▼</span><span class="filter-count" id="phaseCount" style="display:none"></span></button>
-    <div class="filter-menu" id="phaseMenu">
-      <label class="filter-opt"><input type="checkbox" value="SPRING" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SPRING</label>
-      <label class="filter-opt"><input type="checkbox" value="ABSORB" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4d9fff"></span>ABSORB</label>
-      <label class="filter-opt"><input type="checkbox" value="SOS" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SOS</label>
-      <label class="filter-opt"><input type="checkbox" value="ACCUM" checked onchange="applyFilter()"><span class="dot-sm" style="background:#5abf8e"></span>ACCUM</label>
-      <label class="filter-opt"><input type="checkbox" value="UPTHRUST" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff8c42"></span>UPTHRUST</label>
-      <label class="filter-opt"><input type="checkbox" value="DISTRI" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff4d6a"></span>DISTRI</label>
-      <label class="filter-opt"><input type="checkbox" value="NEUTRAL" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4a6070"></span>NEUTRAL</label>
-    </div>
-  </div>
-  <div class="filter-dropdown" id="actionDropdown">
-    <button class="filter-btn" onclick="toggleDropdown('action')">ACTION <span class="arrow">▼</span><span class="filter-count" id="actionCount" style="display:none"></span></button>
-    <div class="filter-menu" id="actionMenu">
-      <label class="filter-opt"><input type="checkbox" value="BUY" checked onchange="applyFilter()"><span style="font-size:11px">🚀</span>BUY</label>
-      <label class="filter-opt"><input type="checkbox" value="HOLD" checked onchange="applyFilter()"><span style="font-size:11px">⌛</span>HOLD</label>
-      <label class="filter-opt"><input type="checkbox" value="SELL" checked onchange="applyFilter()"><span style="font-size:11px">⚠️</span>SELL</label>
+  <div class="filter-dropdown" id="filterDropdown">
+    <button class="filter-btn" onclick="toggleDropdown('filter')">FILTER <span class="arrow">▼</span><span class="filter-count" id="filterCount" style="display:none"></span></button>
+    <div class="filter-menu" id="filterMenu">
+      <div style="padding:4px 12px 6px;font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:4px">ACTION</div>
+      <label class="filter-opt"><input type="checkbox" data-group="action" value="BUY" checked onchange="applyFilter()"><span style="font-size:11px">🚀</span>BUY</label>
+      <label class="filter-opt"><input type="checkbox" data-group="action" value="HOLD" checked onchange="applyFilter()"><span style="font-size:11px">⌛</span>HOLD</label>
+      <label class="filter-opt"><input type="checkbox" data-group="action" value="SELL" checked onchange="applyFilter()"><span style="font-size:11px">⚠️</span>SELL</label>
+      <div style="padding:6px 12px 6px;font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:4px 0">PHASE</div>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="SPRING" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SPRING</label>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="ABSORB" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4d9fff"></span>ABSORB</label>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="SOS" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SOS</label>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="ACCUM" checked onchange="applyFilter()"><span class="dot-sm" style="background:#5abf8e"></span>ACCUM</label>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="UPTHRUST" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff8c42"></span>UPTHRUST</label>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="DISTRI" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff4d6a"></span>DISTRI</label>
+      <label class="filter-opt"><input type="checkbox" data-group="phase" value="NEUTRAL" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4a6070"></span>NEUTRAL</label>
+      <div style="padding:6px 12px;border-top:1px solid var(--border);margin-top:4px">
+        <button onclick="clearFilters()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;width:100%;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">CLEAR ALL</button>
+      </div>
     </div>
   </div>
   <span class="row-count" id="rowCount"></span>
@@ -1112,55 +1112,44 @@ window.addEventListener('DOMContentLoaded', async () => {
   });
 });
 
-// ── Dropdown filters ─────────────────────────────────────────────────
+// ── Dropdown filter ───────────────────────────────────────────────────
 function toggleDropdown(type) {
   const menu = document.getElementById(type + 'Menu');
   const btn = menu.previousElementSibling;
   const isOpen = menu.classList.contains('show');
-  // Close all
   document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('show'));
   document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('open'));
-  if (!isOpen) {
-    menu.classList.add('show');
-    btn.classList.add('open');
-  }
+  if (!isOpen) { menu.classList.add('show'); btn.classList.add('open'); }
 }
 
 function applyFilter() {
-  // Phase filter
-  const pChecked = [...document.querySelectorAll('#phaseMenu input:checked')].map(i => i.value);
-  const pAll = document.querySelectorAll('#phaseMenu input').length;
-  if (pChecked.length === pAll || pChecked.length === 0) {
-    phaseFilter = null;
-    document.getElementById('phaseCount').style.display = 'none';
-    document.querySelector('#phaseDropdown .filter-btn').classList.remove('active');
-  } else {
-    phaseFilter = new Set(pChecked);
-    const ct = document.getElementById('phaseCount');
-    ct.textContent = pChecked.length;
-    ct.style.display = 'inline';
-    document.querySelector('#phaseDropdown .filter-btn').classList.add('active');
-  }
+  const pChecked = [...document.querySelectorAll('#filterMenu input[data-group="phase"]:checked')].map(i => i.value);
+  const pAll = document.querySelectorAll('#filterMenu input[data-group="phase"]').length;
+  phaseFilter = (pChecked.length === pAll || pChecked.length === 0) ? null : new Set(pChecked);
 
-  // Action filter
-  const aChecked = [...document.querySelectorAll('#actionMenu input:checked')].map(i => i.value);
-  const aAll = document.querySelectorAll('#actionMenu input').length;
-  if (aChecked.length === aAll || aChecked.length === 0) {
-    actionFilter = null;
-    document.getElementById('actionCount').style.display = 'none';
-    document.querySelector('#actionDropdown .filter-btn').classList.remove('active');
-  } else {
-    actionFilter = new Set(aChecked);
-    const ct = document.getElementById('actionCount');
-    ct.textContent = aChecked.length;
-    ct.style.display = 'inline';
-    document.querySelector('#actionDropdown .filter-btn').classList.add('active');
-  }
+  const aChecked = [...document.querySelectorAll('#filterMenu input[data-group="action"]:checked')].map(i => i.value);
+  const aAll = document.querySelectorAll('#filterMenu input[data-group="action"]').length;
+  actionFilter = (aChecked.length === aAll || aChecked.length === 0) ? null : new Set(aChecked);
 
+  const totalFiltered = (phaseFilter ? pChecked.length : 0) + (actionFilter ? aChecked.length : 0);
+  const ct = document.getElementById('filterCount');
+  const btn = document.querySelector('#filterDropdown .filter-btn');
+  if (phaseFilter || actionFilter) {
+    ct.textContent = totalFiltered; ct.style.display = 'inline'; btn.classList.add('active');
+  } else {
+    ct.style.display = 'none'; btn.classList.remove('active');
+  }
   renderTable();
 }
 
-// Close dropdown on outside click
+function clearFilters() {
+  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = true);
+  phaseFilter = null; actionFilter = null;
+  document.getElementById('filterCount').style.display = 'none';
+  document.querySelector('#filterDropdown .filter-btn').classList.remove('active');
+  renderTable();
+}
+
 document.addEventListener('click', e => {
   if (!e.target.closest('.filter-dropdown')) {
     document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('show'));
@@ -1823,7 +1812,7 @@ const INFO_CONTENT=`
   <div class="info-section-title">Action — Sinyal Eksekusi</div>
   <div class="info-glossary">
     <div class="info-term"><div class="info-term-label cm">🚀 BUY</div><div class="info-term-desc">Phase SPRING/ABSORB/ACCUM + CM 3 hari terakhir konsisten positif. Bandar akumulasi + tren beli terkonfirmasi.</div></div>
-    <div class="info-term"><div class="info-term-label muted">⌛ HOLD</div><div class="info-term-desc">Phase SOS/ABSORB/ACCUM tapi CM 3 hari belum konsisten. Ada sinyal bagus tapi belum cukup kuat untuk entry. Tunggu konfirmasi.</div></div>
+    <div class="info-term"><div class="info-term-label muted">⌛ HOLD</div><div class="info-term-desc">Phase SOS/ABSORB/ACCUM tapi CM 3 hari belum konsisten. Bisa berarti: (1) wait & see untuk entry — tunggu konfirmasi sebelum beli, atau (2) jika sudah punya posisi — tahan dulu, jangan jual. Ada sinyal positif tapi belum cukup kuat untuk action tegas.</div></div>
     <div class="info-term"><div class="info-term-label bm">⚠️ SELL</div><div class="info-term-desc">Phase UPTHRUST/DISTRI. Bandar jualan atau jebakan naik terdeteksi. Hindari entry baru atau lakukan take profit.</div></div>
   </div>
   <div class="info-highlight neutral">💡 Hover di kolom ACTION untuk melihat detail metrik: SRI, MES, RPR, dan Volx Gap per emiten.</div>

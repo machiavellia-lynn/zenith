@@ -657,6 +657,17 @@ def compute_analytics_for_date(conn, date_str: str):
     if not rows:
         return 0
 
+    # Fallback: get latest price + gain from raw_messages for tickers missing price_close
+    raw_prices = conn.execute("""
+        SELECT ticker,
+               MAX(price) AS last_price,
+               AVG(gain_pct) AS avg_gain
+        FROM raw_messages
+        WHERE date = ? AND price > 0
+        GROUP BY ticker
+    """, [date_str]).fetchall()
+    raw_price_map = {r["ticker"]: {"price": r["last_price"], "gain": r["avg_gain"]} for r in raw_prices}
+
     computed = 0
     for row in rows:
         tk = row["ticker"]
@@ -667,6 +678,11 @@ def compute_analytics_for_date(conn, date_str: str):
         tx_bm = row["tx_bm"] or 0
         pc = row["price_close"]
         vwap = row["vwap_sm"]
+
+        # Fallback price from raw data
+        rp = raw_price_map.get(tk, {})
+        if not pc and rp.get("price"):
+            pc = rp["price"]
 
         hist = conn.execute(f"""
             SELECT sm_val, bm_val, price_close FROM eod_summary
@@ -682,14 +698,16 @@ def compute_analytics_for_date(conn, date_str: str):
         ttx = tx_sm + tx_bm
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
-        # Price change
+        # Price change: try DB price_close history, fallback to raw gain_pct
         prices = [h["price_close"] for h in hist if h["price_close"]]
         pchg = None
         if pc and len(prices) >= 2 and prices[1] and prices[1] > 0:
             pchg = round((pc - prices[1]) / prices[1] * 100, 2)
+        if pchg is None and rp.get("gain") is not None:
+            pchg = round(rp["gain"], 2)
 
         # MES
-        mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else 0
+        mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
         # Volx Gap
         vg = round((pc - vwap) / pc * 100, 2) if pc and vwap and pc > 0 else 0
