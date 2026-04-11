@@ -17,6 +17,8 @@ import os
 import logging
 import threading
 from datetime import datetime, timedelta, timezone
+from concurrent.futures import ThreadPoolExecutor
+import requests
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 log = logging.getLogger("zenith.scraper")
@@ -462,113 +464,260 @@ def process_message(conn, message) -> int:
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-#  EOD SUMMARY — pre-aggregated data per ticker per date
+#  EOD SUMMARY — pre-aggregated data + Wyckoff analytics per ticker per date
 # ══════════════════════════════════════════════════════════════════════════════
 
+_YAHOO_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+}
+_DATE_SORT = "substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
+
+
 def ensure_summary_table(conn):
-    """Create eod_summary table. Drops old schema if columns don't match."""
-    # Check if table exists with correct schema
+    """Create eod_summary v2. Drops old schema if columns don't match."""
     try:
-        conn.execute("SELECT sm_val FROM eod_summary LIMIT 1")
+        conn.execute("SELECT phase FROM eod_summary LIMIT 1")
     except Exception:
-        # Table missing or wrong schema — recreate
         conn.execute("DROP TABLE IF EXISTS eod_summary")
-    
     conn.execute("""
         CREATE TABLE IF NOT EXISTS eod_summary (
-            date        TEXT NOT NULL,
-            ticker      TEXT NOT NULL,
-            sm_val      REAL DEFAULT 0,
-            bm_val      REAL DEFAULT 0,
-            tx_count    INTEGER DEFAULT 0,
-            mf_plus     REAL,
-            mf_minus    REAL,
+            date             TEXT NOT NULL,
+            ticker           TEXT NOT NULL,
+            sm_val           REAL DEFAULT 0,
+            bm_val           REAL DEFAULT 0,
+            tx_count         INTEGER DEFAULT 0,
+            tx_sm            INTEGER DEFAULT 0,
+            tx_bm            INTEGER DEFAULT 0,
+            mf_plus          REAL,
+            mf_minus         REAL,
+            vwap_sm          REAL,
+            price_close      REAL,
+            price_change_pct REAL,
+            sri              REAL,
+            mes              REAL,
+            volx_gap         REAL,
+            rpr              REAL,
+            phase            TEXT,
+            action           TEXT,
             UNIQUE(date, ticker)
         )
     """)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_date ON eod_summary(date)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_ticker ON eod_summary(ticker, date)")
     conn.commit()
 
 
 def rebuild_summary_for_date(conn, date_str: str):
-    """Re-aggregate raw data for a single date into eod_summary."""
-    # SM/BM from raw_messages
+    """Aggregate raw data for a date into eod_summary (flow fields only)."""
     rows_sm_bm = conn.execute("""
-        SELECT ticker, channel,
-               SUM(mf_delta_numeric) AS mf,
-               COUNT(*) AS tx
+        SELECT ticker, channel, SUM(mf_delta_numeric) AS mf, COUNT(*) AS tx
+        FROM raw_messages WHERE date = ? GROUP BY ticker, channel
+    """, [date_str]).fetchall()
+
+    rows_vwap = conn.execute("""
+        SELECT ticker,
+               SUM(price * ABS(mf_delta_numeric)) / NULLIF(SUM(ABS(mf_delta_numeric)), 0) AS vwap
         FROM raw_messages
-        WHERE date = ?
-        GROUP BY ticker, channel
+        WHERE date = ? AND channel = 'smart' AND price > 0 AND mf_delta_numeric IS NOT NULL
+        GROUP BY ticker
     """, [date_str]).fetchall()
+    vwap_map = {r["ticker"]: r["vwap"] for r in rows_vwap if r["vwap"]}
 
-    # MF+/MF- from raw_mf_messages
     rows_mf = conn.execute("""
-        SELECT ticker, channel,
-               SUM(mf_numeric) AS mf
-        FROM raw_mf_messages
-        WHERE date = ?
-        GROUP BY ticker, channel
+        SELECT ticker, channel, SUM(mf_numeric) AS mf
+        FROM raw_mf_messages WHERE date = ? GROUP BY ticker, channel
     """, [date_str]).fetchall()
 
-    # Aggregate per ticker
     tickers = {}
     for r in rows_sm_bm:
         t = r["ticker"]
         if t not in tickers:
-            tickers[t] = {"sm": 0, "bm": 0, "tx": 0, "mfp": None, "mfm": None}
+            tickers[t] = {"sm": 0, "bm": 0, "tx": 0, "tx_sm": 0, "tx_bm": 0, "mfp": None, "mfm": None}
         if r["channel"] == "smart":
             tickers[t]["sm"] += r["mf"] or 0
+            tickers[t]["tx_sm"] += r["tx"] or 0
         else:
             tickers[t]["bm"] += abs(r["mf"] or 0)
+            tickers[t]["tx_bm"] += r["tx"] or 0
         tickers[t]["tx"] += r["tx"] or 0
 
     for r in rows_mf:
         t = r["ticker"]
         if t not in tickers:
-            tickers[t] = {"sm": 0, "bm": 0, "tx": 0, "mfp": None, "mfm": None}
+            tickers[t] = {"sm": 0, "bm": 0, "tx": 0, "tx_sm": 0, "tx_bm": 0, "mfp": None, "mfm": None}
         if r["channel"] == "mf_plus":
             tickers[t]["mfp"] = (tickers[t]["mfp"] or 0) + (r["mf"] or 0)
         elif r["channel"] == "mf_minus":
             tickers[t]["mfm"] = (tickers[t]["mfm"] or 0) + abs(r["mf"] or 0)
 
-    # Delete old summary for this date, then insert fresh
     conn.execute("DELETE FROM eod_summary WHERE date = ?", [date_str])
     for t, d in tickers.items():
         conn.execute("""
-            INSERT INTO eod_summary (date, ticker, sm_val, bm_val, tx_count, mf_plus, mf_minus)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (date_str, t, round(d["sm"], 2), round(d["bm"], 2), d["tx"], 
+            INSERT INTO eod_summary (date,ticker,sm_val,bm_val,tx_count,tx_sm,tx_bm,mf_plus,mf_minus,vwap_sm)
+            VALUES (?,?,?,?,?,?,?,?,?,?)
+        """, (date_str, t, round(d["sm"], 2), round(d["bm"], 2), d["tx"],
+              d["tx_sm"], d["tx_bm"],
               round(d["mfp"], 2) if d["mfp"] is not None else None,
-              round(d["mfm"], 2) if d["mfm"] is not None else None))
+              round(d["mfm"], 2) if d["mfm"] is not None else None,
+              round(vwap_map.get(t, 0), 2) if vwap_map.get(t) else None))
     conn.commit()
     return len(tickers)
 
 
+# ── Yahoo price enrichment (run once per day after market close) ──────────
+
+def _fetch_close(ticker):
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}.JK?range=5d&interval=1d"
+        r = requests.get(url, headers=_YAHOO_HEADERS, timeout=10)
+        closes = r.json()["chart"]["result"][0]["indicators"]["quote"][0]["close"]
+        for c in reversed(closes):
+            if c is not None:
+                return ticker, round(c, 2)
+    except Exception:
+        pass
+    return ticker, None
+
+
+def enrich_daily_prices(conn, date_str: str):
+    """Fetch Yahoo close prices for tickers missing price_close on this date."""
+    rows = conn.execute(
+        "SELECT DISTINCT ticker FROM eod_summary WHERE date = ? AND price_close IS NULL", [date_str]
+    ).fetchall()
+    tickers = [r["ticker"] for r in rows]
+    if not tickers:
+        return 0
+    log.info(f"  💰 Fetching close prices for {len(tickers)} tickers...")
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        results = list(ex.map(_fetch_close, tickers))
+    n = 0
+    for tk, close in results:
+        if close:
+            conn.execute("UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=?", [close, date_str, tk])
+            n += 1
+    conn.commit()
+    log.info(f"  💰 Prices: {n}/{len(tickers)} enriched")
+    return n
+
+
+# ── Wyckoff analytics computation ────────────────────────────────────────
+
+def _classify_phase(sri, mes, volx_gap, rpr, cm, pchg, price, low5):
+    if price and low5 and price <= low5 and cm > 0 and volx_gap < -1:
+        return "SPRING"
+    if sri > 1.5 and mes < 0.2 and cm > 0:
+        return "ABSORB"
+    if pchg is not None and pchg > 2 and sri > 1.5 and cm > 0:
+        return "SOS"
+    if pchg is not None and pchg > 2 and cm < 0 and rpr > 0.6:
+        return "UPTHRUST"
+    if cm < 0 and pchg is not None and pchg < 0 and sri > 1.0:
+        return "DISTRI"
+    return None
+
+
+def _get_action(phase, cm_3d):
+    if phase in ("SPRING", "ABSORB") and cm_3d > 0:
+        return "BUY"
+    if phase == "SOS":
+        return "HOLD"
+    if phase in ("UPTHRUST", "DISTRI"):
+        return "SELL"
+    return None
+
+
+def compute_analytics_for_date(conn, date_str: str):
+    """Compute SRI/MES/VolxGap/RPR/Phase/Action for all tickers on date_str."""
+    rows = conn.execute(
+        "SELECT ticker,sm_val,bm_val,tx_sm,tx_bm,vwap_sm,price_close FROM eod_summary WHERE date=?",
+        [date_str]
+    ).fetchall()
+    if not rows:
+        return 0
+
+    computed = 0
+    for row in rows:
+        tk = row["ticker"]
+        sm = row["sm_val"] or 0
+        bm = row["bm_val"] or 0
+        cm = sm - bm
+        tx_sm = row["tx_sm"] or 0
+        tx_bm = row["tx_bm"] or 0
+        pc = row["price_close"]
+        vwap = row["vwap_sm"]
+
+        hist = conn.execute(f"""
+            SELECT sm_val, bm_val, price_close FROM eod_summary
+            WHERE ticker=? ORDER BY {_DATE_SORT} DESC LIMIT 10
+        """, [tk]).fetchall()
+
+        # SRI
+        sm_h = [h["sm_val"] or 0 for h in hist if (h["sm_val"] or 0) > 0]
+        sma10 = sum(sm_h) / len(sm_h) if sm_h else 0
+        sri = round(sm / sma10, 2) if sma10 > 0 else 0
+
+        # RPR
+        ttx = tx_sm + tx_bm
+        rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
+
+        # Price change
+        prices = [h["price_close"] for h in hist if h["price_close"]]
+        pchg = None
+        if pc and len(prices) >= 2 and prices[1] and prices[1] > 0:
+            pchg = round((pc - prices[1]) / prices[1] * 100, 2)
+
+        # MES
+        mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else 0
+
+        # Volx Gap
+        vg = round((pc - vwap) / pc * 100, 2) if pc and vwap and pc > 0 else 0
+
+        # CM 3d + Low 5d
+        cm3 = sum((h["sm_val"] or 0) - (h["bm_val"] or 0) for h in hist[:3])
+        p5 = [h["price_close"] for h in hist[:5] if h["price_close"]]
+        low5 = min(p5) if p5 else None
+
+        phase = _classify_phase(sri, mes, vg, rpr, cm, pchg, pc, low5)
+        action = _get_action(phase, cm3)
+
+        conn.execute("""
+            UPDATE eod_summary SET price_change_pct=?,sri=?,mes=?,volx_gap=?,rpr=?,phase=?,action=?
+            WHERE date=? AND ticker=?
+        """, [pchg, sri, mes, vg, rpr, phase, action, date_str, tk])
+        computed += 1
+
+    conn.commit()
+    log.info(f"  📊 Analytics: {computed} tickers for {date_str}")
+    return computed
+
+
 def rebuild_all_summaries(conn):
-    """Rebuild eod_summary for ALL dates in raw data. Used for initial migration."""
+    """Rebuild eod_summary for ALL dates + analytics for recent 15 days."""
     ensure_summary_table(conn)
-    
-    # Get all unique dates from both tables
-    dates_sm = conn.execute(
-        "SELECT DISTINCT date FROM raw_messages ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
-    ).fetchall()
-    dates_mf = conn.execute(
-        "SELECT DISTINCT date FROM raw_mf_messages ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
-    ).fetchall()
-    
-    all_dates = sorted(set(r["date"] for r in dates_sm) | set(r["date"] for r in dates_mf))
-    
+    dates_sm = conn.execute(f"SELECT DISTINCT date FROM raw_messages ORDER BY {_DATE_SORT}").fetchall()
+    dates_mf = conn.execute(f"SELECT DISTINCT date FROM raw_mf_messages ORDER BY {_DATE_SORT}").fetchall()
+    all_dates = sorted(
+        set(r["date"] for r in dates_sm) | set(r["date"] for r in dates_mf),
+        key=lambda d: d[6:10] + d[3:5] + d[0:2]
+    )
     log.info(f"📊 Rebuilding summary for {len(all_dates)} dates...")
-    total_tickers = 0
+    total = 0
     for i, d in enumerate(all_dates):
-        n = rebuild_summary_for_date(conn, d)
-        total_tickers += n
+        total += rebuild_summary_for_date(conn, d)
         if (i + 1) % 50 == 0:
-            log.info(f"  ... {i+1}/{len(all_dates)} dates processed")
-    
-    log.info(f"✅ Summary rebuild complete: {len(all_dates)} dates, {total_tickers} ticker-rows")
-    return {"dates": len(all_dates), "ticker_rows": total_tickers}
+            log.info(f"  ... {i+1}/{len(all_dates)} dates done")
+    log.info(f"✅ Summary: {len(all_dates)} dates, {total} rows")
+
+    recent = all_dates[-15:]
+    log.info(f"📈 Enriching + analytics for {len(recent)} recent dates...")
+    for d in recent:
+        try:
+            enrich_daily_prices(conn, d)
+            compute_analytics_for_date(conn, d)
+        except Exception as e:
+            log.warning(f"  Enrich failed {d}: {e}")
+    return {"dates": len(all_dates), "ticker_rows": total}
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -617,11 +766,13 @@ async def run_backfill(client, conn):
         total_scanned += scanned
         total_saved += saved
 
-    # Update summary for today
+    # Update summary + analytics for today
     try:
         rebuild_summary_for_date(conn, today_wib)
+        enrich_daily_prices(conn, today_wib)
+        compute_analytics_for_date(conn, today_wib)
     except Exception as e:
-        log.warning(f"Summary update failed: {e}")
+        log.warning(f"Summary/analytics update failed: {e}")
     log.info(f"✅ BACKFILL complete: scanned={total_scanned}, new_rows={total_saved}")
 
 

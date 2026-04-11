@@ -650,7 +650,7 @@ td:first-child { text-align: left; }
   .date-input{width:88px;font-size:10px;padding:5px 6px}
   .date-arrow{width:24px;height:24px;font-size:11px}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 12px}
-  .flow-table{min-width:920px}
+  .flow-table{min-width:1080px}
   .flow-table thead th{padding:7px 8px;font-size:8px}
   .flow-table td{padding:7px 8px}
   .td-ticker{font-size:11px}
@@ -686,6 +686,17 @@ td:first-child { text-align: left; }
   .s-val{font-size:11px}
   .modal-chart-wrap{height:280px}
 }
+/* Phase & Action badges */
+.phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
+.phase-badge.spring{background:rgba(0,232,162,.15);color:#00e8a2}
+.phase-badge.absorb{background:rgba(77,159,255,.15);color:#4d9fff}
+.phase-badge.sos{background:rgba(0,232,162,.25);color:#00e8a2}
+.phase-badge.upthrust{background:rgba(255,140,66,.15);color:#ff8c42}
+.phase-badge.distri{background:rgba(255,77,106,.15);color:#ff4d6a}
+.action-badge{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:help;white-space:nowrap}
+.action-badge.buy{color:#00e8a2}
+.action-badge.sell{color:#ff4d6a}
+.action-badge.hold{color:#ff8c42}
 </style>
 </head>
 <body>
@@ -774,10 +785,12 @@ td:first-child { text-align: left; }
         <th onclick="sortBy('mf_minus',event)"     data-col="mf_minus" title="Money Outflow">MF− <span class="sort-icon"></span></th>
         <th onclick="sortBy('net_mf',event)"       data-col="net_mf" title="Net Money Flow">NET MF <span class="sort-icon"></span></th>
         <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="% perubahan harga">GAIN% <span class="sort-icon"></span></th>
+        <th onclick="sortBy('phase',event)"        data-col="phase" title="Wyckoff Phase">PHASE <span class="sort-icon"></span></th>
+        <th onclick="sortBy('action',event)"       data-col="action" title="Trading Signal">ACTION <span class="sort-icon"></span></th>
       </tr>
     </thead>
     <tbody id="flowBody">
-      <tr class="state-row"><td colspan="11"><span class="spinner-inline"></span>Memuat data...</td></tr>
+      <tr class="state-row"><td colspan="13"><span class="spinner-inline"></span>Memuat data...</td></tr>
     </tbody>
   </table>
 </div>
@@ -1198,7 +1211,7 @@ function renderTable() {
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="11">Tidak ada data untuk tanggal ini</td></tr>`;
+    tbody.innerHTML = `<tr class="state-row"><td colspan="13">Tidak ada data untuk tanggal ini</td></tr>`;
     return;
   }
 
@@ -1230,6 +1243,8 @@ function renderTable() {
       <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
       <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? fmtM(r.net_mf) : '—'}</span></td>
       <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
+      <td><span class="phase-badge ${r.phase ? r.phase.toLowerCase() : ''}">${r.phase || '—'}</span></td>
+      <td><span class="action-badge ${r.action ? r.action.toLowerCase() : ''}" title="SRI:${r.sri!=null?r.sri:'-'} MES:${r.mes!=null?r.mes:'-'} RPR:${r.rpr!=null?r.rpr:'-'} VxGap:${r.volx_gap!=null?r.volx_gap+'%':'-'}">${r.action==='BUY'?'🚀 BUY':r.action==='SELL'?'⚠️ SELL':r.action==='HOLD'?'⌛ HOLD':'—'}</span></td>
     </tr>`;
   }).join('');
 }
@@ -1244,11 +1259,11 @@ function rsmToColor(rsm) {
 
 function showLoading() {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="11"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+    `<tr class="state-row"><td colspan="13"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="11">⚠ ${msg}</td></tr>`;
+    `<tr class="state-row"><td colspan="13">⚠ ${msg}</td></tr>`;
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────

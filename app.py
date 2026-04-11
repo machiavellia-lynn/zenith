@@ -16,6 +16,7 @@ def is_authed():
 # ── Config ──────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("DB_PATH", r"C:\Users\rabim\Downloads\zenith_project\zenith.db")
 WIB     = timezone(timedelta(hours=7))
+_DATE_SORT = "substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
 GAIN_EXECUTOR = ThreadPoolExecutor(max_workers=10)
 
 # ── Sector mapping ──────────────────────────────────────────────────────
@@ -359,84 +360,55 @@ def flow():
 
     placeholders = ",".join("?" for _ in dates)
 
-    # Check flow DB cache
-    cache_key = f"{date_from}|{date_to}"
-    with _flow_cache_lock:
-        cached = _flow_cache.get(cache_key)
-        if cached and (time.time() - cached["ts"]) < FLOW_CACHE_TTL:
-            rows_sm_bm = cached["sm_bm"]
-            rows_mf = cached["mf"]
-            # Skip DB query, use cached
-            conn = None
-        else:
-            cached = None
+    try:
+        conn = get_db()
 
-    if cached is None:
-        try:
-            conn = get_db()
+        # ── Read from pre-aggregated eod_summary ──
+        rows = conn.execute(f"""
+            SELECT ticker,
+                   SUM(sm_val)   AS sm_val,
+                   SUM(bm_val)   AS bm_val,
+                   SUM(tx_count) AS tx,
+                   SUM(mf_plus)  AS mf_plus,
+                   SUM(mf_minus) AS mf_minus
+            FROM eod_summary
+            WHERE date IN ({placeholders})
+            GROUP BY ticker
+        """, dates).fetchall()
 
-            rows_sm_bm = conn.execute(f"""
-                SELECT
-                    ticker,
-                    channel,
-                    SUM(mf_delta_numeric) AS mf,
-                    COUNT(*) AS tx_total
-                FROM raw_messages
-                WHERE date IN ({placeholders})
-                GROUP BY ticker, channel
-            """, dates).fetchall()
+        # ── Analytics from LATEST date only (phase is daily) ──
+        analytics_map = {}
+        latest_date_row = conn.execute(f"""
+            SELECT date FROM eod_summary
+            WHERE date IN ({placeholders})
+            ORDER BY {_DATE_SORT} DESC LIMIT 1
+        """, dates).fetchone()
+        if latest_date_row:
+            a_rows = conn.execute("""
+                SELECT ticker, price_close, price_change_pct, sri, mes, volx_gap, rpr, phase, action, vwap_sm
+                FROM eod_summary WHERE date = ?
+            """, [latest_date_row["date"]]).fetchall()
+            for ar in a_rows:
+                analytics_map[ar["ticker"]] = dict(ar)
 
-            rows_mf = conn.execute(f"""
-                SELECT
-                    ticker,
-                    channel,
-                    SUM(mf_numeric)       AS mf,
-                    SUM(mft_numeric)      AS mft,
-                    SUM(cm_delta_numeric) AS cm_delta
-                FROM raw_mf_messages
-                WHERE date IN ({placeholders})
-                GROUP BY ticker, channel
-            """, dates).fetchall()
+    except Exception as e:
+        return jsonify({"error": f"DB error: {e}"}), 500
 
-            # Convert to plain dicts for caching (sqlite3.Row not picklable)
-            rows_sm_bm = [dict(r) for r in rows_sm_bm]
-            rows_mf = [dict(r) for r in rows_mf]
-
-            with _flow_cache_lock:
-                _flow_cache[cache_key] = {"sm_bm": rows_sm_bm, "mf": rows_mf, "ts": time.time()}
-
-        except Exception as e:
-            return jsonify({"error": f"DB error: {e}"}), 500
-
-    # Agregasi SM/BM per ticker
+    # Build data dict
     data = {}
-    for row in rows_sm_bm:
+    for row in rows:
         t = row["ticker"]
-        if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0}
-        if row["channel"] == "smart":
-            data[t]["sm_val"] += row["mf"] or 0
-            data[t]["tx"] = (data[t].get("tx") or 0) + (row.get("tx_total") or 0)
-        else:
-            data[t]["bm_val"] += abs(row["mf"] or 0)
-            data[t]["tx"] = (data[t].get("tx") or 0) + (row.get("tx_total") or 0)
-
-    # Agregasi MF+/MF- per ticker dari raw_mf_messages
-    for row in rows_mf:
-        t = row["ticker"]
-        if t not in data:
-            data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0}
-        if row["channel"] == "mf_plus":
-            data[t]["mf_plus"] = (data[t]["mf_plus"] or 0) + (row["mf"] or 0)
-        elif row["channel"] == "mf_minus":
-            data[t]["mf_minus"] = (data[t]["mf_minus"] or 0) + abs(row["mf"] or 0)
-
-    # Hitung net_mf per ticker
-    for t, d in data.items():
+        data[t] = {
+            "sm_val": row["sm_val"] or 0,
+            "bm_val": row["bm_val"] or 0,
+            "tx": row["tx"] or 0,
+            "mf_plus": row["mf_plus"],
+            "mf_minus": row["mf_minus"],
+            "net_mf": None,
+        }
+        d = data[t]
         if d["mf_plus"] is not None or d["mf_minus"] is not None:
-            mfp = d["mf_plus"]  or 0
-            mfm = d["mf_minus"] or 0
-            data[t]["net_mf"] = round(mfp - mfm, 2)
+            d["net_mf"] = round((d["mf_plus"] or 0) - (d["mf_minus"] or 0), 2)
 
     if not data:
         # If sector param given, still need to return sector tickers with gains
@@ -473,6 +445,7 @@ def flow():
         net = round(d["net_mf"],   2) if d.get("net_mf") is not None else None
 
         g = gains.get(t, {})
+        a = analytics_map.get(t, {})
         tickers.append({
             "ticker":      t,
             "clean_money": cm,
@@ -483,8 +456,15 @@ def flow():
             "mf_minus":    mfm,
             "net_mf":      net,
             "gain_pct":    g.get("gain"),
-            "price":       g.get("price"),
+            "price":       g.get("price") or a.get("price_close"),
             "tx":          int(d.get("tx") or 0),
+            "phase":       a.get("phase"),
+            "action":      a.get("action"),
+            "sri":         a.get("sri"),
+            "mes":         a.get("mes"),
+            "volx_gap":    a.get("volx_gap"),
+            "rpr":         a.get("rpr"),
+            "price_change": a.get("price_change_pct"),
         })
 
     # Sort default: clean_money desc (nulls last)

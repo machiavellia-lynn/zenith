@@ -24,6 +24,7 @@ from scraper_daily import (
     save_sm_bm_rows, save_mf_rows,
     get_scraper_db, get_message_topic_id,
     rebuild_summary_for_date, ensure_summary_table,
+    enrich_daily_prices, compute_analytics_for_date,
     GROUP_ID, ALL_TOPICS, SM_BM_TOPICS, MF_TOPICS,
     TOPIC_LABELS, TOPIC_CHANNELS,
     API_ID, API_HASH, SESSION_PATH, WIB,
@@ -130,9 +131,11 @@ async def run_weekly_backfill(client=None, conn=None, days=DAYS_BACK):
         for d in valid_dates:
             try:
                 rebuild_summary_for_date(conn, d)
+                enrich_daily_prices(conn, d)
+                compute_analytics_for_date(conn, d)
             except Exception:
                 pass
-        log.info(f"✅ Summaries rebuilt")
+        log.info(f"✅ Summaries + analytics rebuilt")
 
     if own_client:
         await client.disconnect()
