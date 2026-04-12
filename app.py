@@ -363,12 +363,14 @@ def flow():
     try:
         conn = get_db()
 
-        # ── Read from pre-aggregated eod_summary ──
+        # ── Read from pre-aggregated eod_summary (include tx_sm/tx_bm for RPR) ──
         rows = conn.execute(f"""
             SELECT ticker,
                    SUM(sm_val)   AS sm_val,
                    SUM(bm_val)   AS bm_val,
                    SUM(tx_count) AS tx,
+                   SUM(tx_sm)    AS tx_sm,
+                   SUM(tx_bm)    AS tx_bm,
                    SUM(mf_plus)  AS mf_plus,
                    SUM(mf_minus) AS mf_minus
             FROM eod_summary
@@ -376,7 +378,7 @@ def flow():
             GROUP BY ticker
         """, dates).fetchall()
 
-        # ── Analytics from LATEST date only (phase is daily) ──
+        # ── SRI + volx_gap from LATEST date (needs historical context) ──
         analytics_map = {}
         latest_date_row = conn.execute(f"""
             SELECT date FROM eod_summary
@@ -385,7 +387,7 @@ def flow():
         """, dates).fetchone()
         if latest_date_row:
             a_rows = conn.execute("""
-                SELECT ticker, price_close, price_change_pct, sri, mes, volx_gap, rpr, phase, action, vwap_sm
+                SELECT ticker, price_close, sri, volx_gap, vwap_sm
                 FROM eod_summary WHERE date = ?
             """, [latest_date_row["date"]]).fetchall()
             for ar in a_rows:
@@ -402,6 +404,8 @@ def flow():
             "sm_val": row["sm_val"] or 0,
             "bm_val": row["bm_val"] or 0,
             "tx": row["tx"] or 0,
+            "tx_sm": row["tx_sm"] or 0,
+            "tx_bm": row["tx_bm"] or 0,
             "mf_plus": row["mf_plus"],
             "mf_minus": row["mf_minus"],
             "net_mf": None,
@@ -447,27 +451,67 @@ def flow():
         g = gains.get(t, {})
         a = analytics_map.get(t, {})
         gain = g.get("gain")
-        phase = a.get("phase")
-        action = a.get("action")
         sri = a.get("sri") or 0
-        rpr_val = a.get("rpr") or 0
         volx_gap = a.get("volx_gap")
 
-        # ── MES: compute on-the-fly from gain% (most reliable) ──
-        pchg = gain if gain is not None else a.get("price_change_pct")
+        # ── Compute RPR from RANGE data (not single day) ──
+        range_tx_sm = d.get("tx_sm") or 0
+        range_tx_bm = d.get("tx_bm") or 0
+        range_tx_total = range_tx_sm + range_tx_bm
+        rpr_val = round(range_tx_bm / range_tx_total, 2) if range_tx_total > 0 else 0
+
+        # ── MES: |gain%| ÷ SRI ──
+        pchg = gain
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
-        # ── Phase refinement: use Yahoo gain% when DB price_change is NULL ──
-        if gain is not None and cm is not None:
-            if gain > 2 and cm > 0 and sri > 1.0 and phase not in ("SPRING",):
+        # ── Phase: computed entirely from RANGE-aggregated data ──
+        phase = None
+        action = None
+
+        if cm is not None:
+            # SOS: gain > 2% + CM positif + SM aktif
+            if gain is not None and gain > 2 and cm > 0 and sri > 1.0:
                 phase = "SOS"
                 action = "BUY" if gain < 5 else "HOLD"
-            elif gain > 2 and cm < 0 and rpr_val > 0.5:
+            # SPRING: harga turun + CM positif + SM beli di harga diskon
+            elif gain is not None and gain < -1 and cm > 0 and sri > 1.0:
+                phase = "SPRING"
+                action = "BUY"
+            # UPTHRUST: gain > 2% + CM negatif + big player dominan jual
+            elif gain is not None and gain > 2 and cm < 0 and rpr_val > 0.5:
                 phase = "UPTHRUST"
                 action = "SELL"
-            elif gain < -2 and cm < 0 and phase not in ("DISTRI",):
+            # DISTRI: CM negatif + harga turun + SM aktif jual
+            elif cm < 0 and gain is not None and gain < -0.5 and sri > 0.8:
                 phase = "DISTRI"
                 action = "SELL"
+            # ABSORB: SM very active + CM positif + harga flat
+            elif cm > 0 and sri > 1.5 and gain is not None and abs(gain) < 1:
+                phase = "ABSORB"
+                action = "BUY"
+            # ── Fallback tanpa gain ──
+            elif cm < 0 and sri > 1.0 and rpr_val > 0.5:
+                phase = "DISTRI"
+                action = "SELL"
+            elif cm < 0 and rpr_val > 0.65:
+                phase = "UPTHRUST"
+                action = "SELL"
+            elif cm > 0 and sri > 2.0:
+                phase = "ABSORB"
+                action = "BUY"
+            elif cm < 0 and sri > 0.8:
+                phase = "DISTRI"
+                action = "SELL"
+            # ── Catch-all ──
+            elif cm > 0:
+                phase = "ACCUM"
+                action = "BUY" if cm > 0 else "HOLD"
+            elif cm < 0:
+                phase = "DISTRI"
+                action = "SELL"
+            else:
+                phase = "NEUTRAL"
+                action = "HOLD"
 
         tickers.append({
             "ticker":      t,
