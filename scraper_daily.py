@@ -1078,18 +1078,31 @@ def get_backtest_result(conn, days=None):
 
 
 def _fetch_price_history(ticker, days=90):
-    """Fetch daily close prices from Yahoo for a ticker."""
+    """Fetch daily OHLCV from Yahoo for a ticker. Returns {date: {o,h,l,c}}."""
     try:
         url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}.JK?range={days}d&interval=1d"
         r = requests.get(url, headers=_YAHOO_HEADERS, timeout=15)
         data = r.json()["chart"]["result"][0]
         timestamps = data.get("timestamp", [])
-        closes = data["indicators"]["quote"][0]["close"]
+        q = data["indicators"]["quote"][0]
+        opens = q.get("open", [])
+        highs = q.get("high", [])
+        lows = q.get("low", [])
+        closes = q.get("close", [])
         prices = {}
-        for ts, c in zip(timestamps, closes):
+        for i, ts in enumerate(timestamps):
+            o = opens[i] if i < len(opens) else None
+            h = highs[i] if i < len(highs) else None
+            l = lows[i] if i < len(lows) else None
+            c = closes[i] if i < len(closes) else None
             if c is not None:
                 d = datetime.fromtimestamp(ts, tz=WIB).strftime("%d-%m-%Y")
-                prices[d] = round(c, 2)
+                prices[d] = {
+                    "o": round(o, 2) if o else c,
+                    "h": round(h, 2) if h else c,
+                    "l": round(l, 2) if l else c,
+                    "c": round(c, 2),
+                }
         return ticker, prices
     except Exception:
         return ticker, {}
@@ -1150,19 +1163,22 @@ def run_backtest(conn, days=30):
     """).fetchall()
     all_dates = [r["date"] for r in all_dates]
 
-    if len(all_dates) < 6:
+    if len(all_dates) < 3:
         log.warning("Not enough dates for backtest")
         return {"error": "Not enough data", "total_signals": 0}
 
-    # Take last N dates for signals (but need +5 more for forward returns)
-    signal_dates = all_dates[-(days + 5):-5] if len(all_dates) > days + 5 else all_dates[:-5]
-    forward_dates = all_dates  # full range for price lookup
+    # Take last N dates for signals (need +5 more for forward returns)
+    min_forward = 5
+    if len(all_dates) > days + min_forward:
+        signal_dates = all_dates[-(days + min_forward):-min_forward]
+    else:
+        signal_dates = all_dates[:-min_forward] if len(all_dates) > min_forward else []
 
     if not signal_dates:
-        return {"error": "Not enough dates", "total_signals": 0}
+        return {"error": "Not enough dates for forward returns", "total_signals": 0}
 
     # Build date index for fast D+N lookup
-    date_list = all_dates  # chronological
+    date_list = all_dates
     date_idx = {d: i for i, d in enumerate(date_list)}
 
     log.info(f"  Signal dates: {len(signal_dates)} ({signal_dates[0]} → {signal_dates[-1]})")
@@ -1187,24 +1203,27 @@ def run_backtest(conn, days=30):
     log.info(f"  Prices fetched for {len(price_map)} tickers")
 
     # 4. Also use eod_summary prices as fallback
-    eod_prices = conn.execute(f"""
-        SELECT ticker, date, price_close FROM eod_summary WHERE price_close IS NOT NULL
-    """).fetchall()
+    eod_prices = conn.execute(
+        "SELECT ticker, date, price_close FROM eod_summary WHERE price_close IS NOT NULL"
+    ).fetchall()
     for r in eod_prices:
         tk, dt, pc = r["ticker"], r["date"], r["price_close"]
         if tk not in price_map:
             price_map[tk] = {}
         if dt not in price_map[tk]:
-            price_map[tk][dt] = pc
+            price_map[tk][dt] = {"o": pc, "h": pc, "l": pc, "c": pc}
 
     # 5. For each signal date, compute phase+action and forward returns
-    signals = []  # list of {ticker, date, phase, action, ret_1d, ret_3d, ret_5d}
+    #    Entry: OPEN of D+1 (trader sees signal after close, buys next open)
+    #    BUY return: (max HIGH within D+1..D+N - entry) / entry
+    #    SELL return: (entry - min LOW within D+1..D+N) / entry
+    signals = []
 
     for date_str in signal_dates:
-        rows = conn.execute(f"""
-            SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri
-            FROM eod_summary WHERE date = ?
-        """, [date_str]).fetchall()
+        rows = conn.execute(
+            "SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri FROM eod_summary WHERE date = ?",
+            [date_str]
+        ).fetchall()
 
         d_idx = date_idx.get(date_str)
         if d_idx is None:
@@ -1218,41 +1237,68 @@ def run_backtest(conn, days=30):
             tx_sm = row["tx_sm"] or 0
             tx_bm = row["tx_bm"] or 0
 
-            # Get signal day price
             tp = price_map.get(tk, {})
-            p0 = tp.get(date_str)
-            if not p0:
-                continue  # can't compute returns without price
+            day_data = tp.get(date_str)
+            if not day_data:
+                continue
 
-            # Get gain% for phase computation
-            # Find previous date price
+            # Gain% = signal day change (for phase computation)
             gain = None
             if d_idx > 0:
                 prev_date = date_list[d_idx - 1]
-                p_prev = tp.get(prev_date)
-                if p_prev and p_prev > 0:
-                    gain = round((p0 - p_prev) / p_prev * 100, 2)
+                prev_data = tp.get(prev_date)
+                if prev_data and prev_data["c"] > 0:
+                    gain = round((day_data["c"] - prev_data["c"]) / prev_data["c"] * 100, 2)
 
             phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm)
 
-            # Forward returns
+            # Entry = OPEN of D+1
+            next_idx = d_idx + 1
+            if next_idx >= len(date_list):
+                continue
+            next_date = date_list[next_idx]
+            next_data = tp.get(next_date)
+            if not next_data or not next_data["o"] or next_data["o"] <= 0:
+                continue
+            entry = next_data["o"]
+
+            # Forward returns: check D+1 through D+N
             rets = {}
             for horizon, label in [(1, "1d"), (3, "3d"), (5, "5d")]:
-                future_idx = d_idx + horizon
-                if future_idx < len(date_list):
-                    future_date = date_list[future_idx]
-                    pf = tp.get(future_date)
-                    if pf and p0 > 0:
-                        rets[label] = round((pf - p0) / p0 * 100, 2)
+                # Collect OHLCV for D+1 through D+horizon
+                max_high = 0
+                min_low = float("inf")
+                last_close = None
+                valid = False
+                for offset in range(1, horizon + 1):
+                    fi = d_idx + offset
+                    if fi >= len(date_list):
+                        break
+                    fd = date_list[fi]
+                    fdata = tp.get(fd)
+                    if fdata:
+                        valid = True
+                        if fdata["h"]: max_high = max(max_high, fdata["h"])
+                        if fdata["l"]: min_low = min(min_low, fdata["l"])
+                        last_close = fdata["c"]
+
+                if valid and entry > 0:
+                    if action == "BUY":
+                        # BUY return = max potential gain from entry
+                        rets[label] = round((max_high - entry) / entry * 100, 2)
+                    elif action == "SELL":
+                        # SELL return = max potential drop from entry (positive = correct)
+                        rets[label] = round((entry - min_low) / entry * 100, 2)
+                    else:
+                        # HOLD return = close-based
+                        if last_close:
+                            rets[label] = round((last_close - entry) / entry * 100, 2)
 
             if rets:
                 signals.append({
-                    "ticker": tk,
-                    "date": date_str,
-                    "phase": phase,
-                    "action": action,
-                    "p0": p0,
-                    **rets,
+                    "ticker": tk, "date": date_str,
+                    "phase": phase, "action": action,
+                    "entry": entry, **rets,
                 })
 
     log.info(f"  Total signals with returns: {len(signals)}")
@@ -1275,10 +1321,13 @@ def run_backtest(conn, days=30):
         def hit_rate(rets, act):
             if not rets: return None
             if act == "BUY":
+                # BUY return = max potential gain. Hit if > 0 (price went above entry)
                 hits = sum(1 for r in rets if r > 0)
             elif act == "SELL":
-                hits = sum(1 for r in rets if r < 0)
-            else:  # HOLD — hit if price didn't crash (stayed > -2%)
+                # SELL return = max potential drop. Hit if > 0 (price went below entry)
+                hits = sum(1 for r in rets if r > 0)
+            else:
+                # HOLD: hit if close didn't crash > -2%
                 hits = sum(1 for r in rets if r > -2)
             return round(hits / len(rets) * 100, 1)
 
