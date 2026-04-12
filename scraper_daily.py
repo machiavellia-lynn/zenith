@@ -1154,6 +1154,9 @@ def run_backtest(conn, days=30):
             results TEXT NOT NULL
         )
     """)
+    # Clear old cache for this days value immediately so stale results
+    # are never served while the new computation is in progress.
+    conn.execute("DELETE FROM backtest_cache WHERE days=?", [days])
     conn.commit()
 
     # 1. Get all dates with data, sorted chronologically
