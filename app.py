@@ -464,51 +464,40 @@ def flow():
         pchg = gain
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
-        # ── Phase: computed entirely from RANGE-aggregated data ──
-        phase = None
-        action = None
+        # ── Phase: RSM-based (size-agnostic) ──
+        phase = "NEUTRAL"
+        action = "HOLD"
 
-        if cm is not None:
-            # SOS: gain > 2% + CM positif + SM aktif
-            if gain is not None and gain > 2 and cm > 0 and sri > 1.0:
+        if rsm is not None and cm is not None:
+            # SOS: strong price up + SM very active + SM dominates
+            if gain is not None and gain > 2 and rsm > 65 and sri > 3.0:
                 phase = "SOS"
                 action = "BUY" if gain < 5 else "HOLD"
-            # SPRING: harga turun + CM positif + SM beli di harga diskon
-            elif gain is not None and gain < -1 and cm > 0 and sri > 1.0:
+            # SPRING: price down + SM dominates + SM active
+            elif gain is not None and gain < -1 and rsm > 60 and sri > 1.5:
                 phase = "SPRING"
                 action = "BUY"
-            # UPTHRUST: gain > 2% + CM negatif + big player dominan jual
-            elif gain is not None and gain > 2 and cm < 0 and rpr_val > 0.5:
+            # UPTHRUST: price up + BM dominates + heavy selling
+            elif gain is not None and gain > 2 and rsm < 40 and rpr_val > 0.6:
                 phase = "UPTHRUST"
                 action = "SELL"
-            # DISTRI: CM negatif + harga turun + SM aktif jual
-            elif cm < 0 and gain is not None and gain < -0.5 and sri > 0.8:
+            # DISTRI: BM dominates + price falling + active
+            elif rsm < 40 and gain is not None and gain < -0.5 and sri > 1.0:
                 phase = "DISTRI"
                 action = "SELL"
-            # ABSORB: SM very active + CM positif + harga flat
-            elif cm > 0 and sri > 1.5 and gain is not None and abs(gain) < 1:
+            # ABSORB: SM very active + dominates + price flat
+            elif sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < 1.5:
                 phase = "ABSORB"
                 action = "BUY"
-            # ── Fallback tanpa gain ──
-            elif cm < 0 and sri > 1.0 and rpr_val > 0.5:
-                phase = "DISTRI"
-                action = "SELL"
-            elif cm < 0 and rpr_val > 0.65:
-                phase = "UPTHRUST"
-                action = "SELL"
-            elif cm > 0 and sri > 2.0:
-                phase = "ABSORB"
-                action = "BUY"
-            elif cm < 0 and sri > 0.8:
-                phase = "DISTRI"
-                action = "SELL"
-            # ── Catch-all ──
-            elif cm > 0:
+            # ACCUM: SM dominates with real activity (not catch-all)
+            elif rsm > 60 and sri > 1.0:
                 phase = "ACCUM"
-                action = "BUY" if cm > 0 else "HOLD"
-            elif cm < 0:
+                action = "BUY"
+            # DISTRI fallback: BM clearly dominates
+            elif rsm < 35 and sri > 0.8:
                 phase = "DISTRI"
                 action = "SELL"
+            # Everything else = NEUTRAL
             else:
                 phase = "NEUTRAL"
                 action = "HOLD"

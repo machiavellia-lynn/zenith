@@ -603,46 +603,41 @@ def enrich_daily_prices(conn, date_str: str):
 
 # ── Wyckoff analytics computation ────────────────────────────────────────
 
-def _classify_phase(sri, mes, volx_gap, rpr, cm, pchg, price, low5):
-    """Classify Wyckoff phase. Every ticker gets a label."""
-    # ── Tier 1: Strong signals (with price data) ──
-    if price and low5 and price <= low5 and cm > 0 and volx_gap < -1:
-        return "SPRING"
-    if sri > 1.5 and cm > 0 and pchg is not None and abs(pchg) < 1:
-        return "ABSORB"
-    if pchg is not None and pchg > 2 and sri > 1.5 and cm > 0:
+def _classify_phase(sri, rsm, rpr, pchg, price, low5, volx_gap):
+    """Classify Wyckoff phase using RSM (size-agnostic)."""
+    # SOS: strong price up + SM very active + SM dominates
+    if pchg is not None and pchg > 2 and rsm > 65 and sri > 3.0:
         return "SOS"
-    if pchg is not None and pchg > 2 and cm < 0 and rpr > 0.5:
+    # SPRING: price down + SM dominates + SM active
+    if pchg is not None and pchg < -1 and rsm > 60 and sri > 1.5:
+        return "SPRING"
+    # Also SPRING via price vs low5
+    if price and low5 and price <= low5 and rsm > 60 and volx_gap < -1:
+        return "SPRING"
+    # UPTHRUST: price up + BM dominates + heavy selling
+    if pchg is not None and pchg > 2 and rsm < 40 and rpr > 0.6:
         return "UPTHRUST"
-    if cm < 0 and pchg is not None and pchg < -0.5 and sri > 0.8:
+    # DISTRI: BM dominates + price falling + active
+    if rsm < 40 and pchg is not None and pchg < -0.5 and sri > 1.0:
         return "DISTRI"
-    # ── Tier 2: Clear signals (without price) ──
-    if cm < 0 and sri > 1.0 and rpr > 0.5:
-        return "DISTRI"
-    if cm < 0 and rpr > 0.65:
-        return "UPTHRUST"
-    if cm > 0 and sri > 2.0:
+    # ABSORB: SM very active + dominates + price flat
+    if sri > 2.0 and rsm > 65 and pchg is not None and abs(pchg) < 1.5:
         return "ABSORB"
-    if cm < 0 and sri > 0.8:
-        return "DISTRI"
-    # ── Tier 3: Catch-all (every ticker gets a label) ──
-    if cm > 0:
+    # ACCUM: SM dominates with real activity
+    if rsm > 60 and sri > 1.0:
         return "ACCUM"
-    if cm < 0:
+    # DISTRI fallback: BM clearly dominates
+    if rsm < 35 and sri > 0.8:
         return "DISTRI"
     return "NEUTRAL"
 
 
-def _get_action(phase, cm_3d):
-    """Derive trading action from phase + 3-day CM trend."""
-    if phase in ("SPRING", "ABSORB") and cm_3d > 0:
+def _get_action(phase, pchg):
+    """Derive trading action from phase."""
+    if phase == "SOS":
+        return "BUY" if (pchg is not None and pchg < 5) else "HOLD"
+    if phase in ("SPRING", "ABSORB", "ACCUM"):
         return "BUY"
-    if phase in ("ABSORB", "SOS"):
-        return "HOLD"
-    if phase == "ACCUM" and cm_3d > 0:
-        return "BUY"
-    if phase == "ACCUM":
-        return "HOLD"
     if phase in ("UPTHRUST", "DISTRI"):
         return "SELL"
     return "HOLD"
@@ -717,8 +712,12 @@ def compute_analytics_for_date(conn, date_str: str):
         p5 = [h["price_close"] for h in hist[:5] if h["price_close"]]
         low5 = min(p5) if p5 else None
 
-        phase = _classify_phase(sri, mes, vg, rpr, cm, pchg, pc, low5)
-        action = _get_action(phase, cm3)
+        # RSM
+        total_val = sm + bm
+        rsm_val = round(sm / total_val * 100, 1) if total_val > 0 else 50
+
+        phase = _classify_phase(sri, rsm_val, rpr, pchg, pc, low5, vg)
+        action = _get_action(phase, pchg)
 
         conn.execute("""
             UPDATE eod_summary SET price_change_pct=?,sri=?,mes=?,volx_gap=?,rpr=?,phase=?,action=?
@@ -1097,49 +1096,36 @@ def _fetch_price_history(ticker, days=90):
 
 
 def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm):
-    """Compute phase+action from single-day data. Returns (phase, action)."""
+    """Compute phase+action using RSM-based thresholds (size-agnostic)."""
     cm = sm - bm
+    total_val = sm + bm
+    rsm = (sm / total_val * 100) if total_val > 0 else 50
     ttx = tx_sm + tx_bm
-    rpr = tx_bm / ttx if ttx > 0 else 0
+    rpr = tx_bm / ttx if ttx > 0 else 0.5
 
-    if cm > 0 and gain is not None and gain > 2 and sri > 1.0:
-        phase = "SOS"
-        action = "BUY" if gain < 5 else "HOLD"
-    elif cm > 0 and gain is not None and gain < -1 and sri > 1.0:
-        phase = "SPRING"
-        action = "BUY"
-    elif cm < 0 and gain is not None and gain > 2 and rpr > 0.5:
-        phase = "UPTHRUST"
-        action = "SELL"
-    elif cm < 0 and gain is not None and gain < -0.5 and sri > 0.8:
-        phase = "DISTRI"
-        action = "SELL"
-    elif cm > 0 and sri > 1.5 and gain is not None and abs(gain) < 1:
-        phase = "ABSORB"
-        action = "BUY"
-    elif cm < 0 and sri > 1.0 and rpr > 0.5:
-        phase = "DISTRI"
-        action = "SELL"
-    elif cm < 0 and rpr > 0.65:
-        phase = "UPTHRUST"
-        action = "SELL"
-    elif cm > 0 and sri > 2.0:
-        phase = "ABSORB"
-        action = "BUY"
-    elif cm < 0 and sri > 0.8:
-        phase = "DISTRI"
-        action = "SELL"
-    elif cm > 0:
-        phase = "ACCUM"
-        action = "BUY"
-    elif cm < 0:
-        phase = "DISTRI"
-        action = "SELL"
-    else:
-        phase = "NEUTRAL"
-        action = "HOLD"
-
-    return phase, action
+    # SOS: strong price up + SM very active + SM dominates
+    if gain is not None and gain > 2 and rsm > 65 and sri > 3.0:
+        return "SOS", ("BUY" if gain < 5 else "HOLD")
+    # SPRING: price down + SM dominates + SM active
+    if gain is not None and gain < -1 and rsm > 60 and sri > 1.5:
+        return "SPRING", "BUY"
+    # UPTHRUST: price up + BM dominates + heavy selling
+    if gain is not None and gain > 2 and rsm < 40 and rpr > 0.6:
+        return "UPTHRUST", "SELL"
+    # DISTRI: BM dominates + price falling + active
+    if rsm < 40 and gain is not None and gain < -0.5 and sri > 1.0:
+        return "DISTRI", "SELL"
+    # ABSORB: SM very active + dominates + price flat
+    if sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < 1.5:
+        return "ABSORB", "BUY"
+    # ACCUM: SM dominates with real activity
+    if rsm > 60 and sri > 1.0:
+        return "ACCUM", "BUY"
+    # DISTRI fallback: BM clearly dominates
+    if rsm < 35 and sri > 0.8:
+        return "DISTRI", "SELL"
+    # NEUTRAL
+    return "NEUTRAL", "HOLD"
 
 
 def run_backtest(conn, days=30):
