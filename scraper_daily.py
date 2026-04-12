@@ -846,9 +846,13 @@ def request_rebuild():
 
 
 def get_backfill_status():
-    """Called from HTTP thread to check backfill progress."""
+    """Called from HTTP thread to check backfill/rebuild/backtest progress."""
     with _backfill_lock:
-        return {"backfill": dict(_backfill_request), "rebuild": dict(_rebuild_request)}
+        return {
+            "backfill": dict(_backfill_request),
+            "rebuild": dict(_rebuild_request),
+            "backtest": dict(_backtest_request),
+        }
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -903,15 +907,17 @@ async def scraper_main():
 
         # ── Scheduled backfill loop ───────────────────────────────────────
         backfill_done_today = False
+        backtest_done_today = False
         last_check_date = None
 
         while True:
             now_wib = datetime.now(WIB)
             today_str = now_wib.strftime("%Y-%m-%d")
 
-            # Reset flag at midnight
+            # Reset flags at midnight
             if today_str != last_check_date:
                 backfill_done_today = False
+                backtest_done_today = False
                 last_check_date = today_str
 
             # Run backfill at scheduled time
@@ -923,7 +929,18 @@ async def scraper_main():
                     backfill_done_today = True
                 except Exception as e:
                     log.error(f"❌ Backfill error: {e}")
-                    backfill_done_today = True  # don't retry endlessly
+                    backfill_done_today = True
+
+            # Run nightly backtest at 18:00 WIB
+            if (not backtest_done_today
+                    and now_wib.hour >= BACKTEST_HOUR
+                    and backfill_done_today):
+                try:
+                    run_backtest(conn, days=30)
+                    backtest_done_today = True
+                except Exception as e:
+                    log.error(f"❌ Nightly backtest error: {e}")
+                    backtest_done_today = True
 
             # Check for manual backfill request (from HTTP endpoint)
             with _backfill_lock:
@@ -966,6 +983,25 @@ async def scraper_main():
                         _rebuild_request["status"] = "error"
                         _rebuild_request["result"] = str(e)
 
+            # Check for manual backtest request
+            with _backfill_lock:
+                bt_days = None
+                if _backtest_request["status"] == "pending":
+                    bt_days = _backtest_request["days"]
+                    _backtest_request["status"] = "running"
+
+            if bt_days:
+                try:
+                    result = run_backtest(conn, days=bt_days)
+                    with _backfill_lock:
+                        _backtest_request["status"] = "done"
+                        _backtest_request["result"] = {"ok": True, "total_signals": result.get("total_signals", 0)}
+                except Exception as e:
+                    log.error(f"❌ Backtest error: {e}")
+                    with _backfill_lock:
+                        _backtest_request["status"] = "error"
+                        _backtest_request["result"] = str(e)
+
             await asyncio.sleep(5)  # check every 5 seconds
 
     except Exception as e:
@@ -1003,3 +1039,298 @@ def start_scraper_thread():
     t.start()
     log.info("🚀 Scraper thread started")
     return t
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  BACKTEST ENGINE
+# ══════════════════════════════════════════════════════════════════════════════
+
+import json
+
+_backtest_request = {"days": None, "status": "idle", "result": None}
+BACKTEST_HOUR = 18  # 18:00 WIB
+
+def request_backtest(days: int):
+    with _backfill_lock:
+        if _backtest_request["status"] == "running":
+            return {"ok": False, "error": "Backtest already running"}
+        _backtest_request["days"] = days
+        _backtest_request["status"] = "pending"
+        _backtest_request["result"] = None
+        return {"ok": True, "message": f"Backtest {days} days queued."}
+
+
+def get_backtest_result(conn, days=None):
+    """Read latest cached backtest result from DB."""
+    try:
+        if days:
+            row = conn.execute(
+                "SELECT results FROM backtest_cache WHERE days=? ORDER BY computed_at DESC LIMIT 1", [days]
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT results FROM backtest_cache ORDER BY computed_at DESC LIMIT 1"
+            ).fetchone()
+        if row:
+            return json.loads(row["results"])
+    except Exception:
+        pass
+    return None
+
+
+def _fetch_price_history(ticker, days=90):
+    """Fetch daily close prices from Yahoo for a ticker."""
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}.JK?range={days}d&interval=1d"
+        r = requests.get(url, headers=_YAHOO_HEADERS, timeout=15)
+        data = r.json()["chart"]["result"][0]
+        timestamps = data.get("timestamp", [])
+        closes = data["indicators"]["quote"][0]["close"]
+        prices = {}
+        for ts, c in zip(timestamps, closes):
+            if c is not None:
+                d = datetime.fromtimestamp(ts, tz=WIB).strftime("%d-%m-%Y")
+                prices[d] = round(c, 2)
+        return ticker, prices
+    except Exception:
+        return ticker, {}
+
+
+def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm):
+    """Compute phase+action from single-day data. Returns (phase, action)."""
+    cm = sm - bm
+    ttx = tx_sm + tx_bm
+    rpr = tx_bm / ttx if ttx > 0 else 0
+
+    if cm > 0 and gain is not None and gain > 2 and sri > 1.0:
+        phase = "SOS"
+        action = "BUY" if gain < 5 else "HOLD"
+    elif cm > 0 and gain is not None and gain < -1 and sri > 1.0:
+        phase = "SPRING"
+        action = "BUY"
+    elif cm < 0 and gain is not None and gain > 2 and rpr > 0.5:
+        phase = "UPTHRUST"
+        action = "SELL"
+    elif cm < 0 and gain is not None and gain < -0.5 and sri > 0.8:
+        phase = "DISTRI"
+        action = "SELL"
+    elif cm > 0 and sri > 1.5 and gain is not None and abs(gain) < 1:
+        phase = "ABSORB"
+        action = "BUY"
+    elif cm < 0 and sri > 1.0 and rpr > 0.5:
+        phase = "DISTRI"
+        action = "SELL"
+    elif cm < 0 and rpr > 0.65:
+        phase = "UPTHRUST"
+        action = "SELL"
+    elif cm > 0 and sri > 2.0:
+        phase = "ABSORB"
+        action = "BUY"
+    elif cm < 0 and sri > 0.8:
+        phase = "DISTRI"
+        action = "SELL"
+    elif cm > 0:
+        phase = "ACCUM"
+        action = "BUY"
+    elif cm < 0:
+        phase = "DISTRI"
+        action = "SELL"
+    else:
+        phase = "NEUTRAL"
+        action = "HOLD"
+
+    return phase, action
+
+
+def run_backtest(conn, days=30):
+    """Run backtest on last N days of signals. Returns results dict."""
+    log.info(f"🧪 BACKTEST started: {days} days")
+
+    # Ensure cache table
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS backtest_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            computed_at TEXT NOT NULL,
+            days INTEGER NOT NULL,
+            results TEXT NOT NULL
+        )
+    """)
+    conn.commit()
+
+    # 1. Get all dates with data, sorted chronologically
+    all_dates = conn.execute(f"""
+        SELECT DISTINCT date FROM eod_summary
+        ORDER BY {_DATE_SORT}
+    """).fetchall()
+    all_dates = [r["date"] for r in all_dates]
+
+    if len(all_dates) < 6:
+        log.warning("Not enough dates for backtest")
+        return {"error": "Not enough data", "total_signals": 0}
+
+    # Take last N dates for signals (but need +5 more for forward returns)
+    signal_dates = all_dates[-(days + 5):-5] if len(all_dates) > days + 5 else all_dates[:-5]
+    forward_dates = all_dates  # full range for price lookup
+
+    if not signal_dates:
+        return {"error": "Not enough dates", "total_signals": 0}
+
+    # Build date index for fast D+N lookup
+    date_list = all_dates  # chronological
+    date_idx = {d: i for i, d in enumerate(date_list)}
+
+    log.info(f"  Signal dates: {len(signal_dates)} ({signal_dates[0]} → {signal_dates[-1]})")
+
+    # 2. Get all tickers that appear in signal dates
+    ph = ",".join("?" for _ in signal_dates)
+    all_tickers = conn.execute(f"""
+        SELECT DISTINCT ticker FROM eod_summary WHERE date IN ({ph})
+    """, signal_dates).fetchall()
+    ticker_list = [r["ticker"] for r in all_tickers]
+    log.info(f"  Tickers: {len(ticker_list)}")
+
+    # 3. Fetch Yahoo price history for all tickers (parallel)
+    log.info(f"  Fetching Yahoo prices for {len(ticker_list)} tickers...")
+    price_map = {}  # ticker → {date → price}
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        fetch_days = max(days + 30, 90)
+        results = list(ex.map(lambda t: _fetch_price_history(t, fetch_days), ticker_list))
+    for tk, prices in results:
+        if prices:
+            price_map[tk] = prices
+    log.info(f"  Prices fetched for {len(price_map)} tickers")
+
+    # 4. Also use eod_summary prices as fallback
+    eod_prices = conn.execute(f"""
+        SELECT ticker, date, price_close FROM eod_summary WHERE price_close IS NOT NULL
+    """).fetchall()
+    for r in eod_prices:
+        tk, dt, pc = r["ticker"], r["date"], r["price_close"]
+        if tk not in price_map:
+            price_map[tk] = {}
+        if dt not in price_map[tk]:
+            price_map[tk][dt] = pc
+
+    # 5. For each signal date, compute phase+action and forward returns
+    signals = []  # list of {ticker, date, phase, action, ret_1d, ret_3d, ret_5d}
+
+    for date_str in signal_dates:
+        rows = conn.execute(f"""
+            SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri
+            FROM eod_summary WHERE date = ?
+        """, [date_str]).fetchall()
+
+        d_idx = date_idx.get(date_str)
+        if d_idx is None:
+            continue
+
+        for row in rows:
+            tk = row["ticker"]
+            sm = row["sm_val"] or 0
+            bm = row["bm_val"] or 0
+            sri = row["sri"] or 0
+            tx_sm = row["tx_sm"] or 0
+            tx_bm = row["tx_bm"] or 0
+
+            # Get signal day price
+            tp = price_map.get(tk, {})
+            p0 = tp.get(date_str)
+            if not p0:
+                continue  # can't compute returns without price
+
+            # Get gain% for phase computation
+            # Find previous date price
+            gain = None
+            if d_idx > 0:
+                prev_date = date_list[d_idx - 1]
+                p_prev = tp.get(prev_date)
+                if p_prev and p_prev > 0:
+                    gain = round((p0 - p_prev) / p_prev * 100, 2)
+
+            phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm)
+
+            # Forward returns
+            rets = {}
+            for horizon, label in [(1, "1d"), (3, "3d"), (5, "5d")]:
+                future_idx = d_idx + horizon
+                if future_idx < len(date_list):
+                    future_date = date_list[future_idx]
+                    pf = tp.get(future_date)
+                    if pf and p0 > 0:
+                        rets[label] = round((pf - p0) / p0 * 100, 2)
+
+            if rets:
+                signals.append({
+                    "ticker": tk,
+                    "date": date_str,
+                    "phase": phase,
+                    "action": action,
+                    "p0": p0,
+                    **rets,
+                })
+
+    log.info(f"  Total signals with returns: {len(signals)}")
+
+    # 6. Aggregate into leaderboard
+    from collections import defaultdict
+    combos = defaultdict(lambda: {"count": 0, "rets_1d": [], "rets_3d": [], "rets_5d": []})
+
+    for s in signals:
+        key = f"{s['phase']}|{s['action']}"
+        combos[key]["count"] += 1
+        if "1d" in s: combos[key]["rets_1d"].append(s["1d"])
+        if "3d" in s: combos[key]["rets_3d"].append(s["3d"])
+        if "5d" in s: combos[key]["rets_5d"].append(s["5d"])
+
+    leaderboard = []
+    for key, data in combos.items():
+        phase, action = key.split("|")
+
+        def hit_rate(rets, act):
+            if not rets: return None
+            if act == "BUY":
+                hits = sum(1 for r in rets if r > 0)
+            elif act == "SELL":
+                hits = sum(1 for r in rets if r < 0)
+            else:  # HOLD — hit if price didn't crash (stayed > -2%)
+                hits = sum(1 for r in rets if r > -2)
+            return round(hits / len(rets) * 100, 1)
+
+        def avg_ret(rets):
+            return round(sum(rets) / len(rets), 2) if rets else None
+
+        leaderboard.append({
+            "phase": phase,
+            "action": action,
+            "count": data["count"],
+            "hit_1d": hit_rate(data["rets_1d"], action),
+            "hit_3d": hit_rate(data["rets_3d"], action),
+            "hit_5d": hit_rate(data["rets_5d"], action),
+            "avg_ret_1d": avg_ret(data["rets_1d"]),
+            "avg_ret_3d": avg_ret(data["rets_3d"]),
+            "avg_ret_5d": avg_ret(data["rets_5d"]),
+        })
+
+    # Sort by hit_5d desc
+    leaderboard.sort(key=lambda x: x.get("hit_5d") or 0, reverse=True)
+
+    result = {
+        "computed_at": datetime.now(WIB).strftime("%Y-%m-%d %H:%M WIB"),
+        "days": days,
+        "date_range": f"{signal_dates[0]} → {signal_dates[-1]}" if signal_dates else "",
+        "total_signals": len(signals),
+        "tickers_tested": len(set(s["ticker"] for s in signals)),
+        "leaderboard": leaderboard,
+    }
+
+    # Store in cache
+    conn.execute(
+        "INSERT INTO backtest_cache (computed_at, days, results) VALUES (?, ?, ?)",
+        [result["computed_at"], days, json.dumps(result)]
+    )
+    # Keep only last 10 results
+    conn.execute("DELETE FROM backtest_cache WHERE id NOT IN (SELECT id FROM backtest_cache ORDER BY id DESC LIMIT 10)")
+    conn.commit()
+
+    log.info(f"✅ BACKTEST complete: {len(signals)} signals, {len(leaderboard)} combos")
+    return result

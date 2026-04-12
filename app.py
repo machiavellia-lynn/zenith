@@ -1226,6 +1226,67 @@ def rebuild_summary():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ── Backtest ──────────────────────────────────────────────────────────────
+@app.route("/backtest")
+def backtest_page():
+    if not is_authed(): return redirect("/")
+    return render_template("backtest.html")
+
+
+@app.route("/api/backtest")
+def api_backtest():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
+    days = int(request.args.get("days", "30"))
+    run = request.args.get("run", "")
+
+    # Trigger new backtest if requested
+    if run == "1":
+        try:
+            from scraper_daily import request_backtest, get_backfill_status
+            request_backtest(days)
+            status = get_backfill_status()
+            return jsonify({"triggered": True, "backtest": status.get("backtest", {})})
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # Check status if running
+    if request.args.get("status"):
+        try:
+            from scraper_daily import get_backfill_status
+            return jsonify(get_backfill_status().get("backtest", {}))
+        except:
+            return jsonify({"status": "idle"})
+
+    # Read cached results
+    try:
+        conn = get_db()
+        from scraper_daily import get_backtest_result
+        result = get_backtest_result(conn, days)
+        if result:
+            return jsonify(result)
+        # Try any days
+        result = get_backtest_result(conn)
+        if result:
+            return jsonify(result)
+        return jsonify({"error": "No backtest results. Click RUN BACKTEST.", "total_signals": 0})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/admin/trigger-backtest")
+def trigger_backtest():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+    days = int(request.args.get("days", "30"))
+    try:
+        from scraper_daily import request_backtest
+        result = request_backtest(days)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/admin/download-db")
 def download_db():
     """Download zenith.db for local backup."""
