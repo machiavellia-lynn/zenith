@@ -461,7 +461,7 @@ def flow():
         if gain is not None and cm is not None:
             if gain > 2 and cm > 0 and sri > 1.0 and phase not in ("SPRING",):
                 phase = "SOS"
-                action = "HOLD"
+                action = "BUY" if gain < 5 else "HOLD"
             elif gain > 2 and cm < 0 and rpr_val > 0.5:
                 phase = "UPTHRUST"
                 action = "SELL"

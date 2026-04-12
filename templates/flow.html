@@ -1143,7 +1143,7 @@ function applyFilter() {
 }
 
 function clearFilters() {
-  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = true);
   phaseFilter = null; actionFilter = null;
   document.getElementById('filterCount').style.display = 'none';
   document.querySelector('#filterDropdown .filter-btn').classList.remove('active');
@@ -1793,7 +1793,7 @@ const INFO_CONTENT=`
     <div class="info-term"><div class="info-term-label sm">SRI — SM Relative Intensity</div><div class="info-term-desc">Mengukur agresivitas bandar hari ini vs rata-rata 10 hari. SRI = SM hari ini ÷ rata-rata SM 10 hari. SRI > 2.0 = bandar 2× lebih aktif dari biasanya.</div></div>
     <div class="info-term"><div class="info-term-label muted">MES — Market Efficiency</div><div class="info-term-desc">Effort vs Result. MES = |perubahan harga%| ÷ SRI. MES < 0.2 = bandar belanja besar tapi harga gak gerak (absorption). MES > 2.0 = harga gerak liar tanpa dukungan bandar.</div></div>
     <div class="info-term"><div class="info-term-label cm">Volx Gap</div><div class="info-term-desc">Selisih harga penutupan vs rata-rata harga belanja bandar. Gap < -1.5% = harga di bawah basis beli bandar (discount). Gap > 1.5% = harga sudah di atas harga beli bandar (premium).</div></div>
-    <div class="info-term"><div class="info-term-label bm">RPR — Retail Participation</div><div class="info-term-desc">Rasio aktivitas ritel vs total. RPR = TX BM ÷ (TX SM + TX BM). RPR > 0.65 = ritel mendominasi (hati-hati jebakan). RPR < 0.35 = bandar mendominasi.</div></div>
+    <div class="info-term"><div class="info-term-label bm">RPR — Rasio Tekanan Jual</div><div class="info-term-desc">Mengukur dominasi aksi jual big player. RPR = TX BM ÷ (TX SM + TX BM). RPR > 0.65 = big player lebih banyak JUAL daripada beli (tekanan distribusi tinggi). RPR < 0.35 = big player lebih banyak BELI (akumulasi dominan).</div></div>
   </div>
 </div>
 <div class="info-section">
@@ -1801,8 +1801,8 @@ const INFO_CONTENT=`
   <div class="info-scenarios">
     <div class="info-scenario"><div class="info-scenario-title">🟢 SPRING — Pegas Siap Mental</div><div class="info-scenario-desc">Harga jatuh ke titik terendah 5 hari, tapi bandar justru BELI (CM positif). Seperti pegas yang ditekan — siap mental ke atas. Ini sinyal akumulasi di harga bawah.</div></div>
     <div class="info-scenario"><div class="info-scenario-title">🔵 ABSORB — Bandar Nyerap Barang</div><div class="info-scenario-desc">Bandar belanja besar-besaran (SRI tinggi) tapi harga dijaga flat. Mereka sengaja beli pelan-pelan supaya gak ketahuan. Fase sebelum harga breakout naik.</div></div>
-    <div class="info-scenario"><div class="info-scenario-title">🟢 SOS — Sign of Strength</div><div class="info-scenario-desc">Harga naik > 2% DENGAN dukungan bandar (CM positif + SRI tinggi). Kenaikan yang sehat dan berpotensi lanjut. Konfirmasi momentum.</div></div>
-    <div class="info-scenario"><div class="info-scenario-title">🟠 UPTHRUST — Jebakan Naik</div><div class="info-scenario-desc">Harga naik > 2% tapi bandar JUALAN (CM negatif), ritel yang beli (RPR tinggi). Jebakan — harga kemungkinan turun setelah ini. Hindari beli di sini.</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🟢 SOS — Sign of Strength</div><div class="info-scenario-desc">Harga naik > 2% DENGAN dukungan big player (CM positif + SRI tinggi). Kenaikan yang sehat dan berpotensi lanjut. Sinyal: BUY jika kenaikan masih < 5% (masih awal, harga belum lari jauh). HOLD jika sudah naik ≥ 5% (jangan kejar harga yang sudah terlalu tinggi).</div></div>
+    <div class="info-scenario"><div class="info-scenario-title">🟠 UPTHRUST — Jebakan Naik</div><div class="info-scenario-desc">Harga naik > 2% tapi big player lebih banyak BUANG barang (CM negatif, RPR tinggi). Kenaikan harga tidak didukung oleh pembelian besar — kemungkinan turun setelah ini. Hindari beli di sini.</div></div>
     <div class="info-scenario"><div class="info-scenario-title">🔴 DISTRI — Distribusi</div><div class="info-scenario-desc">Bandar sedang buang barang (CM negatif + bandar aktif). Harga kemungkinan turun. Fase jual/take profit.</div></div>
     <div class="info-scenario"><div class="info-scenario-title">🟢 ACCUM — Akumulasi Ringan</div><div class="info-scenario-desc">Ada pembelian bandar (CM positif) tapi belum cukup agresif untuk ABSORB atau SPRING. Masih tahap awal pengumpulan barang.</div></div>
     <div class="info-scenario"><div class="info-scenario-title">⚪ NEUTRAL — Netral</div><div class="info-scenario-desc">Tidak ada aktivitas signifikan. CM mendekati nol. Tidak ada sinyal arah yang jelas.</div></div>
