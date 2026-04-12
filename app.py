@@ -451,16 +451,21 @@ def flow():
         action = a.get("action")
         sri = a.get("sri") or 0
         rpr_val = a.get("rpr") or 0
+        volx_gap = a.get("volx_gap")
+
+        # ── MES: compute on-the-fly from gain% (most reliable) ──
+        pchg = gain if gain is not None else a.get("price_change_pct")
+        mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
         # ── Phase refinement: use Yahoo gain% when DB price_change is NULL ──
         if gain is not None and cm is not None:
             if gain > 2 and cm > 0 and sri > 1.0 and phase not in ("SPRING",):
                 phase = "SOS"
                 action = "HOLD"
-            elif gain > 2 and cm is not None and cm < 0 and rpr_val > 0.5:
+            elif gain > 2 and cm < 0 and rpr_val > 0.5:
                 phase = "UPTHRUST"
                 action = "SELL"
-            elif gain < -2 and cm is not None and cm < 0 and phase not in ("DISTRI",):
+            elif gain < -2 and cm < 0 and phase not in ("DISTRI",):
                 phase = "DISTRI"
                 action = "SELL"
 
@@ -478,11 +483,11 @@ def flow():
             "tx":          int(d.get("tx") or 0),
             "phase":       phase,
             "action":      action,
-            "sri":         a.get("sri"),
-            "mes":         a.get("mes"),
-            "volx_gap":    a.get("volx_gap"),
-            "rpr":         a.get("rpr"),
-            "price_change": a.get("price_change_pct"),
+            "sri":         sri if sri else None,
+            "mes":         mes,
+            "volx_gap":    volx_gap,
+            "rpr":         rpr_val if rpr_val else None,
+            "price_change": pchg,
         })
 
     # Sort default: clean_money desc (nulls last)
