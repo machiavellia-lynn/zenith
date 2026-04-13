@@ -1180,12 +1180,15 @@ def run_backtest(conn, days=30):
     ticker_list = [r["ticker"] for r in ticker_rows]
     log.info(f"  Tickers: {len(ticker_list)}")
 
-    # 3. Fetch Yahoo OHLCV (parallel)
-    log.info(f"  Fetching OHLCV for {len(ticker_list)} tickers...")
+    # 3. Fetch Yahoo OHLCV — calculate exact range from our data dates
+    earliest = use_dates[0]  # DD-MM-YYYY
+    d_earliest = datetime.strptime(earliest, "%d-%m-%Y")
+    d_today = datetime.now()  # naive, matches strptime
+    calendar_span = min((d_today - d_earliest).days + 10, 730)  # +10 buffer, max 2yr
+    log.info(f"  Fetching OHLCV for {len(ticker_list)} tickers (range={calendar_span}d)...")
     price_map = {}
     with ThreadPoolExecutor(max_workers=10) as ex:
-        fetch_days = int(days * 1.6) + 30  # trading days → calendar days + buffer
-        results = list(ex.map(lambda t: _fetch_price_history(t, fetch_days), ticker_list))
+        results = list(ex.map(lambda t: _fetch_price_history(t, calendar_span), ticker_list))
     for tk, prices in results:
         if prices:
             price_map[tk] = prices

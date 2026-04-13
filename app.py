@@ -1228,23 +1228,35 @@ def api_backtest():
     days = int(request.args.get("days", "30"))
     run = request.args.get("run", "")
 
-    # Trigger new backtest if requested
+    # Trigger new backtest in dedicated thread (bypass signal queue)
     if run == "1":
-        try:
-            from scraper_daily import request_backtest, get_backfill_status
-            request_backtest(days)
-            status = get_backfill_status()
-            return jsonify({"triggered": True, "backtest": status.get("backtest", {})})
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
+        global _bt_thread, _bt_status
+        if _bt_thread and _bt_thread.is_alive():
+            return jsonify({"error": "Backtest already running", "triggered": False})
 
-    # Check status if running
+        _bt_status = {"status": "running", "days": days, "result": None}
+
+        def _run_bt():
+            global _bt_status
+            try:
+                import sqlite3
+                c = sqlite3.connect(DB_PATH)
+                c.row_factory = sqlite3.Row
+                c.execute("PRAGMA busy_timeout = 10000")
+                from scraper_daily import run_backtest
+                result = run_backtest(c, days=days)
+                _bt_status = {"status": "done", "days": days, "result": result}
+                c.close()
+            except Exception as e:
+                _bt_status = {"status": "error", "result": str(e)}
+
+        _bt_thread = threading.Thread(target=_run_bt, daemon=True)
+        _bt_thread.start()
+        return jsonify({"triggered": True, "backtest": {"status": "running"}})
+
+    # Check status
     if request.args.get("status"):
-        try:
-            from scraper_daily import get_backfill_status
-            return jsonify(get_backfill_status().get("backtest", {}))
-        except:
-            return jsonify({"status": "idle"})
+        return jsonify({"status": _bt_status.get("status", "idle")})
 
     # Read cached results — exact match only
     try:
@@ -1256,6 +1268,10 @@ def api_backtest():
         return jsonify({"error": f"No backtest for {days} days. Click RUN BACKTEST.", "total_trades": 0})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+_bt_thread = None
+_bt_status = {"status": "idle"}
 
 
 @app.route("/admin/trigger-backtest")
