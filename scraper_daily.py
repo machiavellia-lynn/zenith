@@ -990,6 +990,7 @@ async def scraper_main():
                 if _backtest_request["status"] == "pending":
                     bt_days = _backtest_request["days"]
                     _backtest_request["status"] = "running"
+                    log.info(f"📋 Backtest request picked up: {bt_days} days")
 
             if bt_days:
                 try:

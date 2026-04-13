@@ -1246,18 +1246,14 @@ def api_backtest():
         except:
             return jsonify({"status": "idle"})
 
-    # Read cached results
+    # Read cached results — exact match only
     try:
         conn = get_db()
         from scraper_daily import get_backtest_result
         result = get_backtest_result(conn, days)
         if result:
             return jsonify(result)
-        # Try any days
-        result = get_backtest_result(conn)
-        if result:
-            return jsonify(result)
-        return jsonify({"error": "No backtest results. Click RUN BACKTEST.", "total_trades": 0})
+        return jsonify({"error": f"No backtest for {days} days. Click RUN BACKTEST.", "total_trades": 0})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
