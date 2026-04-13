@@ -1184,7 +1184,7 @@ def run_backtest(conn, days=30):
     log.info(f"  Fetching OHLCV for {len(ticker_list)} tickers...")
     price_map = {}
     with ThreadPoolExecutor(max_workers=10) as ex:
-        fetch_days = max(days + 30, 120)
+        fetch_days = int(days * 1.6) + 30  # trading days → calendar days + buffer
         results = list(ex.map(lambda t: _fetch_price_history(t, fetch_days), ticker_list))
     for tk, prices in results:
         if prices:
@@ -1304,13 +1304,22 @@ def run_backtest(conn, days=30):
 
     # 6. Aggregate into leaderboard by Entry→Exit combo
     from collections import defaultdict
-    combos = defaultdict(lambda: {"trades": 0, "wins": 0, "profits": [], "durations": []})
+    combos = defaultdict(lambda: {"trades": 0, "wins": 0, "profits": [], "durations": [], "details": []})
 
     for t in trades:
         key = f"{t['entry_phase']}|{t['exit_phase']}"
         combos[key]["trades"] += 1
         combos[key]["profits"].append(t["profit"])
         combos[key]["durations"].append(t["duration"])
+        combos[key]["details"].append({
+            "ticker": t["ticker"],
+            "entry_date": t["entry_date"],
+            "exit_date": t["exit_date"],
+            "entry_price": t["entry_price"],
+            "exit_price": t["exit_price"],
+            "duration": t["duration"],
+            "profit": t["profit"],
+        })
         if t["profit"] > 0:
             combos[key]["wins"] += 1
 
@@ -1340,6 +1349,7 @@ def run_backtest(conn, days=30):
             "avg_loss": avg_loss,
             "avg_duration": avg_dur,
             "expectancy": expectancy,
+            "details": sorted(data["details"], key=lambda x: x["profit"], reverse=True),
         })
 
     leaderboard.sort(key=lambda x: x.get("expectancy") or 0, reverse=True)

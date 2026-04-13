@@ -36,7 +36,7 @@ thead th:first-child,thead th:nth-child(2),thead th:nth-child(3){text-align:left
 thead th:hover{color:var(--text)}
 thead th.sorted{color:var(--accent)}
 thead th .si{margin-left:3px;font-size:7px}
-tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
+tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
 tbody tr:hover{background:rgba(255,255,255,.03)}
 td{padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
 td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
@@ -57,7 +57,26 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 @keyframes spin{to{transform:rotate(360deg)}}
 .empty{text-align:center;padding:60px 20px;color:var(--muted);font-family:'Space Mono',monospace;font-size:12px}
 .info-text{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:16px;line-height:1.6}
-@media(max-width:768px){header{gap:8px;padding:10px 12px}.content{padding:14px}.summary{gap:8px}.sum-item{padding:8px 12px;min-width:90px}.sum-val{font-size:14px}table{min-width:800px}}
+
+/* Trade detail modal */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;display:none;align-items:center;justify-content:center;padding:20px}
+.modal-bg.show{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border2);border-radius:12px;max-width:800px;width:100%;max-height:80vh;overflow:hidden;display:flex;flex-direction:column}
+.modal-header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border)}
+.modal-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px}
+.modal-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:4px;transition:color .15s}
+.modal-close:hover{color:var(--text)}
+.modal-body{overflow:auto;padding:0}
+.detail-table{width:100%;border-collapse:collapse}
+.detail-table th{position:sticky;top:0;background:var(--surface2);padding:8px 12px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap}
+.detail-table th:first-child{text-align:left}
+.detail-table td{padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+.detail-table td:first-child{text-align:left;color:var(--accent2);font-weight:700}
+.detail-table tr:hover{background:rgba(255,255,255,.02)}
+.detail-summary{padding:12px 20px;border-top:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap}
+.detail-summary span{color:var(--text)}
+
+@media(max-width:768px){header{gap:8px;padding:10px 12px}.content{padding:14px}.summary{gap:8px}.sum-item{padding:8px 12px;min-width:90px}.sum-val{font-size:14px}table{min-width:800px}.modal{max-width:100%;max-height:90vh;border-radius:8px}.detail-table{min-width:600px}}
 </style>
 </head>
 <body>
@@ -91,8 +110,8 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
     <table>
       <thead><tr>
         <th onclick="sortLB('rank')">#<span class="si"></span></th>
-        <th onclick="sortLB('entry')">ENTRY PHASE<span class="si"></span></th>
-        <th onclick="sortLB('exit')">EXIT PHASE<span class="si"></span></th>
+        <th onclick="sortLB('entry')">ENTRY<span class="si"></span></th>
+        <th onclick="sortLB('exit')">EXIT<span class="si"></span></th>
         <th onclick="sortLB('trades')">TRADES<span class="si"></span></th>
         <th onclick="sortLB('win_rate')">WIN RATE<span class="si"></span></th>
         <th onclick="sortLB('avg_profit')">AVG PROFIT<span class="si"></span></th>
@@ -102,16 +121,41 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
         <th onclick="sortLB('expectancy')">EXPECTANCY<span class="si"></span></th>
       </tr></thead>
       <tbody id="lbBody">
-        <tr><td colspan="10" class="empty">Belum ada data. Klik RUN BACKTEST untuk memulai.</td></tr>
+        <tr><td colspan="10" class="empty">Belum ada data. Klik RUN BACKTEST.</td></tr>
       </tbody>
     </table>
   </div>
   <div class="info-text">
-    Entry: beli di OPEN hari setelah sinyal BUY muncul. Exit: jual di OPEN hari setelah sinyal SELL muncul.<br>
-    Win Rate: % trade yang profit. Expectancy: (Win% × Avg Win) − (Loss% × |Avg Loss|).<br>
-    Expectancy positif = strategi menguntungkan dalam jangka panjang.
+    Klik baris untuk melihat detail trade. Entry: OPEN D+1 setelah BUY. Exit: OPEN D+1 setelah SELL.<br>
+    Expectancy = (Win% × Avg Win) − (Loss% × |Avg Loss|). Positif = strategi jangka panjang untung.
   </div>
 </div>
+
+<!-- Trade Detail Modal -->
+<div class="modal-bg" id="modalBg" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modalTitle">Trade Detail</div>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <table class="detail-table">
+        <thead><tr>
+          <th>TICKER</th>
+          <th>ENTRY DATE</th>
+          <th>EXIT DATE</th>
+          <th>ENTRY PRICE</th>
+          <th>EXIT PRICE</th>
+          <th>DAYS</th>
+          <th>PROFIT</th>
+        </tr></thead>
+        <tbody id="detailBody"></tbody>
+      </table>
+    </div>
+    <div class="detail-summary" id="detailSummary"></div>
+  </div>
+</div>
+
 <script>
 let lbData = [];
 let sortCol = 'expectancy';
@@ -130,7 +174,7 @@ async function runBacktest() {
   try {
     const r = await fetch(`/api/backtest?days=${days}&run=1`);
     const d = await r.json();
-    if (d.triggered) { setStatus('Running. Pairing BUY→SELL trades...', true); pollBacktest(); }
+    if (d.triggered) { setStatus('Running...', true); pollBacktest(); }
     else { setStatus('Error: ' + (d.error || '?')); btn.disabled = false; btn.textContent = 'RUN BACKTEST'; }
   } catch(e) { setStatus('Network error'); btn.disabled = false; btn.textContent = 'RUN BACKTEST'; }
 }
@@ -199,7 +243,6 @@ function renderLeaderboard() {
     const medal = i < 3 ? `<span class="medal">${medals[i]}</span>` : `${i+1}`;
     const eCls = r.entry ? r.entry.toLowerCase() : '';
     const xCls = r.exit ? r.exit.toLowerCase() : '';
-
     function vc(v) {
       if (v == null) return '<td>—</td>';
       const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
@@ -210,16 +253,12 @@ function renderLeaderboard() {
       const cls = v >= 60 ? 'pos' : v >= 45 ? 'ok' : 'neg';
       return `<td><span class="val ${cls}">${v}%</span></td>`;
     }
-
-    return `<tr>
+    return `<tr onclick="showDetail(${i})">
       <td style="text-align:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700">${medal}</td>
       <td><span class="phase-badge ${eCls}">${r.entry}</span></td>
       <td><span class="phase-badge ${xCls}">${r.exit}</span></td>
       <td style="font-family:'Space Mono',monospace;font-size:12px">${r.trades}</td>
-      ${wc(r.win_rate)}
-      ${vc(r.avg_profit)}
-      ${vc(r.avg_win)}
-      ${vc(r.avg_loss)}
+      ${wc(r.win_rate)}${vc(r.avg_profit)}${vc(r.avg_win)}${vc(r.avg_loss)}
       <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${r.avg_duration}d</td>
       ${vc(r.expectancy)}
     </tr>`;
@@ -233,6 +272,56 @@ function renderLeaderboard() {
   });
 }
 
+function showDetail(idx) {
+  // Get the sorted index mapping
+  const rows = [...lbData];
+  rows.sort((a, b) => {
+    let av = a[sortCol], bv = b[sortCol];
+    if (av == null) av = sortAsc ? Infinity : -Infinity;
+    if (bv == null) bv = sortAsc ? Infinity : -Infinity;
+    if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
+    return sortAsc ? av - bv : bv - av;
+  });
+  const r = rows[idx];
+  if (!r || !r.details) return;
+
+  document.getElementById('modalTitle').innerHTML =
+    `<span class="phase-badge ${r.entry.toLowerCase()}">${r.entry}</span>` +
+    `<span style="color:var(--muted);font-size:12px">→</span>` +
+    `<span class="phase-badge ${r.exit.toLowerCase()}">${r.exit}</span>` +
+    `<span style="color:var(--muted);font-size:11px;margin-left:8px">${r.details.length} trades</span>`;
+
+  const tbody = document.getElementById('detailBody');
+  tbody.innerHTML = r.details.map(d => {
+    const cls = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : 'zero';
+    const sign = d.profit > 0 ? '+' : '';
+    return `<tr>
+      <td>${d.ticker}</td>
+      <td style="color:var(--muted)">${d.entry_date}</td>
+      <td style="color:var(--muted)">${d.exit_date}</td>
+      <td>${d.entry_price.toLocaleString('id-ID')}</td>
+      <td>${d.exit_price.toLocaleString('id-ID')}</td>
+      <td style="color:var(--muted)">${d.duration}d</td>
+      <td><span class="val ${cls}">${sign}${d.profit}%</span></td>
+    </tr>`;
+  }).join('');
+
+  const wins = r.details.filter(d => d.profit > 0).length;
+  const losses = r.details.length - wins;
+  document.getElementById('detailSummary').innerHTML =
+    `Total: <span>${r.details.length}</span> &nbsp;|&nbsp; ` +
+    `Win: <span style="color:var(--up)">${wins}</span> &nbsp;|&nbsp; ` +
+    `Loss: <span style="color:var(--down)">${losses}</span> &nbsp;|&nbsp; ` +
+    `Avg Profit: <span style="color:${r.avg_profit>=0?'var(--up)':'var(--down)'}">${r.avg_profit>0?'+':''}${r.avg_profit}%</span>`;
+
+  document.getElementById('modalBg').classList.add('show');
+}
+
+function closeModal() {
+  document.getElementById('modalBg').classList.remove('show');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 document.addEventListener('DOMContentLoaded', loadResults);
 </script>
 </body>
