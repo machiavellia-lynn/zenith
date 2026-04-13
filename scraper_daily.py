@@ -820,7 +820,9 @@ async def run_backfill(client, conn):
 
 _backfill_request = {"days": None, "status": "idle", "result": None}
 _rebuild_request = {"status": "idle", "result": None}
+_backtest_request = {"days": None, "status": "idle", "result": None}
 _backfill_lock = threading.Lock()
+BACKTEST_HOUR = 18  # 18:00 WIB
 
 
 def request_backfill(days: int):
@@ -994,7 +996,7 @@ async def scraper_main():
                     result = run_backtest(conn, days=bt_days)
                     with _backfill_lock:
                         _backtest_request["status"] = "done"
-                        _backtest_request["result"] = {"ok": True, "total_signals": result.get("total_signals", 0)}
+                        _backtest_request["result"] = {"ok": True, "total_trades": result.get("total_trades", 0)}
                 except Exception as e:
                     log.error(f"❌ Backtest error: {e}")
                     with _backfill_lock:
@@ -1045,9 +1047,6 @@ def start_scraper_thread():
 # ══════════════════════════════════════════════════════════════════════════════
 
 import json
-
-_backtest_request = {"days": None, "status": "idle", "result": None}
-BACKTEST_HOUR = 18  # 18:00 WIB
 
 def request_backtest(days: int):
     with _backfill_lock:
@@ -1142,10 +1141,11 @@ def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm):
 
 
 def run_backtest(conn, days=30):
-    """Run backtest on last N days of signals. Returns results dict."""
-    log.info(f"🧪 BACKTEST started: {days} days")
+    """Pair-based backtest: BUY signal opens position, SELL signal closes it.
+    Entry = OPEN D+1 after BUY. Exit = OPEN D+1 after SELL.
+    Profit = (exit - entry) / entry × 100."""
+    log.info(f"🧪 BACKTEST (pair-based) started: {days} days")
 
-    # Ensure cache table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS backtest_cache (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1154,75 +1154,47 @@ def run_backtest(conn, days=30):
             results TEXT NOT NULL
         )
     """)
-    # Clear old cache for this days value immediately so stale results
-    # are never served while the new computation is in progress.
-    conn.execute("DELETE FROM backtest_cache WHERE days=?", [days])
     conn.commit()
 
-    # 1. Get all dates with data, sorted chronologically
+    # 1. Get all dates chronologically
     all_dates = conn.execute(f"""
-        SELECT DISTINCT date FROM eod_summary
-        ORDER BY {_DATE_SORT}
+        SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT}
     """).fetchall()
     all_dates = [r["date"] for r in all_dates]
 
     if len(all_dates) < 3:
-        log.warning("Not enough dates for backtest")
-        return {"error": "Not enough data", "total_signals": 0}
+        return {"error": "Not enough data", "total_trades": 0}
 
-    # Take last N dates for signals (need +5 more for forward returns)
-    min_forward = 5
-    if len(all_dates) > days + min_forward:
-        signal_dates = all_dates[-(days + min_forward):-min_forward]
-    else:
-        signal_dates = all_dates[:-min_forward] if len(all_dates) > min_forward else []
+    # Use last N dates
+    use_dates = all_dates[-days:] if len(all_dates) > days else all_dates
+    date_idx = {d: i for i, d in enumerate(all_dates)}
 
-    if not signal_dates:
-        return {"error": "Not enough dates for forward returns", "total_signals": 0}
+    log.info(f"  Dates: {len(use_dates)} ({use_dates[0]} → {use_dates[-1]})")
 
-    # Build date index for fast D+N lookup
-    date_list = all_dates
-    date_idx = {d: i for i, d in enumerate(date_list)}
-
-    log.info(f"  Signal dates: {len(signal_dates)} ({signal_dates[0]} → {signal_dates[-1]})")
-
-    # 2. Get all tickers that appear in signal dates
-    ph = ",".join("?" for _ in signal_dates)
-    all_tickers = conn.execute(f"""
+    # 2. Get all tickers in range
+    ph = ",".join("?" for _ in use_dates)
+    ticker_rows = conn.execute(f"""
         SELECT DISTINCT ticker FROM eod_summary WHERE date IN ({ph})
-    """, signal_dates).fetchall()
-    ticker_list = [r["ticker"] for r in all_tickers]
+    """, use_dates).fetchall()
+    ticker_list = [r["ticker"] for r in ticker_rows]
     log.info(f"  Tickers: {len(ticker_list)}")
 
-    # 3. Fetch Yahoo price history for all tickers (parallel)
-    log.info(f"  Fetching Yahoo prices for {len(ticker_list)} tickers...")
-    price_map = {}  # ticker → {date → price}
+    # 3. Fetch Yahoo OHLCV (parallel)
+    log.info(f"  Fetching OHLCV for {len(ticker_list)} tickers...")
+    price_map = {}
     with ThreadPoolExecutor(max_workers=10) as ex:
-        fetch_days = max(days + 30, 90)
+        fetch_days = max(days + 30, 120)
         results = list(ex.map(lambda t: _fetch_price_history(t, fetch_days), ticker_list))
     for tk, prices in results:
         if prices:
             price_map[tk] = prices
-    log.info(f"  Prices fetched for {len(price_map)} tickers")
+    log.info(f"  OHLCV fetched for {len(price_map)} tickers")
 
-    # 4. Also use eod_summary prices as fallback
-    eod_prices = conn.execute(
-        "SELECT ticker, date, price_close FROM eod_summary WHERE price_close IS NOT NULL"
-    ).fetchall()
-    for r in eod_prices:
-        tk, dt, pc = r["ticker"], r["date"], r["price_close"]
-        if tk not in price_map:
-            price_map[tk] = {}
-        if dt not in price_map[tk]:
-            price_map[tk][dt] = {"o": pc, "h": pc, "l": pc, "c": pc}
+    # 4. Build signal timeline per ticker: {ticker: [(date, phase, action, gain), ...]}
+    log.info("  Building signal timeline...")
+    signal_timeline = {}  # ticker → list of (date_idx, date, phase, action)
 
-    # 5. For each signal date, compute phase+action and forward returns
-    #    Entry: OPEN of D+1 (trader sees signal after close, buys next open)
-    #    BUY return: (max HIGH within D+1..D+N - entry) / entry
-    #    SELL return: (entry - min LOW within D+1..D+N) / entry
-    signals = []
-
-    for date_str in signal_dates:
+    for date_str in use_dates:
         rows = conn.execute(
             "SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri FROM eod_summary WHERE date = ?",
             [date_str]
@@ -1245,130 +1217,147 @@ def run_backtest(conn, days=30):
             if not day_data:
                 continue
 
-            # Gain% = signal day change (for phase computation)
+            # Gain% for phase computation
             gain = None
             if d_idx > 0:
-                prev_date = date_list[d_idx - 1]
+                prev_date = all_dates[d_idx - 1]
                 prev_data = tp.get(prev_date)
                 if prev_data and prev_data["c"] > 0:
                     gain = round((day_data["c"] - prev_data["c"]) / prev_data["c"] * 100, 2)
 
             phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm)
 
-            # Entry = OPEN of D+1
-            next_idx = d_idx + 1
-            if next_idx >= len(date_list):
-                continue
-            next_date = date_list[next_idx]
-            next_data = tp.get(next_date)
-            if not next_data or not next_data["o"] or next_data["o"] <= 0:
-                continue
-            entry = next_data["o"]
+            if tk not in signal_timeline:
+                signal_timeline[tk] = []
+            signal_timeline[tk].append((d_idx, date_str, phase, action))
 
-            # Forward returns: check D+1 through D+N
-            rets = {}
-            for horizon, label in [(1, "1d"), (3, "3d"), (5, "5d")]:
-                # Collect OHLCV for D+1 through D+horizon
-                max_high = 0
-                min_low = float("inf")
-                last_close = None
-                valid = False
-                for offset in range(1, horizon + 1):
-                    fi = d_idx + offset
-                    if fi >= len(date_list):
-                        break
-                    fd = date_list[fi]
-                    fdata = tp.get(fd)
-                    if fdata:
-                        valid = True
-                        if fdata["h"]: max_high = max(max_high, fdata["h"])
-                        if fdata["l"]: min_low = min(min_low, fdata["l"])
-                        last_close = fdata["c"]
+    # 5. Pair matching: for each ticker, walk through signals chronologically
+    #    BUY → opens position at OPEN D+1
+    #    HOLD → keep position
+    #    SELL → closes position at OPEN D+1
+    trades = []
 
-                if valid and entry > 0:
-                    if action == "BUY":
-                        # BUY return = max potential gain from entry
-                        rets[label] = round((max_high - entry) / entry * 100, 2)
-                    elif action == "SELL":
-                        # SELL return = max potential drop from entry (positive = correct)
-                        rets[label] = round((entry - min_low) / entry * 100, 2)
+    for tk, timeline in signal_timeline.items():
+        tp = price_map.get(tk, {})
+        position = None  # {entry_date, entry_phase, entry_price, entry_didx}
+
+        for d_idx, date_str, phase, action in timeline:
+            if action == "BUY" and position is None:
+                # Open position → entry at OPEN of next trading day
+                next_idx = d_idx + 1
+                if next_idx >= len(all_dates):
+                    continue
+                next_date = all_dates[next_idx]
+                next_data = tp.get(next_date)
+                if next_data and next_data["o"] and next_data["o"] > 0:
+                    position = {
+                        "entry_date": date_str,
+                        "entry_exec_date": next_date,
+                        "entry_phase": phase,
+                        "entry_price": next_data["o"],
+                        "entry_didx": d_idx,
+                    }
+
+            elif action == "SELL" and position is not None:
+                # Close position → exit at OPEN of next trading day
+                next_idx = d_idx + 1
+                if next_idx >= len(all_dates):
+                    # Last day — use close of signal day as exit
+                    day_data = tp.get(date_str)
+                    if day_data and day_data["c"]:
+                        exit_price = day_data["c"]
                     else:
-                        # HOLD return = close-based
-                        if last_close:
-                            rets[label] = round((last_close - entry) / entry * 100, 2)
+                        continue
+                    exit_exec_date = date_str
+                else:
+                    next_date = all_dates[next_idx]
+                    next_data = tp.get(next_date)
+                    if next_data and next_data["o"] and next_data["o"] > 0:
+                        exit_price = next_data["o"]
+                        exit_exec_date = next_date
+                    else:
+                        continue
 
-            if rets:
-                signals.append({
-                    "ticker": tk, "date": date_str,
-                    "phase": phase, "action": action,
-                    "entry": entry, **rets,
+                entry_p = position["entry_price"]
+                duration = d_idx - position["entry_didx"]
+                profit = round((exit_price - entry_p) / entry_p * 100, 2)
+
+                trades.append({
+                    "ticker": tk,
+                    "entry_phase": position["entry_phase"],
+                    "exit_phase": phase,
+                    "entry_date": position["entry_date"],
+                    "exit_date": date_str,
+                    "entry_price": round(entry_p, 2),
+                    "exit_price": round(exit_price, 2),
+                    "duration": duration,
+                    "profit": profit,
                 })
+                position = None  # reset
 
-    log.info(f"  Total signals with returns: {len(signals)}")
+            elif action == "BUY" and position is not None:
+                # Already in position, ignore duplicate BUY
+                pass
 
-    # 6. Aggregate into leaderboard
+    log.info(f"  Total completed trades: {len(trades)}")
+
+    # 6. Aggregate into leaderboard by Entry→Exit combo
     from collections import defaultdict
-    combos = defaultdict(lambda: {"count": 0, "rets_1d": [], "rets_3d": [], "rets_5d": []})
+    combos = defaultdict(lambda: {"trades": 0, "wins": 0, "profits": [], "durations": []})
 
-    for s in signals:
-        key = f"{s['phase']}|{s['action']}"
-        combos[key]["count"] += 1
-        if "1d" in s: combos[key]["rets_1d"].append(s["1d"])
-        if "3d" in s: combos[key]["rets_3d"].append(s["3d"])
-        if "5d" in s: combos[key]["rets_5d"].append(s["5d"])
+    for t in trades:
+        key = f"{t['entry_phase']}|{t['exit_phase']}"
+        combos[key]["trades"] += 1
+        combos[key]["profits"].append(t["profit"])
+        combos[key]["durations"].append(t["duration"])
+        if t["profit"] > 0:
+            combos[key]["wins"] += 1
 
     leaderboard = []
     for key, data in combos.items():
-        phase, action = key.split("|")
+        entry_phase, exit_phase = key.split("|")
+        profits = data["profits"]
+        wins = [p for p in profits if p > 0]
+        losses = [p for p in profits if p <= 0]
+        win_pct = round(data["wins"] / data["trades"] * 100, 1) if data["trades"] > 0 else 0
+        avg_profit = round(sum(profits) / len(profits), 2) if profits else 0
+        avg_win = round(sum(wins) / len(wins), 2) if wins else 0
+        avg_loss = round(sum(losses) / len(losses), 2) if losses else 0
+        avg_dur = round(sum(data["durations"]) / len(data["durations"]), 1) if data["durations"] else 0
 
-        def hit_rate(rets, act):
-            if not rets: return None
-            if act == "BUY":
-                # BUY return = max potential gain. Hit if > 0 (price went above entry)
-                hits = sum(1 for r in rets if r > 0)
-            elif act == "SELL":
-                # SELL return = max potential drop. Hit if > 0 (price went below entry)
-                hits = sum(1 for r in rets if r > 0)
-            else:
-                # HOLD: hit if close didn't crash > -2%
-                hits = sum(1 for r in rets if r > -2)
-            return round(hits / len(rets) * 100, 1)
-
-        def avg_ret(rets):
-            return round(sum(rets) / len(rets), 2) if rets else None
+        # Expectancy = (Win% × Avg Win) - (Loss% × Avg Loss)
+        loss_pct = 100 - win_pct
+        expectancy = round((win_pct / 100 * avg_win) - (loss_pct / 100 * abs(avg_loss)), 2)
 
         leaderboard.append({
-            "phase": phase,
-            "action": action,
-            "count": data["count"],
-            "hit_1d": hit_rate(data["rets_1d"], action),
-            "hit_3d": hit_rate(data["rets_3d"], action),
-            "hit_5d": hit_rate(data["rets_5d"], action),
-            "avg_ret_1d": avg_ret(data["rets_1d"]),
-            "avg_ret_3d": avg_ret(data["rets_3d"]),
-            "avg_ret_5d": avg_ret(data["rets_5d"]),
+            "entry": entry_phase,
+            "exit": exit_phase,
+            "trades": data["trades"],
+            "win_rate": win_pct,
+            "avg_profit": avg_profit,
+            "avg_win": avg_win,
+            "avg_loss": avg_loss,
+            "avg_duration": avg_dur,
+            "expectancy": expectancy,
         })
 
-    # Sort by hit_5d desc
-    leaderboard.sort(key=lambda x: x.get("hit_5d") or 0, reverse=True)
+    leaderboard.sort(key=lambda x: x.get("expectancy") or 0, reverse=True)
 
     result = {
         "computed_at": datetime.now(WIB).strftime("%Y-%m-%d %H:%M WIB"),
         "days": days,
-        "date_range": f"{signal_dates[0]} → {signal_dates[-1]}" if signal_dates else "",
-        "total_signals": len(signals),
-        "tickers_tested": len(set(s["ticker"] for s in signals)),
+        "date_range": f"{use_dates[0]} → {use_dates[-1]}" if use_dates else "",
+        "total_trades": len(trades),
+        "tickers_tested": len(set(t["ticker"] for t in trades)),
         "leaderboard": leaderboard,
     }
 
-    # Store in cache
     conn.execute(
         "INSERT INTO backtest_cache (computed_at, days, results) VALUES (?, ?, ?)",
         [result["computed_at"], days, json.dumps(result)]
     )
-    # Keep only last 10 results
     conn.execute("DELETE FROM backtest_cache WHERE id NOT IN (SELECT id FROM backtest_cache ORDER BY id DESC LIMIT 10)")
     conn.commit()
 
-    log.info(f"✅ BACKTEST complete: {len(signals)} signals, {len(leaderboard)} combos")
+    log.info(f"✅ BACKTEST complete: {len(trades)} trades, {len(leaderboard)} combos")
     return result

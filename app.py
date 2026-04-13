@@ -1257,7 +1257,7 @@ def api_backtest():
         result = get_backtest_result(conn)
         if result:
             return jsonify(result)
-        return jsonify({"error": "No backtest results. Click RUN BACKTEST.", "total_signals": 0})
+        return jsonify({"error": "No backtest results. Click RUN BACKTEST.", "total_trades": 0})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

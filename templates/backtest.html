@@ -10,17 +10,12 @@
 :root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#4a6070;--up:#00e8a2;--down:#ff4d6a}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;min-height:100vh}
-
 header{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
 .logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
 .logo span{color:var(--muted)}
 .nav-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:5px 14px;font-family:'Space Mono',monospace;font-size:10px;text-decoration:none;transition:all .15s;cursor:pointer;letter-spacing:.04em}
 .nav-btn:hover,.nav-btn.active{border-color:var(--accent);color:var(--accent)}
-.nav-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-
 .content{max-width:1200px;margin:0 auto;padding:24px}
-
-/* Controls bar */
 .controls{display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap}
 .num-input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:12px;width:70px;outline:none;text-align:center}
 .num-input:focus{border-color:var(--accent)}
@@ -29,28 +24,22 @@ header{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .btn.outline{background:none;border:1px solid var(--border);color:var(--muted)}
 .ctrl-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
-
-/* Summary strip */
 .summary{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
 .sum-item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;display:flex;flex-direction:column;gap:2px;min-width:120px}
 .sum-label{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
 .sum-val{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--text)}
 .sum-val.accent{color:var(--accent)}
-
-/* Table */
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:auto}
 table{width:100%;border-collapse:collapse}
-thead th{position:sticky;top:0;z-index:10;background:var(--surface2);border-bottom:1px solid var(--border2);padding:10px 12px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.12em;color:var(--muted);text-align:right;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
-thead th:first-child,thead th:nth-child(2){text-align:left}
+thead th{position:sticky;top:0;z-index:10;background:var(--surface2);border-bottom:1px solid var(--border2);padding:10px 10px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-align:right;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
+thead th:first-child,thead th:nth-child(2),thead th:nth-child(3){text-align:left}
 thead th:hover{color:var(--text)}
 thead th.sorted{color:var(--accent)}
 thead th .si{margin-left:3px;font-size:7px}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s}
 tbody tr:hover{background:rgba(255,255,255,.03)}
-td{padding:9px 12px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td:first-child,td:nth-child(2){text-align:left}
-
-/* Phase + Action badges */
+td{padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 .phase-badge{font-family:'Space Mono',monospace;font-size:10px;padding:3px 8px;border-radius:3px;font-weight:700;letter-spacing:.04em}
 .phase-badge.spring{background:rgba(0,232,162,.15);color:#00e8a2}
 .phase-badge.absorb{background:rgba(77,159,255,.15);color:#4d9fff}
@@ -59,43 +48,16 @@ td:first-child,td:nth-child(2){text-align:left}
 .phase-badge.distri{background:rgba(255,77,106,.15);color:#ff4d6a}
 .phase-badge.accum{background:rgba(0,232,162,.1);color:#5abf8e}
 .phase-badge.neutral{background:rgba(74,96,112,.15);color:var(--muted)}
-.action-badge{font-family:'Space Mono',monospace;font-size:10px;font-weight:700}
-.action-badge.buy{color:#00e8a2}.action-badge.sell{color:#ff4d6a}.action-badge.hold{color:#ff8c42}
-
-/* Hit rate */
-.hit{font-family:'Space Mono',monospace;font-size:11px;font-weight:700}
-.hit.good{color:#00e8a2}.hit.ok{color:#ff8c42}.hit.bad{color:#ff4d6a}
-
-/* Return */
-.ret{font-family:'Space Mono',monospace;font-size:11px;font-weight:700}
-.ret.pos{color:#00e8a2}.ret.neg{color:#ff4d6a}
-
-/* Medal */
+.val{font-family:'Space Mono',monospace;font-size:11px;font-weight:700}
+.val.pos{color:#00e8a2}.val.neg{color:#ff4d6a}.val.ok{color:#ff8c42}.val.zero{color:var(--muted)}
 .medal{font-size:14px;margin-right:2px}
-
-/* Status */
 .status-bar{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:16px;display:flex;align-items:center;gap:8px}
 .status-bar .spinner{width:12px;height:12px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;display:none}
 .status-bar .spinner.active{display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
-
 .empty{text-align:center;padding:60px 20px;color:var(--muted);font-family:'Space Mono',monospace;font-size:12px}
-
-/* Responsive */
-@media(max-width:768px){
-  header{gap:8px;padding:10px 12px}
-  .content{padding:14px}
-  .summary{gap:8px}
-  .sum-item{padding:8px 12px;min-width:90px}
-  .sum-val{font-size:14px}
-  .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-  table{min-width:700px}
-}
-@media(max-width:420px){
-  .logo span{display:none}
-  .controls{gap:8px}
-  .sum-item{min-width:70px;padding:6px 10px}
-}
+.info-text{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:16px;line-height:1.6}
+@media(max-width:768px){header{gap:8px;padding:10px 12px}.content{padding:14px}.summary{gap:8px}.sum-item{padding:8px 12px;min-width:90px}.sum-val{font-size:14px}table{min-width:800px}}
 </style>
 </head>
 <body>
@@ -107,7 +69,6 @@ td:first-child,td:nth-child(2){text-align:left}
   <a href="/sector" class="nav-btn">Sector</a>
   <a href="/backtest" class="nav-btn active">Backtest</a>
 </header>
-
 <div class="content">
   <div class="controls">
     <span class="ctrl-label">Lookback</span>
@@ -116,79 +77,66 @@ td:first-child,td:nth-child(2){text-align:left}
     <button class="btn" id="runBtn" onclick="runBacktest()">Run Backtest</button>
     <button class="btn outline" onclick="loadResults()">Load Cached</button>
   </div>
-
   <div class="status-bar">
     <span class="spinner" id="spinner"></span>
     <span id="statusText">Ready</span>
   </div>
-
   <div class="summary" id="summaryWrap" style="display:none">
-    <div class="sum-item"><div class="sum-label">Signals</div><div class="sum-val accent" id="sumSignals">—</div></div>
+    <div class="sum-item"><div class="sum-label">Completed Trades</div><div class="sum-val accent" id="sumTrades">—</div></div>
     <div class="sum-item"><div class="sum-label">Tickers</div><div class="sum-val" id="sumTickers">—</div></div>
     <div class="sum-item"><div class="sum-label">Period</div><div class="sum-val" id="sumPeriod" style="font-size:11px">—</div></div>
     <div class="sum-item"><div class="sum-label">Computed</div><div class="sum-val" id="sumComputed" style="font-size:11px">—</div></div>
   </div>
-
   <div class="table-wrap">
     <table>
-      <thead>
-        <tr>
-          <th onclick="sortLB('rank')">#<span class="si"></span></th>
-          <th onclick="sortLB('phase')">PHASE<span class="si"></span></th>
-          <th onclick="sortLB('action')">ACTION<span class="si"></span></th>
-          <th onclick="sortLB('count')">SIGNALS<span class="si"></span></th>
-          <th onclick="sortLB('hit_1d')">HIT 1D<span class="si"></span></th>
-          <th onclick="sortLB('hit_3d')">HIT 3D<span class="si"></span></th>
-          <th onclick="sortLB('hit_5d')">HIT 5D<span class="si"></span></th>
-          <th onclick="sortLB('avg_ret_1d')">AVG RET 1D<span class="si"></span></th>
-          <th onclick="sortLB('avg_ret_3d')">AVG RET 3D<span class="si"></span></th>
-          <th onclick="sortLB('avg_ret_5d')">AVG RET 5D<span class="si"></span></th>
-        </tr>
-      </thead>
+      <thead><tr>
+        <th onclick="sortLB('rank')">#<span class="si"></span></th>
+        <th onclick="sortLB('entry')">ENTRY PHASE<span class="si"></span></th>
+        <th onclick="sortLB('exit')">EXIT PHASE<span class="si"></span></th>
+        <th onclick="sortLB('trades')">TRADES<span class="si"></span></th>
+        <th onclick="sortLB('win_rate')">WIN RATE<span class="si"></span></th>
+        <th onclick="sortLB('avg_profit')">AVG PROFIT<span class="si"></span></th>
+        <th onclick="sortLB('avg_win')">AVG WIN<span class="si"></span></th>
+        <th onclick="sortLB('avg_loss')">AVG LOSS<span class="si"></span></th>
+        <th onclick="sortLB('avg_duration')">AVG DAYS<span class="si"></span></th>
+        <th onclick="sortLB('expectancy')">EXPECTANCY<span class="si"></span></th>
+      </tr></thead>
       <tbody id="lbBody">
-        <tr><td colspan="10" class="empty">Belum ada data backtest. Klik RUN BACKTEST untuk memulai.</td></tr>
+        <tr><td colspan="10" class="empty">Belum ada data. Klik RUN BACKTEST untuk memulai.</td></tr>
       </tbody>
     </table>
   </div>
+  <div class="info-text">
+    Entry: beli di OPEN hari setelah sinyal BUY muncul. Exit: jual di OPEN hari setelah sinyal SELL muncul.<br>
+    Win Rate: % trade yang profit. Expectancy: (Win% × Avg Win) − (Loss% × |Avg Loss|).<br>
+    Expectancy positif = strategi menguntungkan dalam jangka panjang.
+  </div>
 </div>
-
 <script>
 let lbData = [];
-let sortCol = 'hit_5d';
+let sortCol = 'expectancy';
 let sortAsc = false;
 
-function setStatus(text, spinning) {
-  document.getElementById('statusText').textContent = text;
-  document.getElementById('spinner').classList.toggle('active', !!spinning);
+function setStatus(t, s) {
+  document.getElementById('statusText').textContent = t;
+  document.getElementById('spinner').classList.toggle('active', !!s);
 }
 
 async function runBacktest() {
   const days = document.getElementById('daysInput').value || 30;
   const btn = document.getElementById('runBtn');
   btn.disabled = true; btn.textContent = 'RUNNING...';
-  setStatus('Queuing backtest...', true);
-
+  setStatus('Queuing...', true);
   try {
     const r = await fetch(`/api/backtest?days=${days}&run=1`);
     const d = await r.json();
-    if (d.triggered) {
-      // Clear stale results immediately — don't show old data while computing
-      lbData = [];
-      document.getElementById('summaryWrap').style.display = 'none';
-      document.getElementById('lbBody').innerHTML = '<tr><td colspan="10" class="empty">Backtest sedang berjalan...</td></tr>';
-      setStatus('Backtest queued. Waiting for results...', true);
-      pollBacktest(days);
-    } else {
-      setStatus('Error: ' + (d.error || 'Unknown'));
-      btn.disabled = false; btn.textContent = 'RUN BACKTEST';
-    }
-  } catch(e) {
-    setStatus('Network error'); btn.disabled = false; btn.textContent = 'RUN BACKTEST';
-  }
+    if (d.triggered) { setStatus('Running. Pairing BUY→SELL trades...', true); pollBacktest(); }
+    else { setStatus('Error: ' + (d.error || '?')); btn.disabled = false; btn.textContent = 'RUN BACKTEST'; }
+  } catch(e) { setStatus('Network error'); btn.disabled = false; btn.textContent = 'RUN BACKTEST'; }
 }
 
 let pollInterval = null;
-function pollBacktest(days) {
+function pollBacktest() {
   if (pollInterval) clearInterval(pollInterval);
   pollInterval = setInterval(async () => {
     try {
@@ -196,17 +144,14 @@ function pollBacktest(days) {
       const s = await r.json();
       if (s.status === 'done') {
         clearInterval(pollInterval); pollInterval = null;
-        setStatus('Backtest complete! Loading results...', true);
         document.getElementById('runBtn').disabled = false;
         document.getElementById('runBtn').textContent = 'RUN BACKTEST';
         loadResults();
       } else if (s.status === 'error') {
         clearInterval(pollInterval); pollInterval = null;
-        setStatus('Backtest error: ' + s.result);
+        setStatus('Error: ' + s.result);
         document.getElementById('runBtn').disabled = false;
         document.getElementById('runBtn').textContent = 'RUN BACKTEST';
-      } else {
-        setStatus('Backtest running... (' + s.status + ')', true);
       }
     } catch(e) {}
   }, 3000);
@@ -214,25 +159,21 @@ function pollBacktest(days) {
 
 async function loadResults() {
   const days = document.getElementById('daysInput').value || 30;
-  setStatus('Loading cached results...', true);
+  setStatus('Loading...', true);
   try {
     const r = await fetch(`/api/backtest?days=${days}`);
     const d = await r.json();
     if (d.leaderboard) {
       lbData = d.leaderboard;
       document.getElementById('summaryWrap').style.display = 'flex';
-      document.getElementById('sumSignals').textContent = (d.total_signals || 0).toLocaleString();
+      document.getElementById('sumTrades').textContent = (d.total_trades || 0).toLocaleString();
       document.getElementById('sumTickers').textContent = d.tickers_tested || '—';
       document.getElementById('sumPeriod').textContent = d.date_range || '—';
       document.getElementById('sumComputed').textContent = d.computed_at || '—';
       renderLeaderboard();
-      setStatus(`Loaded: ${d.total_signals} signals, ${d.leaderboard.length} combos`);
-    } else {
-      setStatus(d.error || 'No results found');
-    }
-  } catch(e) {
-    setStatus('Error loading results');
-  }
+      setStatus(`${d.total_trades} trades, ${d.leaderboard.length} combos`);
+    } else { setStatus(d.error || 'No data'); }
+  } catch(e) { setStatus('Load error'); }
 }
 
 function sortLB(col) {
@@ -250,44 +191,40 @@ function renderLeaderboard() {
     if (typeof av === 'string') return sortAsc ? av.localeCompare(bv) : bv.localeCompare(av);
     return sortAsc ? av - bv : bv - av;
   });
-
   const medals = ['🥇','🥈','🥉'];
   const tbody = document.getElementById('lbBody');
-
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty">Tidak ada data.</td></tr>';
-    return;
-  }
+  if (!rows.length) { tbody.innerHTML = '<tr><td colspan="10" class="empty">Tidak ada data.</td></tr>'; return; }
 
   tbody.innerHTML = rows.map((r, i) => {
     const medal = i < 3 ? `<span class="medal">${medals[i]}</span>` : `${i+1}`;
-    const pCls = r.phase ? r.phase.toLowerCase() : '';
-    const aCls = r.action ? r.action.toLowerCase() : '';
-    const aIcon = r.action==='BUY'?'🚀 ':r.action==='SELL'?'⚠️ ':r.action==='HOLD'?'⌛ ':'';
+    const eCls = r.entry ? r.entry.toLowerCase() : '';
+    const xCls = r.exit ? r.exit.toLowerCase() : '';
 
-    function hitCell(v) {
+    function vc(v) {
       if (v == null) return '<td>—</td>';
-      const cls = v >= 60 ? 'good' : v >= 45 ? 'ok' : 'bad';
-      return `<td><span class="hit ${cls}">${v}%</span></td>`;
+      const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
+      return `<td><span class="val ${cls}">${v > 0 ? '+' : ''}${v}%</span></td>`;
     }
-    function retCell(v) {
+    function wc(v) {
       if (v == null) return '<td>—</td>';
-      const cls = v >= 0 ? 'pos' : 'neg';
-      const sign = v > 0 ? '+' : '';
-      return `<td><span class="ret ${cls}">${sign}${v}%</span></td>`;
+      const cls = v >= 60 ? 'pos' : v >= 45 ? 'ok' : 'neg';
+      return `<td><span class="val ${cls}">${v}%</span></td>`;
     }
 
     return `<tr>
       <td style="text-align:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700">${medal}</td>
-      <td><span class="phase-badge ${pCls}">${r.phase}</span></td>
-      <td><span class="action-badge ${aCls}">${aIcon}${r.action}</span></td>
-      <td style="font-family:'Space Mono',monospace;font-size:12px">${r.count}</td>
-      ${hitCell(r.hit_1d)}${hitCell(r.hit_3d)}${hitCell(r.hit_5d)}
-      ${retCell(r.avg_ret_1d)}${retCell(r.avg_ret_3d)}${retCell(r.avg_ret_5d)}
+      <td><span class="phase-badge ${eCls}">${r.entry}</span></td>
+      <td><span class="phase-badge ${xCls}">${r.exit}</span></td>
+      <td style="font-family:'Space Mono',monospace;font-size:12px">${r.trades}</td>
+      ${wc(r.win_rate)}
+      ${vc(r.avg_profit)}
+      ${vc(r.avg_win)}
+      ${vc(r.avg_loss)}
+      <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${r.avg_duration}d</td>
+      ${vc(r.expectancy)}
     </tr>`;
   }).join('');
 
-  // Update header sort icons
   document.querySelectorAll('thead th').forEach(th => {
     const col = th.onclick?.toString().match(/'(\w+)'/)?.[1];
     const si = th.querySelector('.si');
@@ -296,7 +233,6 @@ function renderLeaderboard() {
   });
 }
 
-// Auto-load cached on page visit (if any)
 document.addEventListener('DOMContentLoaded', loadResults);
 </script>
 </body>
