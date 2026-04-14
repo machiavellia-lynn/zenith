@@ -601,6 +601,65 @@ def enrich_daily_prices(conn, date_str: str):
     return n
 
 
+def _fetch_close_history(ticker, days=45):
+    """Fetch daily close prices for last N calendar days. Returns {DD-MM-YYYY: close}."""
+    try:
+        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}.JK?range={days}d&interval=1d"
+        r = requests.get(url, headers=_YAHOO_HEADERS, timeout=15)
+        data = r.json()["chart"]["result"][0]
+        timestamps = data.get("timestamp", [])
+        closes = data["indicators"]["quote"][0]["close"]
+        result = {}
+        for ts, c in zip(timestamps, closes):
+            if c is not None:
+                d = datetime.fromtimestamp(ts, tz=WIB).strftime("%d-%m-%Y")
+                result[d] = round(c, 2)
+        return ticker, result
+    except Exception:
+        return ticker, {}
+
+
+def backfill_prices(conn, days=30):
+    """Bulk-fetch Yahoo close prices for last N days. One request per ticker."""
+    log.info(f"💰 PRICE BACKFILL: fetching {days} days of close prices...")
+
+    # Get all tickers that have data in recent N dates
+    all_dates = conn.execute(f"""
+        SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT} DESC LIMIT ?
+    """, [days]).fetchall()
+    recent_dates = set(r["date"] for r in all_dates)
+
+    if not recent_dates:
+        log.info("  No dates to backfill")
+        return 0
+
+    tickers = conn.execute("""
+        SELECT DISTINCT ticker FROM eod_summary
+        WHERE date IN ({})
+    """.format(",".join("?" for _ in recent_dates)), list(recent_dates)).fetchall()
+    ticker_list = [r["ticker"] for r in tickers]
+    log.info(f"  Tickers: {len(ticker_list)}, Dates: {len(recent_dates)}")
+
+    # Fetch in parallel — 1 request per ticker covers all dates
+    cal_days = int(days * 1.6) + 10
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        results = list(ex.map(lambda t: _fetch_close_history(t, cal_days), ticker_list))
+
+    # Bulk update
+    updated = 0
+    for tk, prices in results:
+        for date_str, close in prices.items():
+            if date_str in recent_dates and close:
+                conn.execute(
+                    "UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=? AND price_close IS NULL",
+                    [close, date_str, tk]
+                )
+                updated += 1
+    conn.commit()
+    log.info(f"✅ PRICE BACKFILL: {updated} cells updated for {len(ticker_list)} tickers")
+    return updated
+
+
 # ── Wyckoff analytics computation ────────────────────────────────────────
 
 def _classify_phase(sri, rsm, rpr, pchg, price, low5, volx_gap):
@@ -748,13 +807,19 @@ def rebuild_all_summaries(conn):
     log.info(f"✅ Summary: {len(all_dates)} dates, {total} rows")
 
     recent = all_dates[-15:]
-    log.info(f"📈 Enriching prices + analytics for {len(recent)} recent dates...")
+    log.info(f"📈 Enriching analytics for {len(recent)} recent dates...")
     for d in recent:
         try:
-            enrich_daily_prices(conn, d)
             compute_analytics_for_date(conn, d)
         except Exception as e:
-            log.warning(f"  Enrich failed {d}: {e}")
+            log.warning(f"  Analytics failed {d}: {e}")
+
+    # Bulk price backfill for last 30 days (1 Yahoo request per ticker)
+    try:
+        backfill_prices(conn, days=30)
+    except Exception as e:
+        log.warning(f"  Price backfill failed: {e}")
+
     return {"dates": len(all_dates), "ticker_rows": total}
 
 

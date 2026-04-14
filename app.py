@@ -395,79 +395,57 @@ def flow():
             for ar in a_rows:
                 analytics_map[ar["ticker"]] = dict(ar)
 
-        # ── Gain% + Price from raw_messages (no Yahoo needed) ──
-        # Single day: AVG(gain_pct) from Joker signals
-        # Multi day: price comparison between first and last date
+        # ── Gain% from stored price_close (no Yahoo per-request) ──
         gains_map = {}  # ticker → {gain, price}
 
-        if date_from == date_to:
-            # Single day: Joker already provides gain_pct per signal
-            raw_g = conn.execute("""
-                SELECT ticker, AVG(gain_pct) AS gain, MAX(price) AS price
-                FROM raw_messages WHERE date = ? AND price > 0
-                GROUP BY ticker
-            """, [date_from]).fetchall()
-            for r in raw_g:
-                gains_map[r["ticker"]] = {
-                    "gain": round(r["gain"], 2) if r["gain"] is not None else None,
-                    "price": int(round(r["price"])) if r["price"] else None,
-                }
-        else:
-            # Multi day: compare latest price vs earliest price
-            latest_prices = {}
-            earliest_prices = {}
-            if latest_date:
-                for r in conn.execute("""
-                    SELECT ticker, MAX(price) AS p FROM raw_messages
-                    WHERE date = ? AND price > 0 GROUP BY ticker
-                """, [latest_date]).fetchall():
-                    latest_prices[r["ticker"]] = r["p"]
-                # Also try eod_summary price_close
-                for r in conn.execute(
-                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                    [latest_date]
-                ).fetchall():
-                    if r["ticker"] not in latest_prices:
-                        latest_prices[r["ticker"]] = r["price_close"]
-
-            # Earliest date in range
-            earliest_date_row = conn.execute(f"""
-                SELECT date FROM eod_summary WHERE date IN ({placeholders})
-                ORDER BY {_DATE_SORT} ASC LIMIT 1
-            """, dates).fetchone()
-            e_date = earliest_date_row["date"] if earliest_date_row else date_from
-
-            # Find prev trading day before range start
-            e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
-            prev_row = conn.execute(f"""
-                SELECT DISTINCT date FROM eod_summary
-                WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
-            """, [e_sortkey]).fetchone()
-            ref_date = prev_row["date"] if prev_row else e_date
-
-            for r in conn.execute("""
-                SELECT ticker, MAX(price) AS p FROM raw_messages
-                WHERE date = ? AND price > 0 GROUP BY ticker
-            """, [ref_date]).fetchall():
-                earliest_prices[r["ticker"]] = r["p"]
+        # Get price_close for latest date in range
+        price_latest = {}
+        if latest_date:
             for r in conn.execute(
                 "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                [ref_date]
+                [latest_date]
             ).fetchall():
-                if r["ticker"] not in earliest_prices:
-                    earliest_prices[r["ticker"]] = r["price_close"]
+                price_latest[r["ticker"]] = r["price_close"]
 
-            for t in set(list(latest_prices.keys()) + list(earliest_prices.keys())):
-                p_now = latest_prices.get(t)
-                p_ref = earliest_prices.get(t)
-                price = int(round(p_now)) if p_now else None
-                gain = None
-                if p_now and p_ref and p_ref > 0:
-                    gain = round((p_now - p_ref) / p_ref * 100, 2)
-                gains_map[t] = {"gain": gain, "price": price}
+        # Get reference price: day BEFORE the range
+        earliest_date_row = conn.execute(f"""
+            SELECT date FROM eod_summary WHERE date IN ({placeholders})
+            ORDER BY {_DATE_SORT} ASC LIMIT 1
+        """, dates).fetchone()
+        e_date = earliest_date_row["date"] if earliest_date_row else date_from
+        e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
+        prev_row = conn.execute(f"""
+            SELECT DISTINCT date FROM eod_summary
+            WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
+        """, [e_sortkey]).fetchone()
+
+        price_ref = {}
+        if prev_row:
+            for r in conn.execute(
+                "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                [prev_row["date"]]
+            ).fetchall():
+                price_ref[r["ticker"]] = r["price_close"]
+
+        # Compute gain from stored prices
+        for t in set(list(price_latest.keys()) + list(price_ref.keys())):
+            p_now = price_latest.get(t)
+            p_ref = price_ref.get(t)
+            price = int(round(p_now)) if p_now else None
+            gain = None
+            if p_now and p_ref and p_ref > 0:
+                gain = round((p_now - p_ref) / p_ref * 100, 2)
+            gains_map[t] = {"gain": gain, "price": price}
 
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
+
+    # Tickers without stored price: fallback to Yahoo (only for missing ones)
+    missing_tickers = [t for t in data if t not in gains_map or gains_map[t]["gain"] is None]
+    if missing_tickers and len(missing_tickers) <= 50:
+        yahoo_gains = get_gains_batch(missing_tickers, date_from, date_to)
+        for t, g in yahoo_gains.items():
+            gains_map[t] = g
 
     # Build data dict
     data = {}
@@ -1357,6 +1335,22 @@ def trigger_backtest():
         from scraper_daily import request_backtest
         result = request_backtest(days)
         return jsonify(result)
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/backfill-prices")
+def admin_backfill_prices():
+    """Bulk-fetch Yahoo close prices for last N days into eod_summary."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+    days = int(request.args.get("days", "30"))
+    try:
+        conn = get_db()
+        from scraper_daily import backfill_prices
+        n = backfill_prices(conn, days=days)
+        return jsonify({"ok": True, "updated": n, "days": days})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
