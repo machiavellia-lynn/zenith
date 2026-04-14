@@ -440,13 +440,6 @@ def flow():
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
 
-    # Tickers without stored price: fallback to Yahoo (only for missing ones)
-    missing_tickers = [t for t in data if t not in gains_map or gains_map[t]["gain"] is None]
-    if missing_tickers and len(missing_tickers) <= 50:
-        yahoo_gains = get_gains_batch(missing_tickers, date_from, date_to)
-        for t, g in yahoo_gains.items():
-            gains_map[t] = g
-
     # Build data dict
     data = {}
     for row in rows:
@@ -482,7 +475,13 @@ def flow():
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Compute gains from DB prices (no Yahoo request)
+    # Yahoo fallback for tickers without stored price (max 50)
+    missing = [t for t in data if t not in gains_map or gains_map.get(t, {}).get("gain") is None]
+    if missing and len(missing) <= 50:
+        yahoo_gains = get_gains_batch(missing, date_from, date_to)
+        for t, g in yahoo_gains.items():
+            gains_map[t] = g
+
     gains = gains_map
 
     tickers = []
