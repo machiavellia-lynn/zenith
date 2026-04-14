@@ -747,14 +747,15 @@ def rebuild_all_summaries(conn):
             log.info(f"  ... {i+1}/{len(all_dates)} dates done")
     log.info(f"✅ Summary: {len(all_dates)} dates, {total} rows")
 
-    recent = all_dates[-15:]
-    log.info(f"📈 Enriching + analytics for {len(recent)} recent dates...")
-    for d in recent:
+    log.info(f"📈 Enriching prices + analytics for ALL {len(all_dates)} dates...")
+    for i, d in enumerate(all_dates):
         try:
             enrich_daily_prices(conn, d)
             compute_analytics_for_date(conn, d)
         except Exception as e:
             log.warning(f"  Enrich failed {d}: {e}")
+        if (i + 1) % 20 == 0:
+            log.info(f"  ... enriched {i+1}/{len(all_dates)} dates")
     return {"dates": len(all_dates), "ticker_rows": total}
 
 

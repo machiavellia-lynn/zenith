@@ -378,20 +378,75 @@ def flow():
             GROUP BY ticker
         """, dates).fetchall()
 
-        # ── SRI + volx_gap from LATEST date (needs historical context) ──
+        # ── SRI + volx_gap from LATEST date ──
         analytics_map = {}
+        latest_date = None
         latest_date_row = conn.execute(f"""
             SELECT date FROM eod_summary
             WHERE date IN ({placeholders})
             ORDER BY {_DATE_SORT} DESC LIMIT 1
         """, dates).fetchone()
         if latest_date_row:
+            latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
                 SELECT ticker, price_close, sri, volx_gap, vwap_sm
                 FROM eod_summary WHERE date = ?
-            """, [latest_date_row["date"]]).fetchall()
+            """, [latest_date]).fetchall()
             for ar in a_rows:
                 analytics_map[ar["ticker"]] = dict(ar)
+
+        # ── Price data for gain% computation (from DB, no Yahoo) ──
+        # Latest price: price_close from latest date in range
+        # Reference price: price_close from the trading day BEFORE the range
+        earliest_date_row = conn.execute(f"""
+            SELECT date FROM eod_summary
+            WHERE date IN ({placeholders})
+            ORDER BY {_DATE_SORT} ASC LIMIT 1
+        """, dates).fetchone()
+        earliest_date = earliest_date_row["date"] if earliest_date_row else date_from
+
+        # Find prev trading day (latest date before our range)
+        earliest_sortkey = earliest_date[6:10] + earliest_date[3:5] + earliest_date[0:2]
+        prev_day_row = conn.execute(f"""
+            SELECT DISTINCT date FROM eod_summary
+            WHERE {_DATE_SORT} < ?
+            ORDER BY {_DATE_SORT} DESC LIMIT 1
+        """, [earliest_sortkey]).fetchone()
+
+        # Get price_close for latest date and prev date
+        price_latest = {}
+        price_prev = {}
+
+        if latest_date:
+            for r in conn.execute(
+                "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                [latest_date]
+            ).fetchall():
+                price_latest[r["ticker"]] = r["price_close"]
+
+        if prev_day_row:
+            for r in conn.execute(
+                "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                [prev_day_row["date"]]
+            ).fetchall():
+                price_prev[r["ticker"]] = r["price_close"]
+
+        # Fallback prices from raw_messages for tickers missing price_close
+        if latest_date:
+            for r in conn.execute(
+                "SELECT ticker, MAX(price) AS p FROM raw_messages WHERE date = ? AND price > 0 GROUP BY ticker",
+                [latest_date]
+            ).fetchall():
+                if r["ticker"] not in price_latest:
+                    price_latest[r["ticker"]] = r["p"]
+
+        if prev_day_row:
+            for r in conn.execute(
+                "SELECT ticker, MAX(price) AS p FROM raw_messages WHERE date = ? AND price > 0 GROUP BY ticker",
+                [prev_day_row["date"]]
+            ).fetchall():
+                if r["ticker"] not in price_prev:
+                    price_prev[r["ticker"]] = r["p"]
 
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
@@ -431,8 +486,16 @@ def flow():
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Fetch gains — for all tickers in data (includes sector empties)
-    gains = get_gains_batch(list(data.keys()), date_from, date_to)
+    # Compute gains from DB prices (no Yahoo request)
+    gains = {}
+    for t in data:
+        p_now = price_latest.get(t)
+        p_ref = price_prev.get(t)
+        price = int(round(p_now)) if p_now else None
+        gain = None
+        if p_now and p_ref and p_ref > 0:
+            gain = round((p_now - p_ref) / p_ref * 100, 2)
+        gains[t] = {"gain": gain, "price": price}
 
     tickers = []
     for t, d in data.items():
