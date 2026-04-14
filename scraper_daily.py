@@ -651,7 +651,7 @@ def backfill_prices(conn, days=30):
         for date_str, close in prices.items():
             if date_str in recent_dates and close:
                 conn.execute(
-                    "UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=? AND price_close IS NULL",
+                    "UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=?",
                     [close, date_str, tk]
                 )
                 updated += 1

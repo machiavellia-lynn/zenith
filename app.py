@@ -475,9 +475,9 @@ def flow():
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Yahoo fallback for tickers without stored price (max 50)
+    # Yahoo fallback for tickers without stored price
     missing = [t for t in data if t not in gains_map or gains_map.get(t, {}).get("gain") is None]
-    if missing and len(missing) <= 50:
+    if missing:
         yahoo_gains = get_gains_batch(missing, date_from, date_to)
         for t, g in yahoo_gains.items():
             gains_map[t] = g
