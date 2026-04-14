@@ -395,58 +395,76 @@ def flow():
             for ar in a_rows:
                 analytics_map[ar["ticker"]] = dict(ar)
 
-        # ── Price data for gain% computation (from DB, no Yahoo) ──
-        # Latest price: price_close from latest date in range
-        # Reference price: price_close from the trading day BEFORE the range
-        earliest_date_row = conn.execute(f"""
-            SELECT date FROM eod_summary
-            WHERE date IN ({placeholders})
-            ORDER BY {_DATE_SORT} ASC LIMIT 1
-        """, dates).fetchone()
-        earliest_date = earliest_date_row["date"] if earliest_date_row else date_from
+        # ── Gain% + Price from raw_messages (no Yahoo needed) ──
+        # Single day: AVG(gain_pct) from Joker signals
+        # Multi day: price comparison between first and last date
+        gains_map = {}  # ticker → {gain, price}
 
-        # Find prev trading day (latest date before our range)
-        earliest_sortkey = earliest_date[6:10] + earliest_date[3:5] + earliest_date[0:2]
-        prev_day_row = conn.execute(f"""
-            SELECT DISTINCT date FROM eod_summary
-            WHERE {_DATE_SORT} < ?
-            ORDER BY {_DATE_SORT} DESC LIMIT 1
-        """, [earliest_sortkey]).fetchone()
+        if date_from == date_to:
+            # Single day: Joker already provides gain_pct per signal
+            raw_g = conn.execute("""
+                SELECT ticker, AVG(gain_pct) AS gain, MAX(price) AS price
+                FROM raw_messages WHERE date = ? AND price > 0
+                GROUP BY ticker
+            """, [date_from]).fetchall()
+            for r in raw_g:
+                gains_map[r["ticker"]] = {
+                    "gain": round(r["gain"], 2) if r["gain"] is not None else None,
+                    "price": int(round(r["price"])) if r["price"] else None,
+                }
+        else:
+            # Multi day: compare latest price vs earliest price
+            latest_prices = {}
+            earliest_prices = {}
+            if latest_date:
+                for r in conn.execute("""
+                    SELECT ticker, MAX(price) AS p FROM raw_messages
+                    WHERE date = ? AND price > 0 GROUP BY ticker
+                """, [latest_date]).fetchall():
+                    latest_prices[r["ticker"]] = r["p"]
+                # Also try eod_summary price_close
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [latest_date]
+                ).fetchall():
+                    if r["ticker"] not in latest_prices:
+                        latest_prices[r["ticker"]] = r["price_close"]
 
-        # Get price_close for latest date and prev date
-        price_latest = {}
-        price_prev = {}
+            # Earliest date in range
+            earliest_date_row = conn.execute(f"""
+                SELECT date FROM eod_summary WHERE date IN ({placeholders})
+                ORDER BY {_DATE_SORT} ASC LIMIT 1
+            """, dates).fetchone()
+            e_date = earliest_date_row["date"] if earliest_date_row else date_from
 
-        if latest_date:
+            # Find prev trading day before range start
+            e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
+            prev_row = conn.execute(f"""
+                SELECT DISTINCT date FROM eod_summary
+                WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
+            """, [e_sortkey]).fetchone()
+            ref_date = prev_row["date"] if prev_row else e_date
+
+            for r in conn.execute("""
+                SELECT ticker, MAX(price) AS p FROM raw_messages
+                WHERE date = ? AND price > 0 GROUP BY ticker
+            """, [ref_date]).fetchall():
+                earliest_prices[r["ticker"]] = r["p"]
             for r in conn.execute(
                 "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                [latest_date]
+                [ref_date]
             ).fetchall():
-                price_latest[r["ticker"]] = r["price_close"]
+                if r["ticker"] not in earliest_prices:
+                    earliest_prices[r["ticker"]] = r["price_close"]
 
-        if prev_day_row:
-            for r in conn.execute(
-                "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                [prev_day_row["date"]]
-            ).fetchall():
-                price_prev[r["ticker"]] = r["price_close"]
-
-        # Fallback prices from raw_messages for tickers missing price_close
-        if latest_date:
-            for r in conn.execute(
-                "SELECT ticker, MAX(price) AS p FROM raw_messages WHERE date = ? AND price > 0 GROUP BY ticker",
-                [latest_date]
-            ).fetchall():
-                if r["ticker"] not in price_latest:
-                    price_latest[r["ticker"]] = r["p"]
-
-        if prev_day_row:
-            for r in conn.execute(
-                "SELECT ticker, MAX(price) AS p FROM raw_messages WHERE date = ? AND price > 0 GROUP BY ticker",
-                [prev_day_row["date"]]
-            ).fetchall():
-                if r["ticker"] not in price_prev:
-                    price_prev[r["ticker"]] = r["p"]
+            for t in set(list(latest_prices.keys()) + list(earliest_prices.keys())):
+                p_now = latest_prices.get(t)
+                p_ref = earliest_prices.get(t)
+                price = int(round(p_now)) if p_now else None
+                gain = None
+                if p_now and p_ref and p_ref > 0:
+                    gain = round((p_now - p_ref) / p_ref * 100, 2)
+                gains_map[t] = {"gain": gain, "price": price}
 
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
@@ -487,15 +505,7 @@ def flow():
         return jsonify({"tickers": [], "totals": {}})
 
     # Compute gains from DB prices (no Yahoo request)
-    gains = {}
-    for t in data:
-        p_now = price_latest.get(t)
-        p_ref = price_prev.get(t)
-        price = int(round(p_now)) if p_now else None
-        gain = None
-        if p_now and p_ref and p_ref > 0:
-            gain = round((p_now - p_ref) / p_ref * 100, 2)
-        gains[t] = {"gain": gain, "price": price}
+    gains = gains_map
 
     tickers = []
     for t, d in data.items():
