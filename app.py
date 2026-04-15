@@ -389,7 +389,7 @@ def flow():
         if latest_date_row:
             latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
-                SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm, atr_pct
+                SELECT ticker, price_close, sri, volx_gap, vwap_sm
                 FROM eod_summary WHERE date = ?
             """, [latest_date]).fetchall()
             for ar in a_rows:
@@ -503,9 +503,6 @@ def flow():
         gain = g.get("gain")
         sri = a.get("sri") or 0
         volx_gap = a.get("volx_gap")
-        atr_pct = a.get("atr_pct")
-        vwap_sm = a.get("vwap_sm")
-        vwap_bm = a.get("vwap_bm")
 
         # ── Compute RPR from RANGE data (not single day) ──
         range_tx_sm = d.get("tx_sm") or 0
@@ -517,39 +514,40 @@ def flow():
         pchg = gain
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
-        # ── ATR dynamic thresholds ──
-        atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
-        th_up = max(atr * 0.8, 1.0)
-        th_down = max(atr * 0.4, 0.5)
-        th_flat = atr * 0.5
-        th_sos_h = max(atr * 2.0, 5.0)
-
-        # ── Phase: RSM-based + ATR-adjusted ──
+        # ── Phase: RSM-based (size-agnostic) ──
         phase = "NEUTRAL"
         action = "HOLD"
 
         if rsm is not None and cm is not None:
-            if gain is not None and gain > th_up and rsm > 65 and sri > 3.0:
+            # SOS: strong price up + SM very active + SM dominates
+            if gain is not None and gain > 2 and rsm > 65 and sri > 3.0:
                 phase = "SOS"
-                action = "BUY" if gain < th_sos_h else "HOLD"
-            elif gain is not None and gain < -th_down and rsm > 60 and sri > 1.5:
+                action = "BUY" if gain < 5 else "HOLD"
+            # SPRING: price down + SM dominates + SM active
+            elif gain is not None and gain < -1 and rsm > 60 and sri > 1.5:
                 phase = "SPRING"
                 action = "BUY"
-            elif gain is not None and gain > th_up and rsm < 40 and rpr_val > 0.6:
+            # UPTHRUST: price up + BM dominates + heavy selling
+            elif gain is not None and gain > 2 and rsm < 40 and rpr_val > 0.6:
                 phase = "UPTHRUST"
                 action = "SELL"
-            elif rsm < 40 and gain is not None and gain < -(th_down * 0.5) and sri > 1.0:
+            # DISTRI: BM dominates + price falling + active
+            elif rsm < 40 and gain is not None and gain < -0.5 and sri > 1.0:
                 phase = "DISTRI"
                 action = "SELL"
-            elif sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < th_flat:
+            # ABSORB: SM very active + dominates + price flat
+            elif sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < 1.5:
                 phase = "ABSORB"
                 action = "BUY"
+            # ACCUM: SM dominates with real activity (not catch-all)
             elif rsm > 60 and sri > 1.0:
                 phase = "ACCUM"
                 action = "BUY"
+            # DISTRI fallback: BM clearly dominates
             elif rsm < 35 and sri > 0.8:
                 phase = "DISTRI"
                 action = "SELL"
+            # Everything else = NEUTRAL
             else:
                 phase = "NEUTRAL"
                 action = "HOLD"
@@ -573,9 +571,6 @@ def flow():
             "volx_gap":    volx_gap,
             "rpr":         rpr_val if rpr_val else None,
             "price_change": pchg,
-            "atr_pct":     atr_pct,
-            "vwap_sm":     round(vwap_sm, 2) if vwap_sm else None,
-            "vwap_bm":     round(vwap_bm, 2) if vwap_bm else None,
         })
 
     # Sort default: clean_money desc (nulls last)
