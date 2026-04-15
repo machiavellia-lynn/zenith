@@ -1429,7 +1429,7 @@ def analytics():
 @app.route('/admin/darurat-nuke-db')
 def darurat_nuke_db():
     secret = request.args.get('secret')
-    if secret != 'zenith2026':  # Sesuaikan dengan secret-mu
+    if secret != 'machiavellia198161':  # Sesuaikan dengan secret-mu
         return "Akses ditolak", 403
         
     logs = []
