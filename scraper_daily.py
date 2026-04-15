@@ -1292,7 +1292,8 @@ def run_backtest(conn, days=30):
     # 4. Build signal timeline per ticker: {ticker: [(date, phase, action, gain), ...]}
     log.info("  Building signal timeline...")
     signal_timeline = {}  # ticker → list of (date_idx, date, phase, action)
-
+ 
+ 
     for date_str in use_dates:
         rows = conn.execute(
             "SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri, atr_pct FROM eod_summary WHERE date = ?",
