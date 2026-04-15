@@ -7,6 +7,7 @@ import os
 import time
 import threading
 
+
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "zenith-secret-key")
 
@@ -1423,6 +1424,29 @@ def analytics():
         "active_users": active_count,
         "daily_views": recent,
     })
+
+
+@app.route('/admin/darurat-nuke-db')
+def darurat_nuke_db():
+    secret = request.args.get('secret')
+    if secret != 'zenith2026':  # Sesuaikan dengan secret-mu
+        return "Akses ditolak", 403
+        
+    logs = []
+    # Kita babat habis DB lama dan file antreannya
+    target_files = ['/data/zenith.db', '/data/zenith.db-wal', '/data/zenith.db-shm']
+    
+    for file_path in target_files:
+        if os.path.exists(file_path):
+            try:
+                os.remove(file_path)
+                logs.append(f"✅ Dihapus: {file_path}")
+            except Exception as e:
+                logs.append(f"❌ Gagal hapus {file_path}: {e}")
+        else:
+            logs.append(f"⚠️ Tidak ditemukan: {file_path}")
+            
+    return "<br>".join(logs)
 
 
 if __name__ == "__main__":
