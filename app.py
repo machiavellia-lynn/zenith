@@ -1451,7 +1451,7 @@ def darurat_nuke_db():
 @app.route('/admin/fix-schema')
 def fix_schema():
     secret = request.args.get('secret')
-    if secret != 'machiavellia198161':  # Sesuaikan dengan secret-mu
+    if secret != 'zenith2026':
         return "Akses ditolak", 403
     
     import sqlite3
@@ -1460,9 +1460,10 @@ def fix_schema():
     cursor = conn.cursor()
     
     try:
-        # Membuat tabel raw_mf_messages sesuai spek handoff
+        # 1. Tabel raw_messages (SM/BM)
+        cursor.execute('DROP TABLE IF EXISTS raw_messages')
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS raw_mf_messages (
+            CREATE TABLE raw_messages (
                 message_id INTEGER,
                 channel TEXT,
                 date TEXT,
@@ -1483,17 +1484,71 @@ def fix_schema():
                 UNIQUE(message_id, ticker)
             )
         ''')
+
+        # 2. Tabel raw_mf_messages (Market Flow)
+        cursor.execute('DROP TABLE IF EXISTS raw_mf_messages')
+        cursor.execute('''
+            CREATE TABLE raw_mf_messages (
+                message_id INTEGER,
+                channel TEXT,
+                date TEXT,
+                time TEXT,
+                tx_count INTEGER,
+                ticker TEXT,
+                price REAL,
+                gain_pct REAL,
+                val_raw TEXT,
+                val_numeric REAL,
+                mf_raw TEXT,
+                mf_numeric REAL,
+                mft_raw TEXT,
+                mft_numeric REAL,
+                cm_delta_raw TEXT,
+                cm_delta_numeric REAL,
+                signal TEXT,
+                UNIQUE(message_id, ticker)
+            )
+        ''')
+
+        # 3. Tabel eod_summary (Wyckoff Analytics)
+        cursor.execute('DROP TABLE IF EXISTS eod_summary')
+        cursor.execute('''
+            CREATE TABLE eod_summary (
+                date TEXT,
+                ticker TEXT,
+                sm_val REAL,
+                bm_val REAL,
+                tx_count INTEGER,
+                tx_sm INTEGER,
+                tx_bm INTEGER,
+                mf_plus REAL,
+                mf_minus REAL,
+                vwap_sm REAL,
+                vwap_bm REAL,
+                price_close REAL,
+                price_change_pct REAL,
+                sri REAL,
+                mes REAL,
+                volx_gap REAL,
+                rpr REAL,
+                atr_pct REAL,
+                phase TEXT,
+                action TEXT,
+                PRIMARY KEY (date, ticker)
+            )
+        ''')
         
-        # Tambahkan index agar tidak lambat
+        # Indexing untuk performa query dashboard
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_raw_date ON raw_messages(date)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_mf_date ON raw_mf_messages(date)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mf_ticker_date ON raw_mf_messages(ticker, date)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_eod_ticker ON eod_summary(ticker)')
         
         conn.commit()
-        return "✅ Tabel raw_mf_messages dan Index berhasil dibuat!"
+        return "✅ Database Zenith berhasil di-reset dengan skema final (3 tabel)!"
     except Exception as e:
         return f"❌ Gagal memperbaiki schema: {e}"
     finally:
         conn.close()
-
+        
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
