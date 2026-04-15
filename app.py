@@ -1580,5 +1580,27 @@ def check_logs_raw():
     conn.close()
     return {"raw_messages": res, "raw_mf_messages": res_mf}
 
+@app.route('/admin/direct-backfill')
+def direct_backfill():
+    secret = request.args.get('secret')
+    days = request.args.get('days', type=int, default=3)
+    if secret != 'zenith2026':
+        return "Unauthorized", 403
+        
+    try:
+        # Kita import langsung fungsinya dari scraper_daily
+        from scraper_daily import run_backfill
+        import threading
+        
+        # Jalankan di thread baru agar Flask tidak timeout (504)
+        # Tapi kita bypass sistem '_backfill_request["status"] == "pending"'
+        thread = threading.Thread(target=run_backfill, args=(days,))
+        thread.daemon = True
+        thread.start()
+        
+        return f"⚡ DIRECT BACKFILL dipicu untuk {days} hari. Cek log Railway sekarang!"
+    except Exception as e:
+        return f"❌ Gagal memicu direct backfill: {e}"
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
