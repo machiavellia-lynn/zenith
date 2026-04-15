@@ -1077,7 +1077,7 @@ def pull_db():
     with _flow_cache_lock:
         _flow_cache.clear()
 
-    DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
+    DROPBOX_URL = "https://www.dropbox.com/scl/fi/3umhuatpco2v3k095b7ky/zenith.db?rlkey=30x6lo9rzgsu8l8bn21fcepo8&st=hx32l1ou&dl=1"
 
     try:
         os.makedirs("/data", exist_ok=True)
