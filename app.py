@@ -1448,6 +1448,52 @@ def darurat_nuke_db():
             
     return "<br>".join(logs)
 
+@app.route('/admin/fix-schema')
+def fix_schema():
+    secret = request.args.get('secret')
+    if secret != 'machiavellia198161':  # Sesuaikan dengan secret-mu
+        return "Akses ditolak", 403
+    
+    import sqlite3
+    db_path = os.environ.get('DB_PATH', '/data/zenith.db')
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    
+    try:
+        # Membuat tabel raw_mf_messages sesuai spek handoff
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS raw_mf_messages (
+                message_id INTEGER,
+                channel TEXT,
+                date TEXT,
+                time TEXT,
+                tx_count INTEGER,
+                ticker TEXT,
+                price REAL,
+                gain_pct REAL,
+                freq INTEGER,
+                value_raw TEXT,
+                value_numeric REAL,
+                avg_mf_raw TEXT,
+                avg_mf_numeric REAL,
+                mf_delta_raw TEXT,
+                mf_delta_numeric REAL,
+                vol_x REAL,
+                signal TEXT,
+                UNIQUE(message_id, ticker)
+            )
+        ''')
+        
+        # Tambahkan index agar tidak lambat
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mf_date ON raw_mf_messages(date)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_mf_ticker_date ON raw_mf_messages(ticker, date)')
+        
+        conn.commit()
+        return "✅ Tabel raw_mf_messages dan Index berhasil dibuat!"
+    except Exception as e:
+        return f"❌ Gagal memperbaiki schema: {e}"
+    finally:
+        conn.close()
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
