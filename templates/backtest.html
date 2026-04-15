@@ -118,7 +118,7 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
         <th onclick="sortLB('avg_win')">AVG WIN<span class="si"></span></th>
         <th onclick="sortLB('avg_loss')">AVG LOSS<span class="si"></span></th>
         <th onclick="sortLB('avg_duration')">AVG DAYS<span class="si"></span></th>
-        <th onclick="sortLB('expectancy')">EXPECTANCY<span class="si"></span></th>
+        <th onclick="sortLB('profit_factor')">PROFIT FACTOR<span class="si"></span></th>
       </tr></thead>
       <tbody id="lbBody">
         <tr><td colspan="10" class="empty">Belum ada data. Klik RUN BACKTEST.</td></tr>
@@ -127,7 +127,7 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
   </div>
   <div class="info-text">
     Klik baris untuk melihat detail trade. Entry: OPEN D+1 setelah BUY. Exit: OPEN D+1 setelah SELL.<br>
-    Expectancy = (Win% × Avg Win) − (Loss% × |Avg Loss|). Positif = strategi jangka panjang untung.
+    Profit Factor = Gross Profit / Gross Loss. PF > 1.0 = profit, > 2.0 = sangat bagus.
   </div>
 </div>
 
@@ -158,7 +158,7 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 
 <script>
 let lbData = [];
-let sortCol = 'expectancy';
+let sortCol = 'profit_factor';
 let sortAsc = false;
 
 function setStatus(t, s) {
@@ -253,6 +253,11 @@ function renderLeaderboard() {
       const cls = v >= 60 ? 'pos' : v >= 45 ? 'ok' : 'neg';
       return `<td><span class="val ${cls}">${v}%</span></td>`;
     }
+    function pfCell(v) {
+      if (v == null) return '<td>—</td>';
+      const cls = v >= 2.0 ? 'pos' : v >= 1.0 ? 'ok' : 'neg';
+      return `<td><span class="val ${cls}">${v.toFixed(2)}×</span></td>`;
+    }
     return `<tr onclick="showDetail(${i})">
       <td style="text-align:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700">${medal}</td>
       <td><span class="phase-badge ${eCls}">${r.entry}</span></td>
@@ -260,7 +265,7 @@ function renderLeaderboard() {
       <td style="font-family:'Space Mono',monospace;font-size:12px">${r.trades}</td>
       ${wc(r.win_rate)}${vc(r.avg_profit)}${vc(r.avg_win)}${vc(r.avg_loss)}
       <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${r.avg_duration}d</td>
-      ${vc(r.expectancy)}
+      ${pfCell(r.profit_factor)}
     </tr>`;
   }).join('');
 
