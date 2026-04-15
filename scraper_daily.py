@@ -475,9 +475,9 @@ _DATE_SORT = "substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
 
 
 def ensure_summary_table(conn):
-    """Create eod_summary v2. Drops old schema if columns don't match."""
+    """Create eod_summary v3. Drops old schema if columns don't match."""
     try:
-        conn.execute("SELECT phase FROM eod_summary LIMIT 1")
+        conn.execute("SELECT vwap_bm FROM eod_summary LIMIT 1")
     except Exception:
         conn.execute("DROP TABLE IF EXISTS eod_summary")
     conn.execute("""
@@ -492,12 +492,14 @@ def ensure_summary_table(conn):
             mf_plus          REAL,
             mf_minus         REAL,
             vwap_sm          REAL,
+            vwap_bm          REAL,
             price_close      REAL,
             price_change_pct REAL,
             sri              REAL,
             mes              REAL,
             volx_gap         REAL,
             rpr              REAL,
+            atr_pct          REAL,
             phase            TEXT,
             action           TEXT,
             UNIQUE(date, ticker)
@@ -522,7 +524,16 @@ def rebuild_summary_for_date(conn, date_str: str):
         WHERE date = ? AND channel = 'smart' AND price > 0 AND mf_delta_numeric IS NOT NULL
         GROUP BY ticker
     """, [date_str]).fetchall()
-    vwap_map = {r["ticker"]: r["vwap"] for r in rows_vwap if r["vwap"]}
+    vwap_sm_map = {r["ticker"]: r["vwap"] for r in rows_vwap if r["vwap"]}
+
+    rows_vwap_bm = conn.execute("""
+        SELECT ticker,
+               SUM(price * ABS(mf_delta_numeric)) / NULLIF(SUM(ABS(mf_delta_numeric)), 0) AS vwap
+        FROM raw_messages
+        WHERE date = ? AND channel = 'bad' AND price > 0 AND mf_delta_numeric IS NOT NULL
+        GROUP BY ticker
+    """, [date_str]).fetchall()
+    vwap_bm_map = {r["ticker"]: r["vwap"] for r in rows_vwap_bm if r["vwap"]}
 
     rows_mf = conn.execute("""
         SELECT ticker, channel, SUM(mf_numeric) AS mf
@@ -554,13 +565,14 @@ def rebuild_summary_for_date(conn, date_str: str):
     conn.execute("DELETE FROM eod_summary WHERE date = ?", [date_str])
     for t, d in tickers.items():
         conn.execute("""
-            INSERT INTO eod_summary (date,ticker,sm_val,bm_val,tx_count,tx_sm,tx_bm,mf_plus,mf_minus,vwap_sm)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO eod_summary (date,ticker,sm_val,bm_val,tx_count,tx_sm,tx_bm,mf_plus,mf_minus,vwap_sm,vwap_bm)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?)
         """, (date_str, t, round(d["sm"], 2), round(d["bm"], 2), d["tx"],
               d["tx_sm"], d["tx_bm"],
               round(d["mfp"], 2) if d["mfp"] is not None else None,
               round(d["mfm"], 2) if d["mfm"] is not None else None,
-              round(vwap_map.get(t, 0), 2) if vwap_map.get(t) else None))
+              round(vwap_sm_map.get(t, 0), 2) if vwap_sm_map.get(t) else None,
+              round(vwap_bm_map.get(t, 0), 2) if vwap_bm_map.get(t) else None))
     conn.commit()
     return len(tickers)
 
@@ -662,25 +674,33 @@ def backfill_prices(conn, days=30):
 
 # ── Wyckoff analytics computation ────────────────────────────────────────
 
-def _classify_phase(sri, rsm, rpr, pchg, price, low5, volx_gap):
-    """Classify Wyckoff phase using RSM (size-agnostic)."""
+def _classify_phase(sri, rsm, rpr, pchg, price, low5, volx_gap, atr_pct=None):
+    """Classify Wyckoff phase. ATR-adjusted thresholds when available."""
+    # Dynamic thresholds based on ATR (volatility-adjusted)
+    # ATR% is average |daily change %|. Default 2.5% if unavailable.
+    atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
+    th_up    = max(atr * 0.8, 1.0)    # "significant up" = 0.8× ATR (min 1%)
+    th_down  = max(atr * 0.4, 0.5)    # "significant down" = 0.4× ATR (min 0.5%)
+    th_flat  = atr * 0.5              # "flat" = less than 0.5× ATR
+    th_sos_h = max(atr * 2.0, 5.0)   # "too high for SOS BUY" = 2× ATR (min 5%)
+
     # SOS: strong price up + SM very active + SM dominates
-    if pchg is not None and pchg > 2 and rsm > 65 and sri > 3.0:
+    if pchg is not None and pchg > th_up and rsm > 65 and sri > 3.0:
         return "SOS"
     # SPRING: price down + SM dominates + SM active
-    if pchg is not None and pchg < -1 and rsm > 60 and sri > 1.5:
+    if pchg is not None and pchg < -th_down and rsm > 60 and sri > 1.5:
         return "SPRING"
     # Also SPRING via price vs low5
     if price and low5 and price <= low5 and rsm > 60 and volx_gap < -1:
         return "SPRING"
     # UPTHRUST: price up + BM dominates + heavy selling
-    if pchg is not None and pchg > 2 and rsm < 40 and rpr > 0.6:
+    if pchg is not None and pchg > th_up and rsm < 40 and rpr > 0.6:
         return "UPTHRUST"
     # DISTRI: BM dominates + price falling + active
-    if rsm < 40 and pchg is not None and pchg < -0.5 and sri > 1.0:
+    if rsm < 40 and pchg is not None and pchg < -(th_down * 0.5) and sri > 1.0:
         return "DISTRI"
     # ABSORB: SM very active + dominates + price flat
-    if sri > 2.0 and rsm > 65 and pchg is not None and abs(pchg) < 1.5:
+    if sri > 2.0 and rsm > 65 and pchg is not None and abs(pchg) < th_flat:
         return "ABSORB"
     # ACCUM: SM dominates with real activity
     if rsm > 60 and sri > 1.0:
@@ -691,10 +711,13 @@ def _classify_phase(sri, rsm, rpr, pchg, price, low5, volx_gap):
     return "NEUTRAL"
 
 
-def _get_action(phase, pchg):
-    """Derive trading action from phase."""
+def _get_action(phase, pchg, atr_pct=None):
+    """Derive trading action. ATR-adjusted SOS threshold."""
+    atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
+    sos_hold_th = max(atr * 2.0, 5.0)  # Too high = HOLD
+
     if phase == "SOS":
-        return "BUY" if (pchg is not None and pchg < 5) else "HOLD"
+        return "BUY" if (pchg is not None and pchg < sos_hold_th) else "HOLD"
     if phase in ("SPRING", "ABSORB", "ACCUM"):
         return "BUY"
     if phase in ("UPTHRUST", "DISTRI"):
@@ -740,12 +763,12 @@ def compute_analytics_for_date(conn, date_str: str):
 
         hist = conn.execute(f"""
             SELECT sm_val, bm_val, price_close FROM eod_summary
-            WHERE ticker=? ORDER BY {_DATE_SORT} DESC LIMIT 10
+            WHERE ticker=? ORDER BY {_DATE_SORT} DESC LIMIT 14
         """, [tk]).fetchall()
 
         # SRI
         sm_h = [h["sm_val"] or 0 for h in hist if (h["sm_val"] or 0) > 0]
-        sma10 = sum(sm_h) / len(sm_h) if sm_h else 0
+        sma10 = sum(sm_h[:10]) / len(sm_h[:10]) if sm_h[:10] else 0
         sri = round(sm / sma10, 2) if sma10 > 0 else 0
 
         # RPR
@@ -759,6 +782,16 @@ def compute_analytics_for_date(conn, date_str: str):
             pchg = round((pc - prices[1]) / prices[1] * 100, 2)
         if pchg is None and rp.get("gain") is not None:
             pchg = round(rp["gain"], 2)
+
+        # ATR% = average |daily change %| over last 14 days
+        atr_pct = None
+        if len(prices) >= 3:
+            daily_changes = []
+            for j in range(len(prices) - 1):
+                if prices[j] and prices[j+1] and prices[j+1] > 0:
+                    daily_changes.append(abs((prices[j] - prices[j+1]) / prices[j+1] * 100))
+            if daily_changes:
+                atr_pct = round(sum(daily_changes) / len(daily_changes), 2)
 
         # MES
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
@@ -775,13 +808,13 @@ def compute_analytics_for_date(conn, date_str: str):
         total_val = sm + bm
         rsm_val = round(sm / total_val * 100, 1) if total_val > 0 else 50
 
-        phase = _classify_phase(sri, rsm_val, rpr, pchg, pc, low5, vg)
-        action = _get_action(phase, pchg)
+        phase = _classify_phase(sri, rsm_val, rpr, pchg, pc, low5, vg, atr_pct)
+        action = _get_action(phase, pchg, atr_pct)
 
         conn.execute("""
-            UPDATE eod_summary SET price_change_pct=?,sri=?,mes=?,volx_gap=?,rpr=?,phase=?,action=?
+            UPDATE eod_summary SET price_change_pct=?,sri=?,mes=?,volx_gap=?,rpr=?,atr_pct=?,phase=?,action=?
             WHERE date=? AND ticker=?
-        """, [pchg, sri, mes, vg, rpr, phase, action, date_str, tk])
+        """, [pchg, sri, mes, vg, rpr, atr_pct, phase, action, date_str, tk])
         computed += 1
 
     conn.commit()
@@ -1173,36 +1206,33 @@ def _fetch_price_history(ticker, days=90):
         return ticker, {}
 
 
-def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm):
-    """Compute phase+action using RSM-based thresholds (size-agnostic)."""
-    cm = sm - bm
+def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, atr_pct=None):
+    """Compute phase+action. ATR-adjusted thresholds."""
     total_val = sm + bm
     rsm = (sm / total_val * 100) if total_val > 0 else 50
     ttx = tx_sm + tx_bm
     rpr = tx_bm / ttx if ttx > 0 else 0.5
 
-    # SOS: strong price up + SM very active + SM dominates
-    if gain is not None and gain > 2 and rsm > 65 and sri > 3.0:
-        return "SOS", ("BUY" if gain < 5 else "HOLD")
-    # SPRING: price down + SM dominates + SM active
-    if gain is not None and gain < -1 and rsm > 60 and sri > 1.5:
+    atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
+    th_up = max(atr * 0.8, 1.0)
+    th_down = max(atr * 0.4, 0.5)
+    th_flat = atr * 0.5
+    th_sos_h = max(atr * 2.0, 5.0)
+
+    if gain is not None and gain > th_up and rsm > 65 and sri > 3.0:
+        return "SOS", ("BUY" if gain < th_sos_h else "HOLD")
+    if gain is not None and gain < -th_down and rsm > 60 and sri > 1.5:
         return "SPRING", "BUY"
-    # UPTHRUST: price up + BM dominates + heavy selling
-    if gain is not None and gain > 2 and rsm < 40 and rpr > 0.6:
+    if gain is not None and gain > th_up and rsm < 40 and rpr > 0.6:
         return "UPTHRUST", "SELL"
-    # DISTRI: BM dominates + price falling + active
-    if rsm < 40 and gain is not None and gain < -0.5 and sri > 1.0:
+    if rsm < 40 and gain is not None and gain < -(th_down * 0.5) and sri > 1.0:
         return "DISTRI", "SELL"
-    # ABSORB: SM very active + dominates + price flat
-    if sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < 1.5:
+    if sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < th_flat:
         return "ABSORB", "BUY"
-    # ACCUM: SM dominates with real activity
     if rsm > 60 and sri > 1.0:
         return "ACCUM", "BUY"
-    # DISTRI fallback: BM clearly dominates
     if rsm < 35 and sri > 0.8:
         return "DISTRI", "SELL"
-    # NEUTRAL
     return "NEUTRAL", "HOLD"
 
 
@@ -1265,7 +1295,7 @@ def run_backtest(conn, days=30):
 
     for date_str in use_dates:
         rows = conn.execute(
-            "SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri FROM eod_summary WHERE date = ?",
+            "SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri, atr_pct FROM eod_summary WHERE date = ?",
             [date_str]
         ).fetchall()
 
@@ -1280,6 +1310,7 @@ def run_backtest(conn, days=30):
             sri = row["sri"] or 0
             tx_sm = row["tx_sm"] or 0
             tx_bm = row["tx_bm"] or 0
+            atr = row["atr_pct"]
 
             tp = price_map.get(tk, {})
             day_data = tp.get(date_str)
@@ -1294,79 +1325,68 @@ def run_backtest(conn, days=30):
                 if prev_data and prev_data["c"] > 0:
                     gain = round((day_data["c"] - prev_data["c"]) / prev_data["c"] * 100, 2)
 
-            phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm)
+            phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, atr)
 
             if tk not in signal_timeline:
                 signal_timeline[tk] = []
             signal_timeline[tk].append((d_idx, date_str, phase, action))
 
-    # 5. Pair matching: for each ticker, walk through signals chronologically
-    #    BUY → opens position at OPEN D+1
-    #    HOLD → keep position
-    #    SELL → closes position at OPEN D+1
+    # 5. Pair matching: multiple BUY entries, single SELL closes all
     trades = []
 
     for tk, timeline in signal_timeline.items():
         tp = price_map.get(tk, {})
-        position = None  # {entry_date, entry_phase, entry_price, entry_didx}
+        open_positions = []  # list of {entry_date, entry_phase, entry_price, entry_didx}
 
         for d_idx, date_str, phase, action in timeline:
-            if action == "BUY" and position is None:
-                # Open position → entry at OPEN of next trading day
+            if action == "BUY":
+                # Open new position (even if already have one)
                 next_idx = d_idx + 1
                 if next_idx >= len(all_dates):
                     continue
                 next_date = all_dates[next_idx]
                 next_data = tp.get(next_date)
                 if next_data and next_data["o"] and next_data["o"] > 0:
-                    position = {
+                    open_positions.append({
                         "entry_date": date_str,
-                        "entry_exec_date": next_date,
                         "entry_phase": phase,
                         "entry_price": next_data["o"],
                         "entry_didx": d_idx,
-                    }
+                    })
 
-            elif action == "SELL" and position is not None:
-                # Close position → exit at OPEN of next trading day
+            elif action == "SELL" and open_positions:
+                # Close ALL open positions at same exit price
                 next_idx = d_idx + 1
                 if next_idx >= len(all_dates):
-                    # Last day — use close of signal day as exit
                     day_data = tp.get(date_str)
                     if day_data and day_data["c"]:
                         exit_price = day_data["c"]
                     else:
                         continue
-                    exit_exec_date = date_str
                 else:
                     next_date = all_dates[next_idx]
                     next_data = tp.get(next_date)
                     if next_data and next_data["o"] and next_data["o"] > 0:
                         exit_price = next_data["o"]
-                        exit_exec_date = next_date
                     else:
                         continue
 
-                entry_p = position["entry_price"]
-                duration = d_idx - position["entry_didx"]
-                profit = round((exit_price - entry_p) / entry_p * 100, 2)
-
-                trades.append({
-                    "ticker": tk,
-                    "entry_phase": position["entry_phase"],
-                    "exit_phase": phase,
-                    "entry_date": position["entry_date"],
-                    "exit_date": date_str,
-                    "entry_price": round(entry_p, 2),
-                    "exit_price": round(exit_price, 2),
-                    "duration": duration,
-                    "profit": profit,
-                })
-                position = None  # reset
-
-            elif action == "BUY" and position is not None:
-                # Already in position, ignore duplicate BUY
-                pass
+                for pos in open_positions:
+                    entry_p = pos["entry_price"]
+                    duration = d_idx - pos["entry_didx"]
+                    profit = round((exit_price - entry_p) / entry_p * 100, 2)
+                    trades.append({
+                        "ticker": tk,
+                        "entry_phase": pos["entry_phase"],
+                        "exit_phase": phase,
+                        "entry_date": pos["entry_date"],
+                        "exit_date": date_str,
+                        "entry_price": round(entry_p, 2),
+                        "exit_price": round(exit_price, 2),
+                        "duration": duration,
+                        "profit": profit,
+                    })
+                open_positions = []  # reset all
 
     log.info(f"  Total completed trades: {len(trades)}")
 
@@ -1403,9 +1423,10 @@ def run_backtest(conn, days=30):
         avg_loss = round(sum(losses) / len(losses), 2) if losses else 0
         avg_dur = round(sum(data["durations"]) / len(data["durations"]), 1) if data["durations"] else 0
 
-        # Expectancy = (Win% × Avg Win) - (Loss% × Avg Loss)
-        loss_pct = 100 - win_pct
-        expectancy = round((win_pct / 100 * avg_win) - (loss_pct / 100 * abs(avg_loss)), 2)
+        # Profit Factor = Gross Profit / |Gross Loss|
+        gross_profit = sum(p for p in profits if p > 0)
+        gross_loss = abs(sum(p for p in profits if p <= 0))
+        profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0)
 
         leaderboard.append({
             "entry": entry_phase,
@@ -1416,11 +1437,11 @@ def run_backtest(conn, days=30):
             "avg_win": avg_win,
             "avg_loss": avg_loss,
             "avg_duration": avg_dur,
-            "expectancy": expectancy,
+            "profit_factor": profit_factor,
             "details": sorted(data["details"], key=lambda x: x["profit"], reverse=True),
         })
 
-    leaderboard.sort(key=lambda x: x.get("expectancy") or 0, reverse=True)
+    leaderboard.sort(key=lambda x: x.get("profit_factor") or 0, reverse=True)
 
     result = {
         "computed_at": datetime.now(WIB).strftime("%Y-%m-%d %H:%M WIB"),

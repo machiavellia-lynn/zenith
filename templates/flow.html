@@ -1143,7 +1143,7 @@ function applyFilter() {
 }
 
 function clearFilters() {
-  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = false);
+  document.querySelectorAll('#filterMenu input[type="checkbox"]').forEach(cb => cb.checked = true);
   phaseFilter = null; actionFilter = null;
   document.getElementById('filterCount').style.display = 'none';
   document.querySelector('#filterDropdown .filter-btn').classList.remove('active');
@@ -1295,16 +1295,20 @@ function renderTable() {
     const gainStr  = r.gain_pct === null ? '—' : (r.gain_pct > 0 ? '+' : '') + r.gain_pct.toFixed(2) + '%';
     const rsmStr   = r.rsm !== null && r.rsm !== undefined ? r.rsm.toFixed(1) + '%' : '—';
 
+    const vwapSm = r.vwap_sm ? r.vwap_sm.toLocaleString('id-ID') : '—';
+    const vwapBm = r.vwap_bm ? r.vwap_bm.toLocaleString('id-ID') : '—';
+    const atrStr = r.atr_pct ? r.atr_pct.toFixed(1) + '%' : '—';
+
     return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
       <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
       <td><span class="td-num" style="color:var(--muted)">${r.tx ? r.tx.toLocaleString('id-ID') : '—'}</span></td>
-      <td class="cm-cell">
+      <td class="cm-cell" title="Avg SM: ${vwapSm} | Avg BM: ${vwapBm}${r.atr_pct ? ' | ATR: '+atrStr : ''}">
         <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
         <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
       </td>
-      <td><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
-      <td><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
+      <td title="Avg buy price: ${vwapSm}"><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
+      <td title="Avg sell price: ${vwapBm}"><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
       <td><span class="rsm-val" style="color:${rsmColor}">${rsmStr}</span></td>
       <td><span class="td-num mfp">${r.mf_plus  !== null ? fmtM(r.mf_plus)  : '—'}</span></td>
       <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
