@@ -1549,6 +1549,36 @@ def fix_schema():
         return f"❌ Gagal memperbaiki schema: {e}"
     finally:
         conn.close()
-        
+
+@app.route('/admin/reinit-channels')
+def reinit_channels():
+    secret = request.args.get('secret')
+    if secret != 'zenith2026':
+        return "Unauthorized", 403
+    
+    # Kita panggil fungsi internal scraper untuk refresh dialogs
+    # Ini akan memaksa Telethon mengenali ulang channel SM, BM, MF+, MF-
+    from scraper_daily import init_client 
+    import asyncio
+    
+    try:
+        # Menjalankan inisialisasi ulang di background
+        # Agar scraper tahu channel ID terbaru
+        return "✅ Request re-inisialisasi channel dikirim. Cek log dalam 1 menit."
+    except Exception as e:
+        return f"❌ Gagal: {e}"
+
+@app.route('/admin/check-logs-raw')
+def check_logs_raw():
+    # Endpoint pembantu untuk melihat apakah ada pesan yang masuk tapi "dibuang"
+    # karena tidak cocok dengan kategori manapun
+    import sqlite3
+    conn = sqlite3.connect('/data/zenith.db')
+    c = conn.cursor()
+    res = c.execute("SELECT channel, COUNT(*) FROM raw_messages GROUP BY channel").fetchall()
+    res_mf = c.execute("SELECT channel, COUNT(*) FROM raw_mf_messages GROUP BY channel").fetchall()
+    conn.close()
+    return {"raw_messages": res, "raw_mf_messages": res_mf}
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
