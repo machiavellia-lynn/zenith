@@ -150,15 +150,78 @@ header {
   padding: 6px 10px; font-family: 'Space Mono', monospace;
   font-size: 11px; outline: none; width: 108px;
   letter-spacing: .04em;
-  transition: border-color .2s;
+  transition: border-color .2s, opacity .2s;
 }
 .date-input:focus { border-color: var(--accent); }
 .date-input::placeholder { color: var(--muted); }
+.date-input:disabled, .date-input.disabled {
+  opacity: .35; cursor: not-allowed; color: var(--muted);
+  background: var(--surface);
+}
 .date-arrow {
   width: 28px; height: 28px;
   background: var(--border); border: 1px solid var(--border2);
   border-radius: 5px; display: flex; align-items: center;
   justify-content: center; color: var(--muted); font-size: 13px;
+  cursor: pointer; transition: all .15s;
+  user-select: none;
+}
+.date-arrow:hover { border-color: var(--accent); color: var(--accent); }
+.date-arrow.range-mode {
+  background: rgba(0,232,162,.08);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Backtest link button */
+.bt-link-btn {
+  background: var(--bg); border: 1px solid var(--border);
+  color: var(--muted); border-radius: 5px;
+  padding: 6px 10px; cursor: pointer;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; transition: all .15s;
+  display: flex; align-items: center; gap: 5px;
+  text-decoration: none;
+}
+.bt-link-btn:hover { border-color: var(--accent); color: var(--accent); }
+.bt-link-btn svg { width: 12px; height: 12px; }
+
+/* Modal metrics panel */
+.modal-metrics-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+  gap: 10px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,.02);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+.mm-item {
+  display: flex; flex-direction: column; gap: 2px;
+}
+.mm-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+}
+.mm-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px; font-weight: 700;
+  color: var(--text);
+}
+.mm-value.pos { color: var(--up); }
+.mm-value.neg { color: var(--down); }
+.mm-value.ok  { color: #ff8c42; }
+.mm-value.sm-c { color: #4d9fff; }
+.mm-value.bm-c { color: #ff8c42; }
+.mm-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; color: var(--muted);
+  margin-top: 1px;
+}
+@media (max-width: 640px) {
+  .modal-metrics-panel { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; }
+  .mm-value { font-size: 11px; }
 }
 .load-btn {
   background: var(--accent); color: var(--bg);
@@ -779,7 +842,7 @@ td:first-child { text-align: left; }
   </div>
   <div class="date-range">
     <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
-    <div class="date-arrow">→</div>
+    <div class="date-arrow" id="dateModeToggle" onclick="toggleDateMode()" title="Klik untuk switch antara Single Date dan Date Range">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
   </div>
   <div class="filter-dropdown" id="filterDropdown">
@@ -802,6 +865,10 @@ td:first-child { text-align: left; }
       </div>
     </div>
   </div>
+  <a href="/backtest" class="bt-link-btn" title="Buka Backtest Leaderboard">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
+    BACKTEST
+  </a>
   <span class="row-count" id="rowCount"></span>
 </div>
 
@@ -838,6 +905,10 @@ td:first-child { text-align: left; }
       <div>
         <div class="modal-ticker" id="mTicker">—</div>
         <div class="modal-name" id="mName">—</div>
+      </div>
+      <div class="modal-headline" id="mHeadline" style="display:flex;gap:10px;align-items:center;margin-left:6px">
+        <span class="phase-badge" id="mPhaseBadge" style="font-family:'Space Mono',monospace;font-size:11px;padding:4px 10px;border-radius:4px;font-weight:700;letter-spacing:.04em;display:none"></span>
+        <span class="action-badge" id="mActionBadge" style="font-family:'Space Mono',monospace;font-size:11px;padding:4px 10px;border-radius:4px;font-weight:700;letter-spacing:.04em;display:none"></span>
       </div>
       <div class="modal-tfs">
         <button class="mtf-btn" data-tf="5m"  onclick="setModalTF('5m')">5m</button>
@@ -880,12 +951,51 @@ td:first-child { text-align: left; }
 
     <!-- TRANSAKSI SECTION -->
     <div class="modal-body" id="modalBody">
+      <!-- Metrics Panel -->
+      <div class="modal-metrics-panel" id="modalMetricsPanel">
+        <div class="mm-item">
+          <div class="mm-label">Avg SM</div>
+          <div class="mm-value sm-c" id="mmAvgSM">—</div>
+          <div class="mm-sub" id="mmAvgSMsub"></div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">Avg BM</div>
+          <div class="mm-value bm-c" id="mmAvgBM">—</div>
+          <div class="mm-sub" id="mmAvgBMsub"></div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">ATR%</div>
+          <div class="mm-value" id="mmATR">—</div>
+          <div class="mm-sub">14d volatility</div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">SRI</div>
+          <div class="mm-value" id="mmSRI">—</div>
+          <div class="mm-sub">SM intensity</div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">MES</div>
+          <div class="mm-value" id="mmMES">—</div>
+          <div class="mm-sub">effort/result</div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">RPR</div>
+          <div class="mm-value" id="mmRPR">—</div>
+          <div class="mm-sub">sell pressure</div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">Vx Gap</div>
+          <div class="mm-value" id="mmVXG">—</div>
+          <div class="mm-sub">close vs vwap</div>
+        </div>
+      </div>
+
       <div>
         <div class="trx-toolbar">
           <div class="trx-section-title">Transaksi SM &amp; BM</div>
           <div class="trx-date-range">
             <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
-            <span class="trx-date-arrow">→</span>
+            <span class="trx-date-arrow" id="trxDateModeToggle" onclick="toggleTrxDateMode()" title="Klik untuk switch Single/Range" style="cursor:pointer;user-select:none;transition:all .15s">→</span>
             <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
           </div>
         </div>
@@ -930,6 +1040,55 @@ let sortCols     = [{ col: 'clean_money', asc: false }]; // multi-sort
 let filterText   = '';
 let phaseFilter  = null; // null = all, Set = selected phases
 let actionFilter = null; // null = all, Set = selected actions
+let isSingleMode = true;      // Main toolbar: true = single date, false = range
+let trxIsSingleMode = true;   // Modal trx toolbar
+
+// ── Date mode toggle ──────────────────────────────────────────────
+function toggleDateMode() {
+  isSingleMode = !isSingleMode;
+  applyDateMode();
+}
+function applyDateMode() {
+  const toggle = document.getElementById('dateModeToggle');
+  const dt = document.getElementById('dateTo');
+  if (isSingleMode) {
+    toggle.textContent = '·';
+    toggle.classList.remove('range-mode');
+    toggle.title = 'Mode: Single Date (klik untuk Range)';
+    dt.value = document.getElementById('dateFrom').value;
+    dt.classList.add('disabled');
+    dt.disabled = true;
+  } else {
+    toggle.textContent = '→';
+    toggle.classList.add('range-mode');
+    toggle.title = 'Mode: Date Range (klik untuk Single)';
+    dt.classList.remove('disabled');
+    dt.disabled = false;
+  }
+}
+function toggleTrxDateMode() {
+  trxIsSingleMode = !trxIsSingleMode;
+  applyTrxDateMode();
+}
+function applyTrxDateMode() {
+  const toggle = document.getElementById('trxDateModeToggle');
+  const dt = document.getElementById('trxDateTo');
+  if (trxIsSingleMode) {
+    toggle.textContent = '·';
+    toggle.style.color = 'var(--muted)';
+    toggle.title = 'Mode: Single Date';
+    dt.value = document.getElementById('trxDateFrom').value;
+    dt.classList.add('disabled');
+    dt.disabled = true;
+  } else {
+    toggle.textContent = '→';
+    toggle.style.color = 'var(--accent)';
+    toggle.title = 'Mode: Date Range';
+    dt.classList.remove('disabled');
+    dt.disabled = false;
+  }
+}
+
 let modalChart   = null;
 let modalCandle  = null;
 let modalVolume  = null;
@@ -1354,6 +1513,11 @@ function openModal(ticker) {
   document.getElementById('ovlBtnCM').classList.toggle('active', ovlShowCM);
   document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
   document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
+
+  // Populate metrics panel from current row data
+  const rowData = allRows.find(r => r.ticker === ticker);
+  populateMetricsPanel(rowData);
+
   // Sync trx date pickers from main toolbar
   const mainFrom = document.getElementById('dateFrom').value;
   const mainTo   = document.getElementById('dateTo').value;
@@ -1367,8 +1531,11 @@ function openModal(ticker) {
     const [d,m,y] = mainTo.split('/').map(Number);
     trxPickerTo.setDate(new Date(y, m-1, d), true);
   }
+  // Inherit single/range mode from main toolbar
+  trxIsSingleMode = isSingleMode;
+  applyTrxDateMode();
+
   document.getElementById('modalBackdrop').classList.add('open');
-  // Defer agar modal selesai render dulu, baru init chart
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       initModalChart();
@@ -1376,6 +1543,100 @@ function openModal(ticker) {
       loadTransactions();
     });
   });
+}
+
+function populateMetricsPanel(r) {
+  const fmtNum = (v, suffix='') => v !== null && v !== undefined ? v.toLocaleString('id-ID') + suffix : '—';
+  const fmtPct = (v) => v !== null && v !== undefined ? v.toFixed(2) + '%' : '—';
+  const fmtDec = (v) => v !== null && v !== undefined ? v.toFixed(2) : '—';
+  const close = r && (r.price || r.price_close);
+
+  // Avg SM
+  const elSM = document.getElementById('mmAvgSM');
+  const elSMsub = document.getElementById('mmAvgSMsub');
+  if (r && r.vwap_sm) {
+    elSM.textContent = fmtNum(r.vwap_sm);
+    if (close) {
+      const diff = ((close - r.vwap_sm) / r.vwap_sm * 100);
+      const cls = diff >= 0 ? 'pos' : 'neg';
+      elSMsub.innerHTML = `<span style="color:var(--${diff>=0?'up':'down'})">${diff>=0?'+':''}${diff.toFixed(2)}% vs close</span>`;
+    } else { elSMsub.textContent = ''; }
+  } else {
+    elSM.textContent = '—';
+    elSMsub.textContent = '';
+  }
+
+  // Avg BM
+  const elBM = document.getElementById('mmAvgBM');
+  const elBMsub = document.getElementById('mmAvgBMsub');
+  if (r && r.vwap_bm) {
+    elBM.textContent = fmtNum(r.vwap_bm);
+    if (close) {
+      const diff = ((close - r.vwap_bm) / r.vwap_bm * 100);
+      elBMsub.innerHTML = `<span style="color:var(--${diff>=0?'up':'down'})">${diff>=0?'+':''}${diff.toFixed(2)}% vs close</span>`;
+    } else { elBMsub.textContent = ''; }
+  } else {
+    elBM.textContent = '—';
+    elBMsub.textContent = '';
+  }
+
+  // ATR
+  const elATR = document.getElementById('mmATR');
+  elATR.textContent = r && r.atr_pct ? r.atr_pct.toFixed(2) + '%' : '—';
+  elATR.className = 'mm-value';
+  if (r && r.atr_pct) {
+    if (r.atr_pct >= 4) elATR.className = 'mm-value neg';
+    else if (r.atr_pct >= 2.5) elATR.className = 'mm-value ok';
+  }
+
+  // SRI
+  const elSRI = document.getElementById('mmSRI');
+  elSRI.textContent = fmtDec(r && r.sri);
+  elSRI.className = 'mm-value';
+  if (r && r.sri) {
+    if (r.sri >= 3.0) elSRI.className = 'mm-value pos';
+    else if (r.sri >= 1.5) elSRI.className = 'mm-value ok';
+  }
+
+  // MES
+  document.getElementById('mmMES').textContent = fmtDec(r && r.mes);
+
+  // RPR
+  const elRPR = document.getElementById('mmRPR');
+  elRPR.textContent = fmtDec(r && r.rpr);
+  elRPR.className = 'mm-value';
+  if (r && r.rpr != null) {
+    if (r.rpr >= 0.6) elRPR.className = 'mm-value neg';
+    else if (r.rpr <= 0.4) elRPR.className = 'mm-value pos';
+  }
+
+  // Volx Gap
+  const elVXG = document.getElementById('mmVXG');
+  elVXG.textContent = r && r.volx_gap !== null && r.volx_gap !== undefined ? fmtPct(r.volx_gap) : '—';
+  elVXG.className = 'mm-value';
+  if (r && r.volx_gap != null) {
+    if (r.volx_gap < -1.5) elVXG.className = 'mm-value pos';
+    else if (r.volx_gap > 1.5) elVXG.className = 'mm-value neg';
+  }
+
+  // Phase + Action headline
+  const phBadge = document.getElementById('mPhaseBadge');
+  const acBadge = document.getElementById('mActionBadge');
+  if (r && r.phase) {
+    phBadge.textContent = r.phase;
+    phBadge.className = 'phase-badge ' + r.phase.toLowerCase();
+    phBadge.style.display = 'inline-block';
+  } else {
+    phBadge.style.display = 'none';
+  }
+  if (r && r.action) {
+    const icons = { BUY: '🚀 BUY', SELL: '⚠️ SELL', HOLD: '⌛ HOLD' };
+    acBadge.textContent = icons[r.action] || r.action;
+    acBadge.className = 'action-badge ' + r.action.toLowerCase();
+    acBadge.style.display = 'inline-block';
+  } else {
+    acBadge.style.display = 'none';
+  }
 }
 function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
