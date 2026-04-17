@@ -782,11 +782,10 @@ td:first-child { text-align: left; }
 
 <!-- HEADER -->
 <header>
-  <div class="logo">ZENITH <span>/ flow</span></div>
-  <div class="nav-divider"></div>
   <a href="/chart" class="nav-btn">⬡ Chart</a>
   <a href="/flow" class="nav-btn active">⊞ Flow</a>
   <a href="/sector" class="nav-btn">◈ Sector</a>
+  <a href="/backtest" class="nav-btn" title="Backtest Leaderboard">🎯 Backtest</a>
   <div class="nav-divider"></div>
   <div class="ticker-search-wrap">
     <span style="color:var(--muted);font-size:12px">⌕</span>
@@ -865,10 +864,6 @@ td:first-child { text-align: left; }
       </div>
     </div>
   </div>
-  <a href="/backtest" class="bt-link-btn" title="Buka Backtest Leaderboard">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor"/></svg>
-    BACKTEST
-  </a>
   <span class="row-count" id="rowCount"></span>
 </div>
 
@@ -1247,6 +1242,10 @@ window.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.trx-date-input').forEach(el => {
     el.addEventListener('input', () => autoFormatDate(el));
   });
+
+  // Apply default single mode (greys out endDate)
+  applyDateMode();
+  applyTrxDateMode();
 
   loadFlow();
 

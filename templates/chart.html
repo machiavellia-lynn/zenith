@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
 <style>
-:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#4a6070;--up:#00e8a2;--down:#ff4d6a}
+:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#bfcbd4;--up:#00e8a2;--down:#ff4d6a}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column}
 
@@ -195,11 +195,10 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 </head>
 <body>
 <header>
-  <div class="logo">ZENITH <span>/ chart</span></div>
-  <div class="nav-divider"></div>
   <a href="/chart" class="nav-btn active">⬡ Chart</a>
   <a href="/flow" class="nav-btn">⊞ Flow</a>
   <a href="/sector" class="nav-btn">◈ Sector</a>
+  <a href="/backtest" class="nav-btn">🎯 Backtest</a>
   <div class="nav-divider"></div>
   <div class="search-wrap">
     <input type="text" id="tickerInput" placeholder="Ticker..." value="BBRI" maxlength="8"/>
@@ -255,6 +254,46 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
     </div>
     <div id="chart"></div>
     <div class="state-overlay hidden" id="loadingOverlay"></div>
+  </div>
+
+  <!-- METRICS PANEL -->
+  <div class="metrics-panel" id="metricsPanel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">PHASE</div>
+      <div id="mpPhase" style="font-family:'Space Mono',monospace;font-size:13px;font-weight:700">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">ACTION</div>
+      <div id="mpAction" style="font-family:'Space Mono',monospace;font-size:13px;font-weight:700">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Avg SM</div>
+      <div id="mpAvgSM" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--accent2)">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Avg BM</div>
+      <div id="mpAvgBM" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#ff8c42">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">ATR%</div>
+      <div id="mpATR" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">SRI</div>
+      <div id="mpSRI" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">MES</div>
+      <div id="mpMES" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">RPR</div>
+      <div id="mpRPR" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+    </div>
+    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
+      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Vx Gap</div>
+      <div id="mpVXG" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+    </div>
   </div>
 
   <!-- TRANSAKSI SM & BM -->
@@ -389,8 +428,41 @@ async function doLoad(){
     applyAutoScale(isAutoScale);hideLoading();
     if(data.name)document.getElementById('tName').textContent=data.name;
     if(data.price){document.getElementById('tPrice').textContent=data.price.toLocaleString('id-ID')}
-    loadOverlayData(candles);loadTransactions();
+    loadOverlayData(candles);loadTransactions();loadMetrics();
   }catch(err){showError(err.message)}
+}
+
+async function loadMetrics(){
+  try{
+    const res=await fetch(`/api/flow?date_from=${getDateStr()}&date_to=${getDateStr()}`);
+    const d=await res.json();if(!d.tickers)return;
+    const r=d.tickers.find(t=>t.ticker===currentTicker);if(!r)return;
+    const fmt=(v)=>v!=null?v.toLocaleString('id-ID'):'—';
+    const fmtD=(v)=>v!=null?v.toFixed(2):'—';
+    // Phase + Action
+    const ph=document.getElementById('mpPhase');
+    ph.textContent=r.phase||'—';
+    ph.className='';
+    if(r.phase){const c={'SOS':'#00e8a2','SPRING':'#00e8a2','ACCUM':'#5abf8e','ABSORB':'#4d9fff','UPTHRUST':'#ff8c42','DISTRI':'#ff4d6a','NEUTRAL':'var(--muted)'};ph.style.color=c[r.phase]||'var(--text)'}
+    const ac=document.getElementById('mpAction');
+    const icons={BUY:'🚀 BUY',SELL:'⚠️ SELL',HOLD:'⌛ HOLD'};
+    ac.textContent=icons[r.action]||r.action||'—';
+    ac.style.color=r.action==='BUY'?'#00e8a2':r.action==='SELL'?'#ff4d6a':'var(--muted)';
+    document.getElementById('mpAvgSM').textContent=r.vwap_sm?fmt(r.vwap_sm):'—';
+    document.getElementById('mpAvgBM').textContent=r.vwap_bm?fmt(r.vwap_bm):'—';
+    document.getElementById('mpATR').textContent=r.atr_pct?r.atr_pct.toFixed(1)+'%':'—';
+    document.getElementById('mpSRI').textContent=fmtD(r.sri);
+    document.getElementById('mpMES').textContent=fmtD(r.mes);
+    document.getElementById('mpRPR').textContent=fmtD(r.rpr);
+    const vxg=document.getElementById('mpVXG');
+    vxg.textContent=r.volx_gap!=null?r.volx_gap.toFixed(2)+'%':'—';
+    vxg.style.color=r.volx_gap!=null?(r.volx_gap<-1.5?'#00e8a2':r.volx_gap>1.5?'#ff4d6a':'var(--text)'):'var(--text)';
+  }catch(e){}
+}
+
+function getDateStr(){
+  const d=document.getElementById('trxDateFrom').value;
+  return d?displayToApi(d):'';
 }
 
 async function loadOverlayData(candles){

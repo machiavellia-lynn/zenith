@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
 <style>
-:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#4a6070;--up:#00e8a2;--down:#ff4d6a}
+:root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#bfcbd4;--up:#00e8a2;--down:#ff4d6a}
 *{box-sizing:border-box;margin:0;padding:0}html,body{height:100%}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;min-height:100vh}
 header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:200}
@@ -722,11 +722,11 @@ header{display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:
 </head>
 <body>
 <header>
-  <div class="logo">ZENITH <span>/ sector</span></div>
-  <div class="nav-divider"></div>
   <a href="/chart" class="nav-btn">⬡ Chart</a>
   <a href="/flow" class="nav-btn">⊞ Flow</a>
   <a href="/sector" class="nav-btn active">◈ Sector</a>
+  <a href="/backtest" class="nav-btn">🎯 Backtest</a>
+  <div style="flex:1"></div>
   <div class="ihsg-wrap">
     <span class="ihsg-label">IHSG</span>
     <span class="ihsg-price" id="ihsgPrice">—</span>

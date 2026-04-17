@@ -399,44 +399,54 @@ def flow():
         # ── Gain% from stored price_close (no Yahoo per-request) ──
         gains_map = {}  # ticker → {gain, price}
 
-        # Get price_close for latest date in range
-        price_latest = {}
-        if latest_date:
-            for r in conn.execute(
-                "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                [latest_date]
-            ).fetchall():
-                price_latest[r["ticker"]] = r["price_close"]
+        is_single_day = (date_from == date_to)
 
-        # Get reference price: day BEFORE the range
-        earliest_date_row = conn.execute(f"""
-            SELECT date FROM eod_summary WHERE date IN ({placeholders})
-            ORDER BY {_DATE_SORT} ASC LIMIT 1
-        """, dates).fetchone()
-        e_date = earliest_date_row["date"] if earliest_date_row else date_from
-        e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
-        prev_row = conn.execute(f"""
-            SELECT DISTINCT date FROM eod_summary
-            WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
-        """, [e_sortkey]).fetchone()
+        if not is_single_day:
+            # Multi-day range: compare latest vs day before range (from DB)
+            price_latest = {}
+            if latest_date:
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [latest_date]
+                ).fetchall():
+                    price_latest[r["ticker"]] = r["price_close"]
 
-        price_ref = {}
-        if prev_row:
-            for r in conn.execute(
-                "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                [prev_row["date"]]
-            ).fetchall():
-                price_ref[r["ticker"]] = r["price_close"]
+            earliest_date_row = conn.execute(f"""
+                SELECT date FROM eod_summary WHERE date IN ({placeholders})
+                ORDER BY {_DATE_SORT} ASC LIMIT 1
+            """, dates).fetchone()
+            e_date = earliest_date_row["date"] if earliest_date_row else date_from
+            e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
+            prev_row = conn.execute(f"""
+                SELECT DISTINCT date FROM eod_summary
+                WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
+            """, [e_sortkey]).fetchone()
 
-        # Compute gain from stored prices
-        for t in set(list(price_latest.keys()) + list(price_ref.keys())):
-            p_now = price_latest.get(t)
-            p_ref = price_ref.get(t)
-            price = int(round(p_now)) if p_now else None
-            gain = None
-            if p_now and p_ref and p_ref > 0:
-                gain = round((p_now - p_ref) / p_ref * 100, 2)
-            gains_map[t] = {"gain": gain, "price": price}
+            price_ref = {}
+            if prev_row:
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [prev_row["date"]]
+                ).fetchall():
+                    price_ref[r["ticker"]] = r["price_close"]
+
+            for t in set(list(price_latest.keys()) + list(price_ref.keys())):
+                p_now = price_latest.get(t)
+                p_ref = price_ref.get(t)
+                price = int(round(p_now)) if p_now else None
+                gain = None
+                if p_now and p_ref and p_ref > 0:
+                    gain = round((p_now - p_ref) / p_ref * 100, 2)
+                gains_map[t] = {"gain": gain, "price": price}
+        else:
+            # Single day: get price from DB but compute gain via Yahoo
+            # (DB prev_row can be weeks ago → wrong gain%)
+            if latest_date:
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [latest_date]
+                ).fetchall():
+                    gains_map[r["ticker"]] = {"gain": None, "price": int(round(r["price_close"]))}
 
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
@@ -1077,7 +1087,7 @@ def pull_db():
     with _flow_cache_lock:
         _flow_cache.clear()
 
-    DROPBOX_URL = "https://www.dropbox.com/scl/fi/3umhuatpco2v3k095b7ky/zenith.db?rlkey=30x6lo9rzgsu8l8bn21fcepo8&st=hx32l1ou&dl=1"
+    DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
 
     try:
         os.makedirs("/data", exist_ok=True)

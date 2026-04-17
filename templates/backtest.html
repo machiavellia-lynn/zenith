@@ -8,7 +8,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
 :root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#bfcbd4;--up:#00e8a2;--down:#ff4d6a}
-*{box-sizing:border-box;margin:0;padding:0}
+*{box-sizing:border-box;margin:0;padding:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;min-height:100vh}
 header{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
 .logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
@@ -81,12 +85,10 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 </head>
 <body>
 <header>
-  <div class="logo">ZENITH <span>/ backtest</span></div>
-  <a href="/hub" class="nav-btn">Hub</a>
-  <a href="/chart" class="nav-btn">Chart</a>
-  <a href="/flow" class="nav-btn">Flow</a>
-  <a href="/sector" class="nav-btn">Sector</a>
-  <a href="/backtest" class="nav-btn active">Backtest</a>
+  <a href="/chart" class="nav-btn">⬡ Chart</a>
+  <a href="/flow" class="nav-btn">⊞ Flow</a>
+  <a href="/sector" class="nav-btn">◈ Sector</a>
+  <a href="/backtest" class="nav-btn active">🎯 Backtest</a>
 </header>
 <div class="content">
   <div class="controls">
@@ -95,6 +97,11 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
     <span class="ctrl-label">hari</span>
     <button class="btn" id="runBtn" onclick="runBacktest()">Run Backtest</button>
     <button class="btn outline" onclick="loadResults()">Load Cached</button>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:4px 10px;transition:border-color .2s" onfocusin="this.style.borderColor='var(--accent)'" onfocusout="this.style.borderColor='var(--border)'">
+      <span style="color:var(--muted);font-size:11px">⌕</span>
+      <input type="text" id="tickerSearch" placeholder="Cari ticker..." oninput="filterByTicker()" style="background:none;border:none;outline:none;color:var(--text);font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;width:90px"/>
+    </div>
   </div>
   <div class="status-bar">
     <span class="spinner" id="spinner"></span>
@@ -226,8 +233,19 @@ function sortLB(col) {
   renderLeaderboard();
 }
 
+function filterByTicker() {
+  renderLeaderboard();
+}
+
 function renderLeaderboard() {
-  const rows = [...lbData];
+  const search = (document.getElementById('tickerSearch')?.value || '').trim().toUpperCase();
+  let rows = [...lbData];
+
+  // Filter by ticker if search is active
+  if (search) {
+    rows = rows.filter(r => r.details && r.details.some(d => d.ticker.includes(search)));
+  }
+
   rows.sort((a, b) => {
     let av = a[sortCol], bv = b[sortCol];
     if (av == null) av = sortAsc ? Infinity : -Infinity;
