@@ -42,30 +42,48 @@ body {
 
 /* ── HEADER ─────────────────────────────────────── */
 header {
+  position: sticky; top: 0; z-index: 200;
   display: flex; align-items: center; gap: 16px;
   padding: 12px 24px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
-  position: sticky; top: 0; z-index: 200;
+}
+header::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0,232,162,.3), transparent);
 }
 .logo {
+  display: flex; align-items: center;
   font-family: 'Space Mono', monospace;
   font-size: 12px; font-weight: 700;
   letter-spacing: .18em; color: var(--accent);
   text-transform: uppercase; white-space: nowrap;
+  text-decoration: none;
 }
-.logo span { color: var(--muted); }
+.logo-dot {
+  display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  margin-right: 7px; flex-shrink: 0;
+}
+.logo-sub { color: var(--muted); }
 .nav-divider { width: 1px; height: 20px; background: var(--border); }
+.nav-group {
+  display: flex; align-items: center;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 3px; gap: 2px;
+}
 .nav-btn {
-  background: none; border: 1px solid var(--border);
-  color: var(--muted); border-radius: 5px;
-  padding: 5px 14px; cursor: pointer;
+  background: none; border: 1px solid transparent;
+  color: var(--muted); border-radius: 4px;
+  padding: 4px 12px; cursor: pointer;
   font-family: 'Space Mono', monospace;
   font-size: 11px; letter-spacing: .06em;
   text-decoration: none; transition: all .15s;
 }
-.nav-btn:hover { border-color: var(--accent); color: var(--accent); }
-.nav-btn.active { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.nav-btn:hover { color: var(--accent); }
+.nav-btn.active { background: var(--surface); border-color: rgba(0,232,162,.25); color: var(--accent); }
 
 /* search */
 .ticker-search-wrap {
@@ -106,27 +124,33 @@ header {
 
 /* ── STATS BAR ───────────────────────────────────── */
 .stats-bar {
-  display: flex; align-items: center; gap: 0;
-  padding: 0 24px;
+  display: flex; align-items: stretch;
   background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border2);
   overflow-x: auto;
 }
 .stat-item {
-  display: flex; align-items: center; gap: 8px;
-  padding: 10px 20px 10px 0; margin-right: 20px;
+  display: flex; flex-direction: column;
+  justify-content: center; gap: 3px;
+  padding: 10px 18px;
   border-right: 1px solid var(--border);
   white-space: nowrap;
+  min-width: 80px; flex-shrink: 0;
 }
-.stat-item:last-child { border-right: none; }
+.stat-item.stat-ihsg {
+  margin-left: auto;
+  border-right: none;
+  border-left: 1px solid var(--border);
+}
+.stat-item.highlight { background: rgba(0,232,162,.025); }
 .stat-item .s-label {
   font-family: 'Space Mono', monospace;
-  font-size: 9px; letter-spacing: .12em;
+  font-size: 8px; letter-spacing: .1em;
   color: var(--muted); text-transform: uppercase;
 }
 .stat-item .s-val {
   font-family: 'Space Mono', monospace;
-  font-size: 14px; font-weight: 700;
+  font-size: 12px; font-weight: 700;
   color: var(--text);
 }
 .stat-item .s-val.up   { color: var(--up); }
@@ -145,16 +169,30 @@ header {
 }
 
 /* Date range picker */
-.date-range {
-  display: flex; align-items: center; gap: 8px;
+.date-range, .date-group {
+  display: flex; align-items: center;
+  background: var(--bg); border: 1px solid var(--border2);
+  border-radius: 6px; overflow: hidden;
+}
+.date-group .date-input {
+  border: none; border-right: 1px solid var(--border);
+  border-radius: 0; background: transparent;
+  padding: 7px 10px;
+}
+.date-group .date-input:last-child { border-right: none; }
+.date-group .date-arrow {
+  width: auto; height: auto;
+  color: var(--muted); font-size: 11px;
+  padding: 0 8px; background: none; border: none;
+  cursor: pointer; border-radius: 0;
 }
 .date-input {
-  background: var(--bg); border: 1px solid var(--border);
-  color: var(--text); border-radius: 5px;
-  padding: 6px 10px; font-family: 'Space Mono', monospace;
+  background: var(--bg); border: 1px solid var(--border2);
+  color: var(--text); border-radius: 6px;
+  padding: 8px 12px; font-family: 'Space Mono', monospace;
   font-size: 11px; outline: none; width: 108px;
   letter-spacing: .04em;
-  transition: border-color .2s, opacity .2s;
+  transition: border-color .15s, opacity .2s;
 }
 .date-input:focus { border-color: var(--accent); }
 .date-input::placeholder { color: var(--muted); }
@@ -342,9 +380,9 @@ table {
 }
 thead th {
   position: sticky; top: 0; z-index: 10;
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border2);
-  padding: 8px 8px;
+  background: var(--bg);
+  border-bottom: 2px solid var(--border2);
+  padding: 10px 10px;
   font-family: 'Space Mono', monospace;
   font-size: 9px; font-weight: 700;
   letter-spacing: .12em; color: var(--muted);
@@ -360,11 +398,15 @@ thead th .sort-icon { margin-left: 4px; font-size: 8px; }
 
 tbody tr {
   border-bottom: 1px solid var(--border);
+  border-left: 2px solid var(--border2);
   cursor: pointer;
   transition: background .1s;
   animation: rowIn .3s ease both;
 }
-tbody tr:hover { background: rgba(255,255,255,.03); }
+tbody tr.action-buy  { border-left-color: var(--up); }
+tbody tr.action-sell { border-left-color: var(--down); }
+tbody tr.action-hold { border-left-color: var(--border2); }
+tbody tr:hover { background: rgba(0,232,162,.025); }
 @keyframes rowIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -857,8 +899,9 @@ td:first-child { text-align: left; }
 }
 /* Dropdown filter */
 .filter-dropdown{position:relative;display:inline-block}
-.filter-btn{background:var(--bg);border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap}
+.filter-btn{position:relative;background:var(--bg);border:1px solid var(--border2);color:var(--muted);border-radius:6px;padding:7px 12px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap}
 .filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent)}
+.filter-btn.has-filter::before{content:'';position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
 .filter-btn .arrow{font-size:7px;transition:transform .2s}
 .filter-btn.open .arrow{transform:rotate(180deg)}
 .filter-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:6px 0;min-width:140px;z-index:50;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
@@ -870,14 +913,14 @@ td:first-child { text-align: left; }
 .filter-count{background:var(--accent);color:var(--bg);border-radius:8px;padding:0 5px;font-size:8px;font-weight:700;margin-left:2px}
 
 /* Phase & Action badges */
-.phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:2px 6px;border-radius:3px;font-weight:700;letter-spacing:.06em;white-space:nowrap}
-.phase-badge.spring{background:rgba(0,232,162,.15);color:#00e8a2}
-.phase-badge.absorb{background:rgba(77,159,255,.15);color:#4d9fff}
-.phase-badge.sos{background:rgba(0,232,162,.25);color:#00e8a2}
-.phase-badge.upthrust{background:rgba(255,140,66,.15);color:#ff8c42}
-.phase-badge.distri{background:rgba(255,77,106,.15);color:#ff4d6a}
-.phase-badge.accum{background:rgba(0,232,162,.1);color:#5abf8e}
-.phase-badge.neutral{background:rgba(74,96,112,.15);color:var(--muted)}
+.phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:3px 10px;border-radius:20px;border:1px solid transparent;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.phase-badge.spring{background:rgba(0,232,162,.1);color:#00e8a2;border-color:rgba(0,232,162,.2)}
+.phase-badge.absorb{background:rgba(77,159,255,.1);color:#4d9fff;border-color:rgba(77,159,255,.2)}
+.phase-badge.sos{background:rgba(0,232,162,.15);color:#00e8a2;border-color:rgba(0,232,162,.25)}
+.phase-badge.upthrust{background:rgba(255,140,66,.1);color:#ff8c42;border-color:rgba(255,140,66,.2)}
+.phase-badge.distri{background:rgba(255,77,106,.08);color:#ff4d6a;border-color:rgba(255,77,106,.18)}
+.phase-badge.accum{background:rgba(0,232,162,.08);color:#5abf8e;border-color:rgba(90,191,142,.18)}
+.phase-badge.neutral{background:rgba(74,96,112,.12);color:var(--muted);border-color:rgba(74,96,112,.2)}
 .action-badge{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:help;white-space:nowrap}
 .action-badge.buy{color:#00e8a2}
 .action-badge.sell{color:#ff4d6a}
@@ -888,11 +931,13 @@ td:first-child { text-align: left; }
 
 <!-- HEADER -->
 <header>
-  <a href="/chart" class="nav-btn">⬡ Chart</a>
-  <a href="/flow" class="nav-btn active">⊞ Flow</a>
-  <a href="/sector" class="nav-btn">◈ Sector</a>
-  <a href="/backtest" class="nav-btn" title="Backtest Leaderboard">🎯 Backtest</a>
-  <div class="nav-divider"></div>
+  <a href="/" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / flow</span></a>
+  <div class="nav-group">
+    <a href="/chart" class="nav-btn">⬡ Chart</a>
+    <a href="/flow" class="nav-btn active">⊞ Flow</a>
+    <a href="/sector" class="nav-btn">◈ Sector</a>
+    <a href="/backtest" class="nav-btn" title="Backtest Leaderboard">🎯 Backtest</a>
+  </div>
   <div class="ticker-search-wrap">
     <span style="color:var(--muted);font-size:12px">⌕</span>
     <input type="text" id="tickerFilter" placeholder="Filter ticker..."/>
@@ -902,6 +947,10 @@ td:first-child { text-align: left; }
 
 <!-- STATS BAR -->
 <div class="stats-bar" id="statsBar">
+  <div class="stat-item highlight" title="Net Clean Money">
+    <span class="s-label">NET CM</span>
+    <span class="s-val" id="sNCM">—</span>
+  </div>
   <div class="stat-item" title="Smart Money">
     <span class="s-label">SM</span>
     <span class="s-val neutral" id="sSM">—</span>
@@ -918,10 +967,6 @@ td:first-child { text-align: left; }
     <span class="s-label">MF−</span>
     <span class="s-val down" id="sMFM">—</span>
   </div>
-  <div class="stat-item" title="Net Clean Money">
-    <span class="s-label">NET CM</span>
-    <span class="s-val" id="sNCM">—</span>
-  </div>
   <div class="stat-item" title="Net Money Flow">
     <span class="s-label">NET MF</span>
     <span class="s-val" id="sNMF">—</span>
@@ -930,7 +975,7 @@ td:first-child { text-align: left; }
     <span class="s-label">Tickers</span>
     <span class="s-val neutral" id="sCount">—</span>
   </div>
-  <div class="stat-item" style="margin-left:auto" title="IHSG Composite">
+  <div class="stat-item stat-ihsg" title="IHSG Composite">
     <span class="s-label">IHSG</span>
     <span class="s-val" id="sIHSG" style="color:var(--text)">—</span>
   </div>
@@ -945,7 +990,7 @@ td:first-child { text-align: left; }
     <span class="sector-badge-label">Menampilkan:</span>
     <span class="sector-badge-name" id="sectorBadgeName"></span>
   </div>
-  <div class="date-range">
+  <div class="date-group">
     <input type="text" class="date-input" id="dateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
     <div class="date-arrow" id="dateModeToggle" onclick="toggleDateMode()" title="Klik untuk switch antara Single Date dan Date Range">→</div>
     <input type="text" class="date-input" id="dateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
@@ -1457,8 +1502,10 @@ function applyFilter() {
   const btn = document.querySelector('#filterDropdown .filter-btn');
   if (phaseFilter || actionFilter) {
     ct.textContent = totalFiltered; ct.style.display = 'inline'; btn.classList.add('active');
+    btn.classList.add('has-filter');
   } else {
     ct.style.display = 'none'; btn.classList.remove('active');
+    btn.classList.remove('has-filter');
   }
   renderTable();
 }
@@ -1468,6 +1515,7 @@ function clearFilters() {
   phaseFilter = null; actionFilter = null;
   document.getElementById('filterCount').style.display = 'none';
   document.querySelector('#filterDropdown .filter-btn').classList.remove('active');
+  document.querySelector('#filterDropdown .filter-btn').classList.remove('has-filter');
   renderTable();
 }
 
@@ -1620,7 +1668,8 @@ function renderTable() {
     const vwapBm = r.vwap_bm ? r.vwap_bm.toLocaleString('id-ID') : '—';
     const atrStr = r.atr_pct ? r.atr_pct.toFixed(1) + '%' : '—';
 
-    return `<tr onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
+    const actCls = r.action === 'BUY' ? 'action-buy' : r.action === 'SELL' ? 'action-sell' : r.action === 'HOLD' ? 'action-hold' : '';
+    return `<tr class="${actCls}" onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
       <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
       <td><span class="td-num" style="color:var(--muted)">${r.tx ? r.tx.toLocaleString('id-ID') : '—'}</span></td>

@@ -18,13 +18,15 @@
 ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;display:flex;flex-direction:column}
 
-header{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);position:sticky;top:0;z-index:200;flex-wrap:wrap}
-.logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap}
-.logo span{color:var(--muted)}
-.nav-divider{width:1px;height:20px;background:var(--border)}
-.nav-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:5px 14px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
-.nav-btn:hover{border-color:var(--accent);color:var(--accent)}
-.nav-btn.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+header{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,232,162,.3),transparent)}
+.logo{display:flex;align-items:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap;text-decoration:none}
+.logo-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);margin-right:7px;flex-shrink:0}
+.logo-sub{color:var(--muted)}
+.nav-group{display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px}
+.nav-btn{background:none;border:1px solid transparent;color:var(--muted);border-radius:4px;padding:4px 12px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
+.nav-btn:hover{color:var(--accent)}
+.nav-btn.active{background:var(--surface);border-color:rgba(0,232,162,.25);color:var(--accent)}
 .search-wrap{display:flex;align-items:center;gap:8px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:5px 12px;transition:border-color .2s}
 .search-wrap:focus-within{border-color:var(--accent)}
 .search-wrap input{background:none;border:none;outline:none;color:var(--text);font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;width:100px}
@@ -43,9 +45,23 @@ header{display:flex;align-items:center;gap:12px;padding:12px 24px;border-bottom:
 main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 .tf-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .tf-label{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
-.tf-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:4px 12px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.06em}
-.tf-btn:hover{border-color:var(--accent);color:var(--accent)}
-.tf-btn.active{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.tf-group{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px}
+.tf-btn{background:none;border:1px solid transparent;border-radius:4px;color:var(--muted);padding:4px 12px;font-family:'Space Mono',monospace;font-size:11px;cursor:pointer;transition:all .15s;letter-spacing:.06em}
+.tf-btn:hover{color:var(--accent)}
+.tf-btn.active{background:var(--surface);border-color:rgba(0,232,162,.25);color:var(--accent)}
+input[type="text"]{transition:border-color .15s}
+input[type="text"]:focus{border-color:var(--accent)}
+
+.metrics-panel{background:var(--surface);border:1px solid var(--border2);border-radius:10px;overflow:hidden}
+.mp-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
+.mp-title{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.mp-phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:3px 10px;border-radius:20px;background:rgba(0,232,162,.1);color:var(--accent);border:1px solid rgba(0,232,162,.2);font-weight:700;letter-spacing:.06em}
+.mp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}
+.mp-item{background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:3px}
+.mp-label{font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.mp-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--text)}
+@media(max-width:900px){.mp-grid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:560px){.mp-grid{grid-template-columns:repeat(3,1fr)}}
 .chart-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden;position:relative;height:max(600px,calc(100vh - 280px))}
 #chart{width:100%;height:100%}
 .hover-tooltip{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:16px;background:rgba(14,19,24,.92);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-family:'Space Mono',monospace;font-size:11px;pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap}
@@ -199,11 +215,13 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 </head>
 <body>
 <header>
-  <a href="/chart" class="nav-btn active">⬡ Chart</a>
-  <a href="/flow" class="nav-btn">⊞ Flow</a>
-  <a href="/sector" class="nav-btn">◈ Sector</a>
-  <a href="/backtest" class="nav-btn">🎯 Backtest</a>
-  <div class="nav-divider"></div>
+  <a href="/" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / chart</span></a>
+  <div class="nav-group">
+    <a href="/chart" class="nav-btn active">⬡ Chart</a>
+    <a href="/flow" class="nav-btn">⊞ Flow</a>
+    <a href="/sector" class="nav-btn">◈ Sector</a>
+    <a href="/backtest" class="nav-btn">🎯 Backtest</a>
+  </div>
   <div class="search-wrap">
     <input type="text" id="tickerInput" placeholder="Ticker..." value="BBRI" maxlength="8"/>
   </div>
@@ -267,42 +285,21 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
   </div>
 
   <!-- METRICS PANEL -->
-  <div class="metrics-panel" id="metricsPanel" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;padding:14px 18px;background:var(--surface);border:1px solid var(--border);border-radius:10px">
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">PHASE</div>
-      <div id="mpPhase" style="font-family:'Space Mono',monospace;font-size:13px;font-weight:700">—</div>
+  <div class="metrics-panel" id="metricsPanel">
+    <div class="mp-header">
+      <span class="mp-title">Metrics</span>
+      <span class="mp-phase-badge" id="mpPhaseBadge">— · —</span>
     </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">ACTION</div>
-      <div id="mpAction" style="font-family:'Space Mono',monospace;font-size:13px;font-weight:700">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Avg SM</div>
-      <div id="mpAvgSM" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--accent2)">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Avg BM</div>
-      <div id="mpAvgBM" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:#ff8c42">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">ATR%</div>
-      <div id="mpATR" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">SRI</div>
-      <div id="mpSRI" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">MES</div>
-      <div id="mpMES" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">RPR</div>
-      <div id="mpRPR" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
-    </div>
-    <div class="mp-item" style="display:flex;flex-direction:column;gap:2px">
-      <div style="font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase">Vx Gap</div>
-      <div id="mpVXG" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+    <div class="mp-grid">
+      <span id="mpPhase" style="display:none">—</span>
+      <span id="mpAction" style="display:none">—</span>
+      <div class="mp-item"><div class="mp-label">Avg SM</div><div id="mpAvgSM" class="mp-val" style="color:var(--accent2)">—</div></div>
+      <div class="mp-item"><div class="mp-label">Avg BM</div><div id="mpAvgBM" class="mp-val" style="color:#ff8c42">—</div></div>
+      <div class="mp-item"><div class="mp-label">ATR%</div><div id="mpATR" class="mp-val">—</div></div>
+      <div class="mp-item"><div class="mp-label">SRI</div><div id="mpSRI" class="mp-val">—</div></div>
+      <div class="mp-item"><div class="mp-label">MES</div><div id="mpMES" class="mp-val">—</div></div>
+      <div class="mp-item"><div class="mp-label">RPR</div><div id="mpRPR" class="mp-val">—</div></div>
+      <div class="mp-item"><div class="mp-label">Vx Gap</div><div id="mpVXG" class="mp-val">—</div></div>
     </div>
   </div>
 
@@ -503,6 +500,14 @@ async function loadMetrics(){
     const icons={BUY:'🚀 BUY',SELL:'⚠️ SELL',HOLD:'⌛ HOLD'};
     ac.textContent=icons[r.action]||r.action||'—';
     ac.style.color=r.action==='BUY'?'#00e8a2':r.action==='SELL'?'#ff4d6a':'var(--muted)';
+    // Update combined pill badge
+    const pb=document.getElementById('mpPhaseBadge');
+    if(pb){
+      pb.textContent=(r.phase||'—')+' · '+(r.action||'—');
+      const phc={'SOS':'rgba(0,232,162,.15)','SPRING':'rgba(0,232,162,.1)','ACCUM':'rgba(0,232,162,.08)','ABSORB':'rgba(77,159,255,.1)','UPTHRUST':'rgba(255,140,66,.1)','DISTRI':'rgba(255,77,106,.08)','NEUTRAL':'rgba(74,96,112,.12)'};
+      const phcol={'SOS':'#00e8a2','SPRING':'#00e8a2','ACCUM':'#5abf8e','ABSORB':'#4d9fff','UPTHRUST':'#ff8c42','DISTRI':'#ff4d6a','NEUTRAL':'var(--muted)'};
+      if(r.phase){pb.style.background=phc[r.phase]||'rgba(0,232,162,.1)';pb.style.color=phcol[r.phase]||'var(--accent)'}
+    }
     document.getElementById('mpAvgSM').textContent=r.vwap_sm?fmt(r.vwap_sm):'—';
     document.getElementById('mpAvgBM').textContent=r.vwap_bm?fmt(r.vwap_bm):'—';
     document.getElementById('mpATR').textContent=r.atr_pct?r.atr_pct.toFixed(1)+'%':'—';

@@ -12,35 +12,61 @@
 ::-webkit-scrollbar{width:6px;height:6px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
-::-webkit-scrollbar-thumb:hover{background:var(--muted)}html,body{height:100%}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+html,body{height:100%}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px}
 
-header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
-.logo{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase}
-.logo span{color:var(--muted)}
-.header-tag{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+/* ── HEADER ── */
+header{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface)}
+header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,232,162,.3),transparent)}
+.logo{display:flex;align-items:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap;text-decoration:none}
+.logo-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);margin-right:7px;flex-shrink:0}
+.logo-sub{color:var(--muted)}
+.nav-group{display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px}
+.nav-btn{background:none;border:1px solid transparent;color:var(--muted);border-radius:4px;padding:4px 12px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
+.nav-btn:hover{color:var(--accent)}
+.nav-btn.active{background:var(--surface);border-color:rgba(0,232,162,.25);color:var(--accent)}
+.header-tag{margin-left:auto;font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
 
+/* ── CONTENT ── */
 .content{max-width:1000px;margin:0 auto;padding:24px;display:flex;flex-direction:column;gap:20px}
-.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:24px;display:flex;flex-direction:column;gap:16px}
-.card-title{font-family:'Space Mono',monospace;font-size:14px;font-weight:700;letter-spacing:.1em;color:var(--accent);text-transform:uppercase}
-.card-sub{font-size:11px;color:var(--muted);margin-top:-8px;font-family:'Space Mono',monospace;letter-spacing:.04em}
+
+/* ── CARDS ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:0;display:flex;flex-direction:column;overflow:hidden}
+.card-header{padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;flex-direction:column;gap:2px}
+.card-body{padding:20px;display:flex;flex-direction:column;gap:16px}
+.card-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--accent);text-transform:uppercase}
+.card-sub{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:.04em}
 .card-row{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--border)}
-.card-row:first-of-type{border-top:none;padding-top:0}
+.card-row:first-child{border-top:none;padding-top:0}
 .row-label{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
 
-.btn{background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:9px 18px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:opacity .15s;text-transform:uppercase}
+/* ── BUTTONS ── */
+.btn{position:relative;overflow:hidden;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:9px 18px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:opacity .15s;text-transform:uppercase}
+.btn::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:rgba(255,255,255,.25)}
 .btn:hover{opacity:.85}
 .btn:disabled{opacity:.4;cursor:not-allowed}
-.btn.danger{background:var(--danger)}
-.btn.outline{background:none;border:1px solid var(--border);color:var(--muted)}
-.btn.outline:hover{border-color:var(--accent);color:var(--accent)}
+
+.btn.outline{background:none;border:1px solid var(--border2);color:var(--muted)}
+.btn.outline::after{display:none}
+.btn.outline:hover{border-color:rgba(0,232,162,.35);color:var(--accent);background:rgba(0,232,162,.04)}
+
+.btn.danger{background:rgba(255,77,106,.08);border:1px solid rgba(255,77,106,.25);color:var(--danger)}
+.btn.danger::after{display:none}
+.btn.danger:hover{background:rgba(255,77,106,.15)}
+
 .btn-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
+/* ── INPUTS ── */
 .file-input{display:none}
-.file-label{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;transition:border-color .15s;display:inline-block}
+.file-label{background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:8px 14px;font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);cursor:pointer;transition:all .15s;display:inline-block}
 .file-label:hover{border-color:var(--accent);color:var(--accent)}
 .file-name{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-left:8px}
 
+.num-input{background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:12px;width:80px;outline:none;text-align:center;transition:border-color .15s}
+.num-input:focus{border-color:var(--accent)}
+
+/* ── PROGRESS ── */
 .progress-wrap{width:100%;height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:none}
 .progress-wrap.active{display:block}
 .progress-bar{height:100%;background:var(--accent);border-radius:3px;transition:width .2s;width:0%}
@@ -50,32 +76,34 @@ header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:
 .status{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);min-height:14px;letter-spacing:.04em}
 .status.ok{color:var(--accent)}.status.err{color:var(--danger)}
 
-/* Scraper status panel */
+/* ── STAT GRID ── */
 .stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
-.stat-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.stat-box{background:var(--bg);border:1px solid var(--border);border-left:2px solid var(--border2);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.stat-box.up{border-left-color:var(--up)}
+.stat-box.down{border-left-color:var(--down)}
+.stat-box.sm{border-left-color:var(--accent2)}
+.stat-box.bm{border-left-color:#ff8c42}
 .stat-label{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
 .stat-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--text)}
 .stat-val.up{color:var(--up)}.stat-val.down{color:var(--down)}.stat-val.sm{color:var(--accent2)}.stat-val.bm{color:#ff8c42}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
 .dot.alive{background:var(--accent);box-shadow:0 0 6px var(--accent)}.dot.dead{background:var(--danger);box-shadow:0 0 6px var(--danger)}
 
-.num-input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:12px;width:80px;outline:none;text-align:center}
-.num-input:focus{border-color:var(--accent)}
-
-/* Mascot */
+/* ── MASCOT ── */
 .mascot-wrap{position:fixed;bottom:16px;right:24px;z-index:500;display:flex;flex-direction:column;align-items:flex-end;gap:8px;cursor:pointer}
 .mascot-img{width:100px;height:auto;border-radius:12px;animation:bounce 3s ease-in-out infinite;filter:drop-shadow(0 4px 12px rgba(0,0,0,.5))}
 @keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 .mascot-bubble{background:var(--surface);border:1px solid var(--accent);border-radius:8px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:10px;color:var(--text);max-width:200px;line-height:1.5;position:relative;opacity:1;transition:opacity .3s}
 .mascot-bubble::after{content:'';position:absolute;bottom:-6px;right:20px;width:10px;height:6px;background:var(--accent);clip-path:polygon(50% 100%,0 0,100% 0)}
 
-
-/* ── RESPONSIVE ──────────────────────────── */
+/* ── RESPONSIVE ── */
 @media(max-width:768px){
   header{gap:8px;padding:10px 14px;flex-wrap:wrap}
   .logo{font-size:11px}
+  .nav-btn{padding:3px 10px;font-size:10px}
   .content{padding:14px;gap:14px}
-  .card{padding:16px;gap:12px}
+  .card-header{padding:12px 14px}
+  .card-body{padding:14px;gap:12px}
   .card-title{font-size:12px}
   .stat-grid{grid-template-columns:1fr 1fr;gap:6px}
   .stat-box{padding:8px 10px}
@@ -86,7 +114,7 @@ header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:
 }
 @media(max-width:420px){
   .content{padding:10px;gap:10px}
-  .card{padding:12px;gap:10px}
+  .card-body{padding:12px;gap:10px}
   .stat-grid{grid-template-columns:1fr}
   .mascot-img{width:50px}
   .mascot-bubble{max-width:120px;font-size:8px}
@@ -98,110 +126,132 @@ header{display:flex;align-items:center;gap:16px;padding:14px 24px;border-bottom:
 </head>
 <body>
 <header>
-  <div class="logo">ZENITH <span>/ admin</span></div>
+  <a href="/" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / admin</span></a>
+  <div class="nav-group">
+    <a href="/chart" class="nav-btn">⬡ Chart</a>
+    <a href="/flow" class="nav-btn">⊞ Flow</a>
+    <a href="/sector" class="nav-btn">◈ Sector</a>
+    <a href="/backtest" class="nav-btn">🎯 Backtest</a>
+  </div>
   <div class="header-tag">System Control Panel</div>
 </header>
 
 <div class="content">
   <!-- DATABASE -->
   <div class="card">
-    <div class="card-title">Database</div>
-    <div class="card-sub">zenith.db</div>
-    <div class="card-row">
-      <div class="row-label">Upload Database</div>
-      <div class="btn-row">
-        <label class="file-label" for="dbFile">Pilih File .db</label>
-        <input type="file" id="dbFile" class="file-input" accept=".db" onchange="showFileName('dbFile','dbFileName')"/>
-        <span class="file-name" id="dbFileName"></span>
-        <button class="btn" onclick="uploadDB()">Upload</button>
-      </div>
-      <div class="progress-wrap" id="dbProgress"><div class="progress-bar" id="dbBar"></div></div>
-      <div class="status" id="dbStatus"></div>
+    <div class="card-header">
+      <div class="card-title">Database</div>
+      <div class="card-sub">zenith.db</div>
     </div>
-    <div class="card-row">
-      <div class="row-label">Pull dari Dropbox</div>
-      <div class="btn-row">
-        <button class="btn outline" onclick="pullDB()">Pull from Dropbox</button>
+    <div class="card-body">
+      <div class="card-row">
+        <div class="row-label">Upload Database</div>
+        <div class="btn-row">
+          <label class="file-label" for="dbFile">Pilih File .db</label>
+          <input type="file" id="dbFile" class="file-input" accept=".db" onchange="showFileName('dbFile','dbFileName')"/>
+          <span class="file-name" id="dbFileName"></span>
+          <button class="btn" onclick="uploadDB()">Upload</button>
+        </div>
+        <div class="progress-wrap" id="dbProgress"><div class="progress-bar" id="dbBar"></div></div>
+        <div class="status" id="dbStatus"></div>
       </div>
-      <div class="progress-wrap" id="pullProgress"><div class="progress-bar indeterminate" id="pullBar"></div></div>
-      <div class="status" id="pullStatus"></div>
-    </div>
-    <div class="card-row">
-      <div class="row-label">Download Backup</div>
-      <div class="btn-row">
-        <button class="btn outline" onclick="downloadDB()">Download zenith.db</button>
+      <div class="card-row">
+        <div class="row-label">Pull dari Dropbox</div>
+        <div class="btn-row">
+          <button class="btn outline" onclick="pullDB()">Pull from Dropbox</button>
+        </div>
+        <div class="progress-wrap" id="pullProgress"><div class="progress-bar indeterminate" id="pullBar"></div></div>
+        <div class="status" id="pullStatus"></div>
+      </div>
+      <div class="card-row">
+        <div class="row-label">Download Backup</div>
+        <div class="btn-row">
+          <button class="btn outline" onclick="downloadDB()">Download zenith.db</button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- SESSION -->
   <div class="card">
-    <div class="card-title">Telegram Session</div>
-    <div class="card-sub">session_joker.session</div>
-    <div class="card-row">
-      <div class="btn-row">
-        <label class="file-label" for="sessFile">Pilih File .session</label>
-        <input type="file" id="sessFile" class="file-input" accept=".session" onchange="showFileName('sessFile','sessFileName')"/>
-        <span class="file-name" id="sessFileName"></span>
-        <button class="btn" onclick="uploadSession()">Upload Session</button>
+    <div class="card-header">
+      <div class="card-title">Telegram Session</div>
+      <div class="card-sub">session_joker.session</div>
+    </div>
+    <div class="card-body">
+      <div class="card-row">
+        <div class="btn-row">
+          <label class="file-label" for="sessFile">Pilih File .session</label>
+          <input type="file" id="sessFile" class="file-input" accept=".session" onchange="showFileName('sessFile','sessFileName')"/>
+          <span class="file-name" id="sessFileName"></span>
+          <button class="btn" onclick="uploadSession()">Upload Session</button>
+        </div>
+        <div class="progress-wrap" id="sessProgress"><div class="progress-bar" id="sessBar"></div></div>
+        <div class="status" id="sessStatus"></div>
       </div>
-      <div class="progress-wrap" id="sessProgress"><div class="progress-bar" id="sessBar"></div></div>
-      <div class="status" id="sessStatus"></div>
     </div>
   </div>
 
   <!-- SCRAPER -->
   <div class="card">
-    <div class="card-title">Scraper Control</div>
-    <div class="card-sub">Realtime Telegram listener + backfill</div>
-    <div class="card-row">
-      <div class="row-label">Status</div>
-      <div class="stat-grid">
-        <div class="stat-box"><div class="stat-label">Thread</div><div class="stat-val" id="stThread"><span class="dot dead"></span>—</div></div>
-        <div class="stat-box"><div class="stat-label">Backfill</div><div class="stat-val" id="stBackfill">—</div></div>
-        <div class="stat-box"><div class="stat-label">Latest SM</div><div class="stat-val sm" id="stSM">—</div></div>
-        <div class="stat-box"><div class="stat-label">Latest BM</div><div class="stat-val bm" id="stBM">—</div></div>
-        <div class="stat-box"><div class="stat-label">Latest MF+</div><div class="stat-val up" id="stMFP">—</div></div>
-        <div class="stat-box"><div class="stat-label">Latest MF-</div><div class="stat-val down" id="stMFM">—</div></div>
-        <div class="stat-box"><div class="stat-label">SM Rows</div><div class="stat-val" id="stSMc">—</div></div>
-        <div class="stat-box"><div class="stat-label">BM Rows</div><div class="stat-val" id="stBMc">—</div></div>
-        <div class="stat-box"><div class="stat-label">MF+ Rows</div><div class="stat-val" id="stMFPc">—</div></div>
-        <div class="stat-box"><div class="stat-label">MF- Rows</div><div class="stat-val" id="stMFMc">—</div></div>
-        <div class="stat-box"><div class="stat-label">EOD Summary</div><div class="stat-val" id="stEOD" style="color:var(--accent)">—</div></div>
-      </div>
+    <div class="card-header">
+      <div class="card-title">Scraper Control</div>
+      <div class="card-sub">Realtime Telegram listener + backfill</div>
     </div>
-    <div class="card-row">
-      <div class="row-label">Manual Backfill</div>
-      <div class="btn-row">
-        <input type="number" class="num-input" id="bfDays" value="7" min="1" max="365"/>
-        <span style="font-size:11px;color:var(--muted)">hari</span>
-        <button class="btn" id="bfBtn" onclick="triggerBackfill()">Trigger Backfill</button>
+    <div class="card-body">
+      <div class="card-row">
+        <div class="row-label">Status</div>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="stat-label">Thread</div><div class="stat-val" id="stThread"><span class="dot dead"></span>—</div></div>
+          <div class="stat-box"><div class="stat-label">Backfill</div><div class="stat-val" id="stBackfill">—</div></div>
+          <div class="stat-box sm"><div class="stat-label">Latest SM</div><div class="stat-val sm" id="stSM">—</div></div>
+          <div class="stat-box bm"><div class="stat-label">Latest BM</div><div class="stat-val bm" id="stBM">—</div></div>
+          <div class="stat-box up"><div class="stat-label">Latest MF+</div><div class="stat-val up" id="stMFP">—</div></div>
+          <div class="stat-box down"><div class="stat-label">Latest MF-</div><div class="stat-val down" id="stMFM">—</div></div>
+          <div class="stat-box sm"><div class="stat-label">SM Rows</div><div class="stat-val" id="stSMc">—</div></div>
+          <div class="stat-box bm"><div class="stat-label">BM Rows</div><div class="stat-val" id="stBMc">—</div></div>
+          <div class="stat-box up"><div class="stat-label">MF+ Rows</div><div class="stat-val" id="stMFPc">—</div></div>
+          <div class="stat-box down"><div class="stat-label">MF- Rows</div><div class="stat-val" id="stMFMc">—</div></div>
+          <div class="stat-box"><div class="stat-label">EOD Summary</div><div class="stat-val" id="stEOD" style="color:var(--accent)">—</div></div>
+        </div>
       </div>
-      <div class="progress-wrap" id="bfProgress"><div class="progress-bar indeterminate" id="bfBar"></div></div>
-      <div class="status" id="bfStatus"></div>
-    </div>
-    <div class="card-row">
-      <div class="row-label">Rebuild EOD Summary</div>
-      <div class="btn-row">
-        <button class="btn outline" id="rbBtn" onclick="triggerRebuild()">Rebuild Summary</button>
+      <div class="card-row">
+        <div class="row-label">Manual Backfill</div>
+        <div class="btn-row">
+          <input type="number" class="num-input" id="bfDays" value="7" min="1" max="365"/>
+          <span style="font-size:11px;color:var(--muted)">hari</span>
+          <button class="btn" id="bfBtn" onclick="triggerBackfill()">Trigger Backfill</button>
+        </div>
+        <div class="progress-wrap" id="bfProgress"><div class="progress-bar indeterminate" id="bfBar"></div></div>
+        <div class="status" id="bfStatus"></div>
       </div>
-      <div class="progress-wrap" id="rbProgress"><div class="progress-bar indeterminate" id="rbBar"></div></div>
-      <div class="status" id="rbStatus"></div>
+      <div class="card-row">
+        <div class="row-label">Rebuild EOD Summary</div>
+        <div class="btn-row">
+          <button class="btn outline" id="rbBtn" onclick="triggerRebuild()">Rebuild Summary</button>
+        </div>
+        <div class="progress-wrap" id="rbProgress"><div class="progress-bar indeterminate" id="rbBar"></div></div>
+        <div class="status" id="rbStatus"></div>
+      </div>
     </div>
   </div>
 
   <!-- ANALYTICS -->
   <div class="card">
-    <div class="card-title">Analytics</div>
-    <div class="card-sub">Visitor tracking (since deploy)</div>
-    <div class="card-row">
-      <div class="stat-grid">
-        <div class="stat-box"><div class="stat-label">Active Users</div><div class="stat-val up" id="anActive">—</div></div>
-        <div class="stat-box"><div class="stat-label">Total Views</div><div class="stat-val" id="anTotal">—</div></div>
-      </div>
-      <div style="margin-top:12px">
-        <div class="row-label">Daily Page Views (14 days)</div>
-        <canvas id="analyticsChart" height="120" style="width:100%;margin-top:8px"></canvas>
+    <div class="card-header">
+      <div class="card-title">Analytics</div>
+      <div class="card-sub">Visitor tracking (since deploy)</div>
+    </div>
+    <div class="card-body">
+      <div class="card-row">
+        <div class="stat-grid">
+          <div class="stat-box up"><div class="stat-label">Active Users</div><div class="stat-val up" id="anActive">—</div></div>
+          <div class="stat-box"><div class="stat-label">Total Views</div><div class="stat-val" id="anTotal">—</div></div>
+        </div>
+        <div style="margin-top:12px">
+          <div class="row-label">Daily Page Views (14 days)</div>
+          <canvas id="analyticsChart" height="120" style="width:100%;margin-top:8px"></canvas>
+        </div>
       </div>
     </div>
   </div>
@@ -254,7 +304,6 @@ function uploadDB(){
   xhr.send(file);
 }
 
-// Pull DB
 async function pullDB(){
   const pw=document.getElementById('pullProgress');
   const st=document.getElementById('pullStatus');
@@ -270,7 +319,6 @@ async function pullDB(){
   }catch(e){pw.classList.remove('active');st.className='status err';st.textContent='Network error';setBubble('Aduh, ada yang error... 😅')}
 }
 
-// Upload Session
 function uploadSession(){
   const file=document.getElementById('sessFile').files[0];
   if(!file){document.getElementById('sessStatus').textContent='Pilih file dulu!';return}
@@ -292,7 +340,6 @@ function uploadSession(){
   xhr.send(file);
 }
 
-// Backfill
 let bfPolling=null;
 function triggerBackfill(){
   const days=document.getElementById('bfDays').value||7;
@@ -306,7 +353,6 @@ function triggerBackfill(){
   fetch(`/admin/scraper-weekly?secret=${encodeURIComponent(SECRET)}&days=${days}`)
     .then(r=>r.json()).then(d=>{
       st.textContent=d.message||d.error||JSON.stringify(d);
-      // Start polling
       bfPolling=setInterval(()=>{
         fetch(`/admin/scraper-status?secret=${encodeURIComponent(SECRET)}`)
           .then(r=>r.json()).then(s=>{
@@ -336,12 +382,10 @@ function triggerBackfill(){
     });
 }
 
-// Download DB
 function downloadDB(){
   window.open(`/admin/download-db?secret=${encodeURIComponent(SECRET)}`,'_blank');
 }
 
-// Rebuild Summary
 let rbPolling=null;
 function triggerRebuild(){
   const btn=document.getElementById('rbBtn');
@@ -383,7 +427,6 @@ function triggerRebuild(){
     });
 }
 
-// Auto-refresh scraper status
 function refreshStatus(){
   fetch(`/admin/scraper-status?secret=${encodeURIComponent(SECRET)}`)
     .then(r=>r.json()).then(d=>{
@@ -406,7 +449,6 @@ function refreshStatus(){
     }).catch(()=>{});
 }
 
-// Analytics
 function loadAnalytics(){
   fetch(`/admin/analytics?secret=${encodeURIComponent(SECRET)}`)
     .then(r=>r.json()).then(d=>{
@@ -433,7 +475,6 @@ function drawChart(data){
   const pad=10;
 
   ctx.clearRect(0,0,w,h);
-  // Grid lines
   ctx.strokeStyle='#1a2230';ctx.lineWidth=0.5;
   for(let i=0;i<4;i++){const y=pad+((h-pad*2)/3)*i;ctx.beginPath();ctx.moveTo(pad,y);ctx.lineTo(w-pad,y);ctx.stroke()}
 
@@ -444,17 +485,14 @@ function drawChart(data){
     const y=h-pad-bh;
     ctx.fillStyle='#00e8a2';
     ctx.fillRect(x,y,barW,bh);
-    // Date label (show day only)
     if(days.length<=14){
-      ctx.fillStyle='#4a6070';ctx.font='8px "Space Mono"';ctx.textAlign='center';
+      ctx.fillStyle='#bfcbd4';ctx.font='8px "Space Mono"';ctx.textAlign='center';
       ctx.fillText(d.slice(8,10)+'/'+d.slice(5,7),x+barW/2,h-1);
     }
-    // Value on top
     if(v>0){ctx.fillStyle='#c8d8e8';ctx.font='8px "Space Mono"';ctx.textAlign='center';ctx.fillText(v,x+barW/2,y-3)}
   });
 }
 
-// Refresh every 5s, pause when tab hidden
 let statusInterval;
 function startPolling(){statusInterval=setInterval(()=>{if(!document.hidden){refreshStatus();loadAnalytics()}},5000)}
 document.addEventListener('DOMContentLoaded',()=>{refreshStatus();loadAnalytics();startPolling()});
