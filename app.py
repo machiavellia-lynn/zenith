@@ -1369,21 +1369,28 @@ def api_ticker_fitness():
         bt_days = data.get("days", 0)
 
         # Filter trades for this ticker across all combos
+        # Skip extreme moves (right issue, delisting, etc: >50% or <-50%)
         ticker_trades = []
         best_combo = None
         best_pf = 0
 
         for combo in lb:
             details = combo.get("details", [])
-            t_trades = [d for d in details if d["ticker"] == ticker]
+            t_trades = [d for d in details if d["ticker"] == ticker and abs(d.get("profit", 0)) <= 50]
             if t_trades:
                 ticker_trades.extend([{**t, "entry_phase": combo["entry"], "exit_phase": combo["exit"]} for t in t_trades])
+                # Best combo: compute PF and win rate for THIS combo only
+                combo_wins = [t for t in t_trades if t["profit"] > 0]
+                combo_wr = round(len(combo_wins) / len(t_trades) * 100, 1) if t_trades else 0
                 gp = sum(t["profit"] for t in t_trades if t["profit"] > 0)
                 gl = abs(sum(t["profit"] for t in t_trades if t["profit"] <= 0))
                 pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
                 if pf > best_pf and len(t_trades) >= 1:
                     best_pf = pf
-                    best_combo = {"entry": combo["entry"], "exit": combo["exit"], "pf": pf, "trades": len(t_trades)}
+                    best_combo = {
+                        "entry": combo["entry"], "exit": combo["exit"],
+                        "pf": pf, "trades": len(t_trades), "win_rate": combo_wr,
+                    }
 
         if not ticker_trades:
             return jsonify({"ticker": ticker, "total_trades": 0, "period": period})
@@ -1394,10 +1401,10 @@ def api_ticker_fitness():
         gross_loss = abs(sum(t["profit"] for t in losses))
         pf = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0)
 
-        # Sort trades by entry_date
+        # Sort trades by entry_date DESCENDING (latest first)
         trades_sorted = sorted(ticker_trades, key=lambda t: (
             t.get("entry_date", "")[6:10] + t.get("entry_date", "")[3:5] + t.get("entry_date", "")[0:2]
-        ))
+        ), reverse=True)
 
         return jsonify({
             "ticker": ticker,

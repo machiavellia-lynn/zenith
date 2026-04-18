@@ -202,6 +202,10 @@ header {
 }
 .mm-item {
   display: flex; flex-direction: column; gap: 2px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
 }
 .mm-label {
   font-family: 'Space Mono', monospace;
@@ -230,10 +234,10 @@ header {
 
 /* Ticker Strategy Fitness card */
 .fitness-card {
-  margin: 0 18px 10px;
-  background: var(--surface2);
+  margin: 0 18px 12px;
+  background: rgba(255,255,255,.02);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
 }
 .fitness-header {
@@ -489,7 +493,22 @@ td:first-child { text-align: left; }
 }
 
 /* modal tf tabs */
-.modal-tfs { display: flex; gap: 6px; }
+.tf-selector { display: flex; align-items: center; gap: 2px; }
+.tf-dropdown {
+  background: var(--bg); border: 1px solid var(--border); color: var(--accent);
+  border-radius: 4px; padding: 4px 8px; font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 700; cursor: pointer; outline: none;
+  appearance: none; -webkit-appearance: none; text-align: center; min-width: 44px;
+}
+.tf-dropdown:focus { border-color: var(--accent); }
+.tf-dropdown option { background: var(--surface); color: var(--text); }
+.tf-arrow {
+  background: none; border: 1px solid var(--border); color: var(--muted);
+  border-radius: 4px; width: 22px; height: 22px; font-size: 9px;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all .15s; padding: 0;
+}
+.tf-arrow:hover { border-color: var(--accent); color: var(--accent); }
 .mtf-btn {
   background: none; border: 1px solid var(--border);
   color: var(--muted); border-radius: 4px;
@@ -994,12 +1013,16 @@ td:first-child { text-align: left; }
         <span class="phase-badge" id="mPhaseBadge" style="font-family:'Space Mono',monospace;font-size:11px;padding:4px 10px;border-radius:4px;font-weight:700;letter-spacing:.04em;display:none"></span>
         <span class="action-badge" id="mActionBadge" style="font-family:'Space Mono',monospace;font-size:11px;padding:4px 10px;border-radius:4px;font-weight:700;letter-spacing:.04em;display:none"></span>
       </div>
-      <div class="modal-tfs">
-        <button class="mtf-btn" data-tf="5m"  onclick="setModalTF('5m')">5m</button>
-        <button class="mtf-btn" data-tf="15m" onclick="setModalTF('15m')">15m</button>
-        <button class="mtf-btn" data-tf="30m" onclick="setModalTF('30m')">30m</button>
-        <button class="mtf-btn" data-tf="1h"  onclick="setModalTF('1h')">1h</button>
-        <button class="mtf-btn active" data-tf="1d" onclick="setModalTF('1d')">1D</button>
+      <div class="tf-selector">
+        <button class="tf-arrow" onclick="cycleTF(-1)" title="Previous">▲</button>
+        <select class="tf-dropdown" id="tfDropdown" onchange="setModalTF(this.value)">
+          <option value="5m">5m</option>
+          <option value="15m">15m</option>
+          <option value="30m">30m</option>
+          <option value="1h">1h</option>
+          <option value="1d" selected>1D</option>
+        </select>
+        <button class="tf-arrow" onclick="cycleTF(1)" title="Next">▼</button>
       </div>
       <div class="overlay-toggles">
         <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
@@ -1007,6 +1030,11 @@ td:first-child { text-align: left; }
         <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
       </div>
       <div style="flex:1"></div>
+      <div class="trx-date-range" style="gap:4px">
+        <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10" style="width:90px;font-size:10px;padding:4px 6px"/>
+        <span class="trx-date-arrow" id="trxDateModeToggle" onclick="toggleTrxDateMode()" title="Single/Range" style="cursor:pointer;user-select:none;font-size:11px;color:var(--muted);transition:all .15s">·</span>
+        <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10" style="width:90px;font-size:10px;padding:4px 6px" disabled/>
+      </div>
       <div class="modal-scale-btns">
         <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
         <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
@@ -1122,11 +1150,6 @@ td:first-child { text-align: left; }
       <div>
         <div class="trx-toolbar">
           <div class="trx-section-title">Transaksi SM &amp; BM</div>
-          <div class="trx-date-range">
-            <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
-            <span class="trx-date-arrow" id="trxDateModeToggle" onclick="toggleTrxDateMode()" title="Klik untuk switch Single/Range" style="cursor:pointer;user-select:none;transition:all .15s">→</span>
-            <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
-          </div>
         </div>
         <div class="trx-grid">
           <div class="trx-box">
@@ -1353,7 +1376,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     onSelect: () => loadFlow(),
   });
 
-  // ── Modal transaction date pickers ──
+  // ── Modal transaction date pickers (in header bar) ──
   trxPickerFrom = new Pikaday({
     ...pikadayOpts,
     field:       document.getElementById('trxDateFrom'),
@@ -1361,10 +1384,13 @@ window.addEventListener('DOMContentLoaded', async () => {
     setDefaultDate: true,
     container:   document.getElementById('modalBox'),
     onSelect: date => {
-      if (trxPickerTo && date > trxPickerTo.getDate()) {
+      if (trxIsSingleMode) {
+        trxPickerTo.setDate(date, true);
+        document.getElementById('trxDateTo').value = document.getElementById('trxDateFrom').value;
+      } else if (trxPickerTo && date > trxPickerTo.getDate()) {
         trxPickerTo.setDate(date);
       }
-      loadTransactions();
+      reloadModalData();
     },
   });
 
@@ -1374,7 +1400,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     defaultDate: initDate,
     setDefaultDate: true,
     container:   document.getElementById('modalBox'),
-    onSelect: () => loadTransactions(),
+    onSelect: () => reloadModalData(),
   });
 
   // date mask for trx inputs
@@ -1642,9 +1668,8 @@ function openModal(ticker) {
   modalIsAuto = true;
   document.getElementById('mBtnLog').classList.remove('active');
   document.getElementById('mBtnAuto').classList.add('active');
-  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
-    b.classList.toggle('active', b.dataset.tf === '1d')
-  );
+  const dd = document.getElementById('tfDropdown');
+  if (dd) dd.value = '1d';
   document.getElementById('mTicker').textContent = ticker;
   document.getElementById('mName').textContent   = '—';
   // Sync overlay buttons
@@ -1797,7 +1822,8 @@ async function loadTickerFitness(ticker) {
     if (bc) {
       document.getElementById('fitBestCombo').innerHTML =
         `<span class="phase-badge ${bc.entry.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.entry}</span>` +
-        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.exit}</span>`;
+        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.exit}</span>` +
+        `<span style="font-size:9px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% win · ${bc.trades} trades</span>`;
     } else {
       document.getElementById('fitBestCombo').textContent = '—';
     }
@@ -1842,6 +1868,30 @@ async function loadTickerFitness(ticker) {
   } catch(e) {
     card.style.display = 'none';
   }
+}
+
+async function reloadModalData() {
+  if (!modalTicker) return;
+  const df = document.getElementById('trxDateFrom').value;
+  const dt = document.getElementById('trxDateTo').value;
+  if (!df) return;
+
+  // Reload metrics for new date
+  try {
+    const url = `/api/flow?date_from=${displayToApi(df)}&date_to=${displayToApi(dt || df)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    if (data.tickers) {
+      const r = data.tickers.find(t => t.ticker === modalTicker);
+      if (r) populateMetricsPanel(r);
+    }
+  } catch(e) {}
+
+  // Reload transactions
+  loadTransactions();
+
+  // Reload fitness
+  loadTickerFitness(modalTicker);
 }
 
 function closeModal() {
@@ -2156,11 +2206,18 @@ async function loadTransactions() {
   }
 }
 
+const TF_LIST = ['5m','15m','30m','1h','1d'];
+function cycleTF(dir) {
+  const dd = document.getElementById('tfDropdown');
+  let idx = TF_LIST.indexOf(dd.value);
+  idx = Math.max(0, Math.min(TF_LIST.length - 1, idx + dir));
+  dd.value = TF_LIST[idx];
+  setModalTF(TF_LIST[idx]);
+}
 function setModalTF(tf) {
   modalTF = tf;
-  document.querySelectorAll('.mtf-btn[data-tf]').forEach(b =>
-    b.classList.toggle('active', b.dataset.tf === tf)
-  );
+  const dd = document.getElementById('tfDropdown');
+  if (dd) dd.value = tf;
   initModalChart();
   loadModalChart();
 }

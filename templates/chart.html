@@ -224,18 +224,24 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
 
 <main>
   <div class="tf-row">
-    <span class="tf-label">Time Frame</span>
-    <button class="tf-btn" data-tf="5m" onclick="setTF('5m')">5m</button>
-    <button class="tf-btn" data-tf="15m" onclick="setTF('15m')">15m</button>
-    <button class="tf-btn" data-tf="30m" onclick="setTF('30m')">30m</button>
-    <button class="tf-btn" data-tf="1h" onclick="setTF('1h')">1h</button>
-    <button class="tf-btn active" data-tf="1d" onclick="setTF('1d')">1D</button>
+    <div class="tf-selector" style="display:flex;align-items:center;gap:2px">
+      <button onclick="chartCycleTF(-1)" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;width:22px;height:22px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">▲</button>
+      <select id="chartTFDropdown" onchange="setTF(this.value)" style="background:var(--bg);border:1px solid var(--border);color:var(--accent);border-radius:4px;padding:4px 8px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;text-align:center;min-width:44px">
+        <option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="1d" selected>1D</option>
+      </select>
+      <button onclick="chartCycleTF(1)" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;width:22px;height:22px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">▼</button>
+    </div>
     <div class="overlay-toggles">
       <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
       <button class="ovl-btn sm" id="ovlBtnSM" onclick="toggleOverlay('sm')" title="Smart Money"><span class="ovl-dot" style="background:#4d9fff"></span>SM</button>
       <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
     </div>
     <div style="flex:1"></div>
+    <div class="trx-date-range" style="display:flex;align-items:center;gap:4px">
+      <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10" style="width:90px;font-size:10px;padding:4px 6px"/>
+      <span id="trxDateToggle" onclick="toggleChartDateMode()" style="cursor:pointer;user-select:none;font-size:11px;color:var(--muted);transition:all .15s">·</span>
+      <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10" style="width:90px;font-size:10px;padding:4px 6px" disabled/>
+    </div>
     <button class="tf-btn" id="btnLog" onclick="setScale('log')" title="Log scale">L</button>
     <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')" title="Auto scale">A</button>
   </div>
@@ -349,11 +355,6 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
   <div class="trx-section">
     <div class="trx-toolbar">
       <div class="trx-section-title">Transaksi SM &amp; BM</div>
-      <div class="trx-date-range">
-        <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
-        <span class="trx-date-arrow">→</span>
-        <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10"/>
-      </div>
     </div>
     <div class="trx-grid">
       <div class="trx-box">
@@ -456,7 +457,12 @@ function initChart(){
 
 function applyAutoScale(on){if(!chart)return;chart.priceScale('right').applyOptions({autoScale:on,scaleMargins:{top:0.1,bottom:0.2}});chart.applyOptions({handleScale:{axisPressedMouseMove:{price:!on,time:true}}})}
 function setScale(mode){if(mode==='auto'){isAutoScale=!isAutoScale;applyAutoScale(isAutoScale);document.getElementById('btnAuto').classList.toggle('active',isAutoScale)}else{isLogScale=!isLogScale;if(chart)chart.priceScale('right').applyOptions({mode:isLogScale?1:0});document.getElementById('btnLog').classList.toggle('active',isLogScale)}}
-function setTF(tf){currentTF=tf;document.querySelectorAll('.tf-btn[data-tf]').forEach(b=>b.classList.toggle('active',b.dataset.tf===tf));if(chart){chart.remove();chart=null;candleSeries=null;volumeSeries=null;ovlSeriesCM=null;ovlSeriesSM=null;ovlSeriesBM=null}doLoad()}
+const CHART_TF_LIST=['5m','15m','30m','1h','1d'];
+let chartSingleMode=true;
+function chartCycleTF(dir){const dd=document.getElementById('chartTFDropdown');let i=CHART_TF_LIST.indexOf(dd.value);i=Math.max(0,Math.min(CHART_TF_LIST.length-1,i+dir));dd.value=CHART_TF_LIST[i];setTF(CHART_TF_LIST[i])}
+function setTF(tf){currentTF=tf;const dd=document.getElementById('chartTFDropdown');if(dd)dd.value=tf;if(chart){chart.remove();chart=null;candleSeries=null;volumeSeries=null;ovlSeriesCM=null;ovlSeriesSM=null;ovlSeriesBM=null}doLoad()}
+function toggleChartDateMode(){chartSingleMode=!chartSingleMode;const t=document.getElementById('trxDateToggle');const dt=document.getElementById('trxDateTo');if(chartSingleMode){t.textContent='·';dt.value=document.getElementById('trxDateFrom').value;dt.disabled=true;dt.style.opacity='.35'}else{t.textContent='→';dt.disabled=false;dt.style.opacity='1'}reloadChartData()}
+function reloadChartData(){loadMetrics();loadTransactions();loadChartFitness()}
 
 async function doLoad(){
   const input=document.getElementById('tickerInput').value.trim().toUpperCase();
@@ -615,8 +621,8 @@ window.addEventListener('DOMContentLoaded',async()=>{
   try{const r=await fetch('/api/last-date');const d=await r.json();if(d.date)initDateStr=d.date}catch(_){}
   const[dd,mm,yyyy]=initDateStr.split('/').map(Number);const initDate=new Date(yyyy,mm-1,dd);
   const opts={format:'DD/MM/YYYY',toString:date=>{const d=String(date.getDate()).padStart(2,'0'),m=String(date.getMonth()+1).padStart(2,'0');return`${d}/${m}/${date.getFullYear()}`},parse:str=>{const[d,m,y]=str.split('/').map(Number);return new Date(y,m-1,d)},i18n:{previousMonth:'‹',nextMonth:'›',months:['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'],weekdays:['Minggu','Senin','Selasa','Rabu','Kamis','Jumat','Sabtu'],weekdaysShort:['Min','Sen','Sel','Rab','Kam','Jum','Sab']},maxDate:new Date()};
-  trxPickerFrom=new Pikaday({...opts,field:document.getElementById('trxDateFrom'),defaultDate:initDate,setDefaultDate:true,onSelect:date=>{if(trxPickerTo&&date>trxPickerTo.getDate())trxPickerTo.setDate(date);loadTransactions()}});
-  trxPickerTo=new Pikaday({...opts,field:document.getElementById('trxDateTo'),defaultDate:initDate,setDefaultDate:true,onSelect:()=>loadTransactions()});
+  trxPickerFrom=new Pikaday({...opts,field:document.getElementById('trxDateFrom'),defaultDate:initDate,setDefaultDate:true,onSelect:date=>{if(chartSingleMode){trxPickerTo.setDate(date,true);document.getElementById('trxDateTo').value=document.getElementById('trxDateFrom').value}else if(trxPickerTo&&date>trxPickerTo.getDate())trxPickerTo.setDate(date);reloadChartData()}});
+  trxPickerTo=new Pikaday({...opts,field:document.getElementById('trxDateTo'),defaultDate:initDate,setDefaultDate:true,onSelect:()=>reloadChartData()});
   document.querySelectorAll('.trx-date-input').forEach(el=>el.addEventListener('input',()=>autoFormatDate(el)));
 
   // IHSG
