@@ -57,20 +57,22 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 @media(max-width:1000px){.cards{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:560px){.cards{grid-template-columns:1fr}}
 
-.card{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--border2);border-radius:10px;padding:20px;cursor:pointer;transition:border-color .2s,transform .15s;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:var(--text);position:relative;overflow:hidden}
-.card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:transparent;transition:background .2s}
-.card:hover{border-color:var(--border2);transform:translateY(-2px)}
-.card:hover::after{background:linear-gradient(90deg,transparent,rgba(0,232,162,.2),transparent)}
-.card.primary{border-top-color:var(--accent)}
-.card.primary::after{background:linear-gradient(90deg,transparent,rgba(0,232,162,.12),transparent)}
-.card-accent-bar{width:28px;height:3px;border-radius:2px;background:var(--border2);margin-bottom:2px}
-.card.primary .card-accent-bar{background:var(--accent)}
-.card-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text)}
+.card{background:var(--surface);border:1px solid var(--border);border-top:2px solid var(--border2);border-radius:10px;padding:20px;cursor:pointer;transition:border-color .25s cubic-bezier(.4,0,.2,1),transform .25s cubic-bezier(.4,0,.2,1),box-shadow .25s cubic-bezier(.4,0,.2,1),background .2s;display:flex;flex-direction:column;gap:10px;text-decoration:none;color:var(--text);position:relative;overflow:hidden;will-change:transform}
+.card::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at var(--mx,50%) var(--my,50%),rgba(0,232,162,.08),transparent 60%);opacity:0;transition:opacity .3s;pointer-events:none}
+.card::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:transparent;transition:background .25s}
+.card:hover{border-color:rgba(0,232,162,.35);border-top-color:var(--accent);transform:translateY(-4px) scale(1.01);box-shadow:0 12px 32px -8px rgba(0,0,0,.6),0 0 0 1px rgba(0,232,162,.08)}
+.card:hover::before{opacity:1}
+.card:hover::after{background:linear-gradient(90deg,transparent,rgba(0,232,162,.4),transparent)}
+.card:hover .card-accent-bar{background:var(--accent);width:48px}
+.card:active{transform:translateY(-2px) scale(.99);transition:transform .08s ease-out;box-shadow:0 4px 12px -4px rgba(0,0,0,.5)}
+.card-accent-bar{width:28px;height:3px;border-radius:2px;background:var(--border2);margin-bottom:2px;transition:background .25s,width .25s cubic-bezier(.4,0,.2,1)}
+.card-title{font-family:'Space Mono',monospace;font-size:13px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text);transition:color .2s}
+.card:hover .card-title{color:var(--accent)}
 .card-sub{font-size:10px;font-family:'Space Mono',monospace;color:var(--accent);letter-spacing:.04em;margin-top:-4px}
 .card-desc{font-size:12px;color:var(--muted);line-height:1.55;flex:1}
 .card-footer{display:flex;justify-content:flex-end;margin-top:4px}
-.card-arrow{font-family:'Space Mono',monospace;font-size:14px;color:var(--border2);transition:color .15s}
-.card:hover .card-arrow{color:var(--accent)}
+.card-arrow{font-family:'Space Mono',monospace;font-size:14px;color:var(--border2);transition:color .2s,transform .25s cubic-bezier(.4,0,.2,1)}
+.card:hover .card-arrow{color:var(--accent);transform:translateX(4px)}
 
 .footer{text-align:center;padding:24px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);margin-top:auto}
 
@@ -153,19 +155,13 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 <body>
 <header>
   <a href="/" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / hub</span></a>
-  <div class="nav-group">
-    <a href="/chart" class="nav-btn">⬡ Chart</a>
-    <a href="/flow" class="nav-btn">⊞ Flow</a>
-    <a href="/sector" class="nav-btn">◈ Sector</a>
-    <a href="/backtest" class="nav-btn">🎯 Backtest</a>
-  </div>
   <div class="nav-right">
     <div class="ihsg-wrap">
       <span class="ihsg-label">IHSG</span>
       <span class="ihsg-price" id="ihsgPrice">—</span>
       <span class="ihsg-gain" id="ihsgGain">—</span>
     </div>
-    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data">?</button>
+    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
   </div>
 </header>
 
@@ -181,7 +177,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
     <div class="sr-sep"></div>
     <div class="sr-item"><span class="sr-label">WIB</span><span class="sr-val" id="sTime" style="color:var(--text)">—</span></div>
     <div class="sr-sep"></div>
-    <div class="sr-item"><span class="sr-label">Total SM</span><span class="sr-val" id="sSM" style="color:var(--accent2)">—</span></div>
+    <div class="sr-item"><span class="sr-label">Clean Money</span><span class="sr-val" id="sCM" style="color:var(--accent)">—</span></div>
   </div>
 </div>
 
@@ -193,7 +189,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
     <div class="card-desc">Analisis pergerakan harga saham IDX dengan timeframe 5m hingga 1D. Dilengkapi overlay CM, SM, dan BM langsung di atas candlestick.</div>
     <div class="card-footer"><span class="card-arrow">→</span></div>
   </a>
-  <a href="/flow" class="card primary">
+  <a href="/flow" class="card">
     <div class="card-accent-bar"></div>
     <div class="card-title">Flow</div>
     <div class="card-sub">Smart & Bad Money Flow</div>
@@ -245,7 +241,12 @@ async function init(){
       const apiDate=ld.date.replace(/\//g,'-');
       const r3=await fetch(`/api/flow?date_from=${apiDate}&date_to=${apiDate}`);
       const fd=await r3.json();
-      if(fd.totals)document.getElementById('sSM').textContent=fmtM(fd.totals.sm);
+      if(fd.totals){
+        const cm=(fd.totals.sm||0)-(fd.totals.bm||0);
+        const el=document.getElementById('sCM');
+        el.textContent=(cm>0?'+':'')+fmtM(cm);
+        el.style.color=cm>=0?'var(--up)':'var(--down)';
+      }
     }
   }catch(_){}
   function tick(){const now=new Date(Date.now()+7*3600*1000);document.getElementById('sTime').textContent=String(now.getUTCHours()).padStart(2,'0')+':'+String(now.getUTCMinutes()).padStart(2,'0')+':'+String(now.getUTCSeconds()).padStart(2,'0')}
@@ -253,6 +254,20 @@ async function init(){
 }
 window.addEventListener('DOMContentLoaded',init);
 window.addEventListener('DOMContentLoaded',initOnboarding);
+window.addEventListener('DOMContentLoaded',initCardEffects);
+
+function initCardEffects(){
+  document.querySelectorAll('.card').forEach(card=>{
+    card.addEventListener('mousemove',e=>{
+      const r=card.getBoundingClientRect();
+      card.style.setProperty('--mx',((e.clientX-r.left)/r.width*100)+'%');
+      card.style.setProperty('--my',((e.clientY-r.top)/r.height*100)+'%');
+    });
+    card.addEventListener('mousedown',()=>card.style.setProperty('transition','transform .08s ease-out'));
+    card.addEventListener('mouseup',()=>card.style.removeProperty('transition'));
+    card.addEventListener('mouseleave',()=>card.style.removeProperty('transition'));
+  });
+}
 
 function initOnboarding(){
   if(localStorage.getItem('zenith_onboarded'))return;

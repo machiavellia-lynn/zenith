@@ -135,8 +135,9 @@ input[type="text"]:focus{border-color:var(--accent)}
 .is-disabled .pika-button{color:var(--muted)!important;opacity:.4!important}
 .pika-select{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important}
 
-.info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:24px;height:24px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.info-btn:hover{border-color:var(--accent);color:var(--accent)}
+.info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:28px;height:28px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-decoration:none}
+.info-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 8px rgba(0,232,162,.2)}
+.info-btn svg{width:13px;height:13px}
 .info-backdrop{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
 .info-backdrop.open{opacity:1;pointer-events:all}
 .info-modal{background:var(--surface);border:1px solid var(--border2);border-radius:10px;width:min(90vw,760px);max-height:85vh;display:flex;flex-direction:column;transform:scale(.97);transition:transform .2s;overflow:hidden}
@@ -215,17 +216,17 @@ input[type="text"]:focus{border-color:var(--accent)}
 </head>
 <body>
 <header>
-  <a href="/" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / chart</span></a>
+  <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / chart</span></a>
   <div class="nav-group">
     <a href="/chart" class="nav-btn active">⬡ Chart</a>
     <a href="/flow" class="nav-btn">⊞ Flow</a>
     <a href="/sector" class="nav-btn">◈ Sector</a>
-    <a href="/backtest" class="nav-btn">🎯 Backtest</a>
   </div>
   <div class="search-wrap">
     <input type="text" id="tickerInput" placeholder="Ticker..." value="BBRI" maxlength="8"/>
   </div>
   <button class="search-btn" onclick="doLoad()">Load</button>
+  <a href="/backtest" class="info-btn" title="Backtest Leaderboard" aria-label="Backtest Leaderboard"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></a>
   <div class="ticker-info">
     <div class="t-name" id="tName">—</div>
     <div class="t-price" id="tPrice">—</div>
@@ -236,7 +237,8 @@ input[type="text"]:focus{border-color:var(--accent)}
       <span class="ihsg-price" id="ihsgPrice">—</span>
       <span class="ihsg-gain" id="ihsgGain">—</span>
     </div>
-    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data">?</button>
+    <a href="/hub" class="info-btn" title="Kembali ke Hub" aria-label="Kembali ke Hub"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z"/></svg></a>
+    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
   </div>
 </header>
 
