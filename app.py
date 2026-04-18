@@ -1350,16 +1350,23 @@ def api_ticker_fitness():
 
     try:
         conn = get_db()
-        # Get latest backtest result (any days)
+        # Prefer 90-day cache, fallback to any
         row = conn.execute(
-            "SELECT results FROM backtest_cache ORDER BY computed_at DESC LIMIT 1"
+            "SELECT results FROM backtest_cache WHERE days=90 ORDER BY computed_at DESC LIMIT 1"
         ).fetchone()
         if not row:
-            return jsonify({"error": "No backtest data", "ticker": ticker})
+            row = conn.execute(
+                "SELECT results FROM backtest_cache ORDER BY computed_at DESC LIMIT 1"
+            ).fetchone()
+        if not row:
+            return jsonify({"error": "No backtest data", "ticker": ticker, "total_trades": 0})
 
         import json
         data = json.loads(row["results"])
         lb = data.get("leaderboard", [])
+        period = data.get("date_range", "")
+        computed = data.get("computed_at", "")
+        bt_days = data.get("days", 0)
 
         # Filter trades for this ticker across all combos
         ticker_trades = []
@@ -1370,8 +1377,7 @@ def api_ticker_fitness():
             details = combo.get("details", [])
             t_trades = [d for d in details if d["ticker"] == ticker]
             if t_trades:
-                ticker_trades.extend(t_trades)
-                # Compute PF for this combo+ticker
+                ticker_trades.extend([{**t, "entry_phase": combo["entry"], "exit_phase": combo["exit"]} for t in t_trades])
                 gp = sum(t["profit"] for t in t_trades if t["profit"] > 0)
                 gl = abs(sum(t["profit"] for t in t_trades if t["profit"] <= 0))
                 pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
@@ -1380,7 +1386,7 @@ def api_ticker_fitness():
                     best_combo = {"entry": combo["entry"], "exit": combo["exit"], "pf": pf, "trades": len(t_trades)}
 
         if not ticker_trades:
-            return jsonify({"ticker": ticker, "total_trades": 0})
+            return jsonify({"ticker": ticker, "total_trades": 0, "period": period})
 
         wins = [t for t in ticker_trades if t["profit"] > 0]
         losses = [t for t in ticker_trades if t["profit"] <= 0]
@@ -1388,9 +1394,10 @@ def api_ticker_fitness():
         gross_loss = abs(sum(t["profit"] for t in losses))
         pf = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0)
 
-        # Sparkline data: list of profits sorted by date
-        trades_sorted = sorted(ticker_trades, key=lambda t: t.get("entry_date", ""))
-        sparkline = [t["profit"] for t in trades_sorted]
+        # Sort trades by entry_date
+        trades_sorted = sorted(ticker_trades, key=lambda t: (
+            t.get("entry_date", "")[6:10] + t.get("entry_date", "")[3:5] + t.get("entry_date", "")[0:2]
+        ))
 
         return jsonify({
             "ticker": ticker,
@@ -1399,9 +1406,12 @@ def api_ticker_fitness():
             "profit_factor": pf,
             "avg_profit": round(sum(t["profit"] for t in ticker_trades) / len(ticker_trades), 2),
             "best_combo": best_combo,
-            "sparkline": sparkline,
             "wins": len(wins),
             "losses": len(losses),
+            "period": period,
+            "computed_at": computed,
+            "days": bt_days,
+            "trades": trades_sorted,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

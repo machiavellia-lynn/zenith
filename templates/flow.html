@@ -25,7 +25,11 @@
   --up:       #00e8a2;
   --down:     #ff4d6a;
 }
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 html, body { height: 100%; }
 body {
   background: var(--bg);
@@ -243,13 +247,14 @@ header {
   letter-spacing: .08em; color: var(--accent);
   text-transform: uppercase;
 }
-.fitness-trades {
+.fitness-period {
   font-family: 'Space Mono', monospace;
-  font-size: 10px; color: var(--muted);
+  font-size: 9px; color: var(--muted);
 }
-.fitness-body {
+.fitness-stats {
   display: flex; align-items: center; gap: 16px;
   padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
   flex-wrap: wrap;
 }
 .fit-col { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
@@ -265,12 +270,46 @@ header {
 .fit-value.pos { color: var(--up); }
 .fit-value.neg { color: var(--down); }
 .fit-value.ok { color: #ff8c42; }
-.fit-spark { flex: 1; min-width: 100px; }
-.fit-spark canvas { display: block; }
+.fit-wr-col { flex: 1; min-width: 120px; }
+.fit-wr-bar {
+  height: 6px; background: var(--down); border-radius: 3px;
+  overflow: hidden; margin-top: 4px;
+}
+.fit-wr-fill {
+  height: 100%; background: var(--up); border-radius: 3px;
+  transition: width .3s ease;
+}
+.fit-wr-nums {
+  display: flex; justify-content: space-between;
+  font-family: 'Space Mono', monospace; font-size: 9px; margin-top: 2px;
+}
+.fit-wr-w { color: var(--up); }
+.fit-wr-l { color: var(--down); }
+.fitness-trades-wrap {
+  max-height: 150px; overflow-y: auto;
+}
+.fitness-trades-table {
+  width: 100%; border-collapse: collapse;
+}
+.fitness-trades-table th {
+  position: sticky; top: 0; z-index: 2;
+  background: var(--surface2); padding: 5px 10px;
+  font-family: 'Space Mono', monospace; font-size: 8px;
+  font-weight: 700; letter-spacing: .08em;
+  color: var(--muted); text-transform: uppercase;
+  text-align: right; white-space: nowrap;
+}
+.fitness-trades-table td {
+  padding: 4px 10px; font-family: 'Space Mono', monospace;
+  font-size: 10px; text-align: right;
+  border-top: 1px solid var(--border); white-space: nowrap;
+}
+.fitness-trades-table tr:hover { background: rgba(255,255,255,.02); }
 @media (max-width: 640px) {
-  .fitness-body { gap: 10px; padding: 8px 10px; }
+  .fitness-stats { gap: 10px; padding: 8px 10px; }
   .fit-col { min-width: 60px; }
   .fit-value { font-size: 11px; }
+  .fitness-trades-wrap { max-height: 120px; }
 }
 
 .load-btn {
@@ -1039,16 +1078,12 @@ td:first-child { text-align: left; }
       <div class="fitness-card" id="fitnessCard" style="display:none">
         <div class="fitness-header">
           <span class="fitness-title">📊 Strategy Fitness</span>
-          <span class="fitness-trades" id="fitTotalTrades">—</span>
+          <span class="fitness-period" id="fitPeriod">—</span>
         </div>
-        <div class="fitness-body">
+        <div class="fitness-stats">
           <div class="fit-col">
             <div class="fit-label">Best Combo</div>
             <div class="fit-value" id="fitBestCombo">—</div>
-          </div>
-          <div class="fit-col">
-            <div class="fit-label">Win Rate</div>
-            <div class="fit-value" id="fitWinRate">—</div>
           </div>
           <div class="fit-col">
             <div class="fit-label">Profit Factor</div>
@@ -1058,10 +1093,29 @@ td:first-child { text-align: left; }
             <div class="fit-label">Avg Profit</div>
             <div class="fit-value" id="fitAvgProfit">—</div>
           </div>
-          <div class="fit-col fit-spark">
-            <div class="fit-label">Track Record</div>
-            <canvas id="fitSparkline" width="120" height="32"></canvas>
+          <div class="fit-col fit-wr-col">
+            <div class="fit-label" id="fitWRLabel">Win Rate —</div>
+            <div class="fit-wr-bar">
+              <div class="fit-wr-fill" id="fitWRFill" style="width:0%"></div>
+            </div>
+            <div class="fit-wr-nums">
+              <span class="fit-wr-w" id="fitWins">0W</span>
+              <span class="fit-wr-l" id="fitLosses">0L</span>
+            </div>
           </div>
+        </div>
+        <div class="fitness-trades-wrap" id="fitTradesWrap">
+          <table class="fitness-trades-table">
+            <thead><tr>
+              <th style="text-align:left">ENTRY</th>
+              <th style="text-align:left">EXIT</th>
+              <th>ENTRY ₽</th>
+              <th>EXIT ₽</th>
+              <th>DAYS</th>
+              <th>PROFIT</th>
+            </tr></thead>
+            <tbody id="fitTradesBody"></tbody>
+          </table>
         </div>
       </div>
 
@@ -1735,8 +1789,8 @@ async function loadTickerFitness(ticker) {
     }
     card.style.display = 'block';
 
-    // Total trades
-    document.getElementById('fitTotalTrades').textContent = `${d.total_trades} trades (${d.wins}W / ${d.losses}L)`;
+    // Period
+    document.getElementById('fitPeriod').textContent = d.period ? `${d.period} (${d.days}d)` : '—';
 
     // Best combo
     const bc = d.best_combo;
@@ -1748,11 +1802,6 @@ async function loadTickerFitness(ticker) {
       document.getElementById('fitBestCombo').textContent = '—';
     }
 
-    // Win rate
-    const wrEl = document.getElementById('fitWinRate');
-    wrEl.textContent = d.win_rate + '%';
-    wrEl.className = 'fit-value ' + (d.win_rate >= 60 ? 'pos' : d.win_rate >= 45 ? 'ok' : 'neg');
-
     // Profit Factor
     const pfEl = document.getElementById('fitPF');
     pfEl.textContent = d.profit_factor + '×';
@@ -1763,43 +1812,36 @@ async function loadTickerFitness(ticker) {
     apEl.textContent = (d.avg_profit > 0 ? '+' : '') + d.avg_profit + '%';
     apEl.className = 'fit-value ' + (d.avg_profit > 0 ? 'pos' : 'neg');
 
-    // Sparkline
-    drawSparkline(d.sparkline || []);
+    // Win rate progress bar
+    document.getElementById('fitWRLabel').textContent = `Win Rate ${d.win_rate}%`;
+    document.getElementById('fitWRFill').style.width = d.win_rate + '%';
+    document.getElementById('fitWins').textContent = d.wins + 'W';
+    document.getElementById('fitLosses').textContent = d.losses + 'L';
+
+    // Trade table
+    const tbody = document.getElementById('fitTradesBody');
+    const trades = d.trades || [];
+    if (trades.length) {
+      tbody.innerHTML = trades.map(t => {
+        const cls = t.profit > 0 ? 'color:var(--up)' : t.profit < 0 ? 'color:var(--down)' : '';
+        const sign = t.profit > 0 ? '+' : '';
+        const eCls = (t.entry_phase || '').toLowerCase();
+        const xCls = (t.exit_phase || '').toLowerCase();
+        return `<tr>
+          <td style="text-align:left"><span class="phase-badge ${eCls}" style="font-size:8px;padding:1px 5px">${t.entry_phase||'—'}</span> ${t.entry_date||''}</td>
+          <td style="text-align:left"><span class="phase-badge ${xCls}" style="font-size:8px;padding:1px 5px">${t.exit_phase||'—'}</span> ${t.exit_date||''}</td>
+          <td>${t.entry_price ? t.entry_price.toLocaleString('id-ID') : '—'}</td>
+          <td>${t.exit_price ? t.exit_price.toLocaleString('id-ID') : '—'}</td>
+          <td style="color:var(--muted)">${t.duration}d</td>
+          <td style="${cls};font-weight:700">${sign}${t.profit}%</td>
+        </tr>`;
+      }).join('');
+    } else {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:12px">No trades</td></tr>';
+    }
   } catch(e) {
     card.style.display = 'none';
   }
-}
-
-function drawSparkline(data) {
-  const canvas = document.getElementById('fitSparkline');
-  if (!canvas || !data.length) return;
-  const ctx = canvas.getContext('2d');
-  const w = canvas.width, h = canvas.height;
-  ctx.clearRect(0, 0, w, h);
-
-  const maxAbs = Math.max(...data.map(Math.abs), 1);
-  const mid = h / 2;
-  const barW = Math.max(2, Math.min(8, (w - data.length) / data.length));
-  const gap = 1;
-
-  data.forEach((v, i) => {
-    const x = i * (barW + gap);
-    const barH = Math.max(1, (Math.abs(v) / maxAbs) * (h / 2 - 2));
-    ctx.fillStyle = v >= 0 ? '#00e8a2' : '#ff4d6a';
-    if (v >= 0) {
-      ctx.fillRect(x, mid - barH, barW, barH);
-    } else {
-      ctx.fillRect(x, mid, barW, barH);
-    }
-  });
-
-  // Zero line
-  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = 0.5;
-  ctx.beginPath();
-  ctx.moveTo(0, mid);
-  ctx.lineTo(w, mid);
-  ctx.stroke();
 }
 
 function closeModal() {
