@@ -199,7 +199,7 @@ header {
   background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 12px;
-  margin: 0 0 12px;
+  margin: 0 18px 12px;
 }
 .mm-item {
   display: flex; flex-direction: column; gap: 2px;
@@ -1826,15 +1826,17 @@ async function loadTickerFitness(ticker) {
       document.getElementById('fitBestCombo').textContent = '—';
     }
 
-    // Profit Factor
+    // Profit Factor — from best combo
+    const bestPF = bc ? bc.pf : d.profit_factor;
     const pfEl = document.getElementById('fitPF');
-    pfEl.textContent = d.profit_factor + '×';
-    pfEl.className = 'fit-value ' + (d.profit_factor >= 2.0 ? 'pos' : d.profit_factor >= 1.0 ? 'ok' : 'neg');
+    pfEl.textContent = bestPF + '×';
+    pfEl.className = 'fit-value ' + (bestPF >= 2.0 ? 'pos' : bestPF >= 1.0 ? 'ok' : 'neg');
 
-    // Avg profit
+    // Avg profit — from best combo
+    const bestAvg = bc ? bc.avg_profit : d.avg_profit;
     const apEl = document.getElementById('fitAvgProfit');
-    apEl.textContent = (d.avg_profit > 0 ? '+' : '') + d.avg_profit + '%';
-    apEl.className = 'fit-value ' + (d.avg_profit > 0 ? 'pos' : 'neg');
+    apEl.textContent = (bestAvg > 0 ? '+' : '') + bestAvg + '%';
+    apEl.className = 'fit-value ' + (bestAvg > 0 ? 'pos' : 'neg');
 
     // Win rate progress bar — show BEST COMBO win rate only
     const bestWR = bc ? (bc.win_rate || 0) : d.win_rate;

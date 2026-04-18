@@ -534,10 +534,12 @@ async function loadChartFitness(){
       document.getElementById('fitBestCombo').innerHTML=
         `<span style="color:${pc[bc.entry]||'var(--text)'}">${bc.entry}</span> → <span style="color:${pc[bc.exit]||'var(--text)'}">${bc.exit}</span><span style="font-size:9px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% · ${bc.trades}t</span>`;
     }else{document.getElementById('fitBestCombo').textContent='—'}
-    const pf=document.getElementById('fitPF');pf.textContent=d.profit_factor+'×';
-    pf.style.color=d.profit_factor>=2?'#00e8a2':d.profit_factor>=1?'#ff8c42':'#ff4d6a';
-    const ap=document.getElementById('fitAvgProfit');ap.textContent=(d.avg_profit>0?'+':'')+d.avg_profit+'%';
-    ap.style.color=d.avg_profit>0?'#00e8a2':'#ff4d6a';
+    const bestPF=bc?bc.pf:d.profit_factor;
+    const pf=document.getElementById('fitPF');pf.textContent=bestPF+'×';
+    pf.style.color=bestPF>=2?'#00e8a2':bestPF>=1?'#ff8c42':'#ff4d6a';
+    const bestAvg=bc?bc.avg_profit:d.avg_profit;
+    const ap=document.getElementById('fitAvgProfit');ap.textContent=(bestAvg>0?'+':'')+bestAvg+'%';
+    ap.style.color=bestAvg>0?'#00e8a2':'#ff4d6a';
     const bestWR=bc?(bc.win_rate||0):d.win_rate;
     const bestW=bc?Math.round(bc.trades*(bc.win_rate/100)):d.wins;
     const bestL=bc?(bc.trades-bestW):d.losses;

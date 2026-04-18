@@ -1372,24 +1372,26 @@ def api_ticker_fitness():
         # Skip extreme moves (right issue, delisting, etc: >50% or <-50%)
         ticker_trades = []
         best_combo = None
-        best_pf = 0
+        best_avg = -999
 
         for combo in lb:
             details = combo.get("details", [])
             t_trades = [d for d in details if d["ticker"] == ticker and abs(d.get("profit", 0)) <= 50]
             if t_trades:
                 ticker_trades.extend([{**t, "entry_phase": combo["entry"], "exit_phase": combo["exit"]} for t in t_trades])
-                # Best combo: compute PF and win rate for THIS combo only
+                # Best combo = highest average profit
                 combo_wins = [t for t in t_trades if t["profit"] > 0]
                 combo_wr = round(len(combo_wins) / len(t_trades) * 100, 1) if t_trades else 0
+                combo_avg = round(sum(t["profit"] for t in t_trades) / len(t_trades), 2)
                 gp = sum(t["profit"] for t in t_trades if t["profit"] > 0)
                 gl = abs(sum(t["profit"] for t in t_trades if t["profit"] <= 0))
-                pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
-                if pf > best_pf and len(t_trades) >= 1:
-                    best_pf = pf
+                combo_pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
+                if combo_avg > best_avg and len(t_trades) >= 1:
+                    best_avg = combo_avg
                     best_combo = {
                         "entry": combo["entry"], "exit": combo["exit"],
-                        "pf": pf, "trades": len(t_trades), "win_rate": combo_wr,
+                        "pf": combo_pf, "avg_profit": combo_avg,
+                        "trades": len(t_trades), "win_rate": combo_wr,
                     }
 
         if not ticker_trades:
