@@ -223,6 +223,56 @@ header {
   .modal-metrics-panel { grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 10px 14px; }
   .mm-value { font-size: 11px; }
 }
+
+/* Ticker Strategy Fitness card */
+.fitness-card {
+  margin: 0 18px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.fitness-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.fitness-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .08em; color: var(--accent);
+  text-transform: uppercase;
+}
+.fitness-trades {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--muted);
+}
+.fitness-body {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 14px;
+  flex-wrap: wrap;
+}
+.fit-col { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
+.fit-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 8px; letter-spacing: .1em;
+  color: var(--muted); text-transform: uppercase;
+}
+.fit-value {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700; color: var(--text);
+}
+.fit-value.pos { color: var(--up); }
+.fit-value.neg { color: var(--down); }
+.fit-value.ok { color: #ff8c42; }
+.fit-spark { flex: 1; min-width: 100px; }
+.fit-spark canvas { display: block; }
+@media (max-width: 640px) {
+  .fitness-body { gap: 10px; padding: 8px 10px; }
+  .fit-col { min-width: 60px; }
+  .fit-value { font-size: 11px; }
+}
+
 .load-btn {
   background: var(--accent); color: var(--bg);
   border: none; border-radius: 5px;
@@ -985,6 +1035,36 @@ td:first-child { text-align: left; }
         </div>
       </div>
 
+      <!-- Ticker Strategy Fitness -->
+      <div class="fitness-card" id="fitnessCard" style="display:none">
+        <div class="fitness-header">
+          <span class="fitness-title">📊 Strategy Fitness</span>
+          <span class="fitness-trades" id="fitTotalTrades">—</span>
+        </div>
+        <div class="fitness-body">
+          <div class="fit-col">
+            <div class="fit-label">Best Combo</div>
+            <div class="fit-value" id="fitBestCombo">—</div>
+          </div>
+          <div class="fit-col">
+            <div class="fit-label">Win Rate</div>
+            <div class="fit-value" id="fitWinRate">—</div>
+          </div>
+          <div class="fit-col">
+            <div class="fit-label">Profit Factor</div>
+            <div class="fit-value" id="fitPF">—</div>
+          </div>
+          <div class="fit-col">
+            <div class="fit-label">Avg Profit</div>
+            <div class="fit-value" id="fitAvgProfit">—</div>
+          </div>
+          <div class="fit-col fit-spark">
+            <div class="fit-label">Track Record</div>
+            <canvas id="fitSparkline" width="120" height="32"></canvas>
+          </div>
+        </div>
+      </div>
+
       <div>
         <div class="trx-toolbar">
           <div class="trx-section-title">Transaksi SM &amp; BM</div>
@@ -1042,6 +1122,7 @@ let trxIsSingleMode = true;   // Modal trx toolbar
 function toggleDateMode() {
   isSingleMode = !isSingleMode;
   applyDateMode();
+  loadFlow();
 }
 function applyDateMode() {
   const toggle = document.getElementById('dateModeToggle');
@@ -1051,6 +1132,7 @@ function applyDateMode() {
     toggle.classList.remove('range-mode');
     toggle.title = 'Mode: Single Date (klik untuk Range)';
     dt.value = document.getElementById('dateFrom').value;
+    if (pickerTo && pickerFrom) pickerTo.setDate(pickerFrom.getDate(), true);
     dt.classList.add('disabled');
     dt.disabled = true;
   } else {
@@ -1199,7 +1281,10 @@ window.addEventListener('DOMContentLoaded', async () => {
     defaultDate: initDate,
     setDefaultDate: true,
     onSelect: date => {
-      if (pickerTo && date > pickerTo.getDate()) {
+      if (isSingleMode) {
+        pickerTo.setDate(date, true);
+        document.getElementById('dateTo').value = document.getElementById('dateFrom').value;
+      } else if (pickerTo && date > pickerTo.getDate()) {
         pickerTo.setDate(date);
       }
       loadFlow();
@@ -1540,6 +1625,7 @@ function openModal(ticker) {
       initModalChart();
       loadModalChart();
       loadTransactions();
+      loadTickerFitness(ticker);
     });
   });
 }
@@ -1637,6 +1723,85 @@ function populateMetricsPanel(r) {
     acBadge.style.display = 'none';
   }
 }
+
+async function loadTickerFitness(ticker) {
+  const card = document.getElementById('fitnessCard');
+  try {
+    const res = await fetch(`/api/ticker-fitness?ticker=${ticker}`);
+    const d = await res.json();
+    if (!d || d.total_trades === 0 || d.error) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+
+    // Total trades
+    document.getElementById('fitTotalTrades').textContent = `${d.total_trades} trades (${d.wins}W / ${d.losses}L)`;
+
+    // Best combo
+    const bc = d.best_combo;
+    if (bc) {
+      document.getElementById('fitBestCombo').innerHTML =
+        `<span class="phase-badge ${bc.entry.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.entry}</span>` +
+        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.exit}</span>`;
+    } else {
+      document.getElementById('fitBestCombo').textContent = '—';
+    }
+
+    // Win rate
+    const wrEl = document.getElementById('fitWinRate');
+    wrEl.textContent = d.win_rate + '%';
+    wrEl.className = 'fit-value ' + (d.win_rate >= 60 ? 'pos' : d.win_rate >= 45 ? 'ok' : 'neg');
+
+    // Profit Factor
+    const pfEl = document.getElementById('fitPF');
+    pfEl.textContent = d.profit_factor + '×';
+    pfEl.className = 'fit-value ' + (d.profit_factor >= 2.0 ? 'pos' : d.profit_factor >= 1.0 ? 'ok' : 'neg');
+
+    // Avg profit
+    const apEl = document.getElementById('fitAvgProfit');
+    apEl.textContent = (d.avg_profit > 0 ? '+' : '') + d.avg_profit + '%';
+    apEl.className = 'fit-value ' + (d.avg_profit > 0 ? 'pos' : 'neg');
+
+    // Sparkline
+    drawSparkline(d.sparkline || []);
+  } catch(e) {
+    card.style.display = 'none';
+  }
+}
+
+function drawSparkline(data) {
+  const canvas = document.getElementById('fitSparkline');
+  if (!canvas || !data.length) return;
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const maxAbs = Math.max(...data.map(Math.abs), 1);
+  const mid = h / 2;
+  const barW = Math.max(2, Math.min(8, (w - data.length) / data.length));
+  const gap = 1;
+
+  data.forEach((v, i) => {
+    const x = i * (barW + gap);
+    const barH = Math.max(1, (Math.abs(v) / maxAbs) * (h / 2 - 2));
+    ctx.fillStyle = v >= 0 ? '#00e8a2' : '#ff4d6a';
+    if (v >= 0) {
+      ctx.fillRect(x, mid - barH, barW, barH);
+    } else {
+      ctx.fillRect(x, mid, barW, barH);
+    }
+  });
+
+  // Zero line
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  ctx.moveTo(0, mid);
+  ctx.lineTo(w, mid);
+  ctx.stroke();
+}
+
 function closeModal() {
   document.getElementById('modalBackdrop').classList.remove('open');
   if (window._modalChartRO) { window._modalChartRO.disconnect(); window._modalChartRO = null; }

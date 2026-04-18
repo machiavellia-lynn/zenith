@@ -1340,6 +1340,73 @@ _bt_thread = None
 _bt_status = {"status": "idle"}
 
 
+@app.route("/api/ticker-fitness")
+def api_ticker_fitness():
+    """Per-ticker backtest stats from cached results."""
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
+    ticker = request.args.get("ticker", "").strip().upper()
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
+
+    try:
+        conn = get_db()
+        # Get latest backtest result (any days)
+        row = conn.execute(
+            "SELECT results FROM backtest_cache ORDER BY computed_at DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            return jsonify({"error": "No backtest data", "ticker": ticker})
+
+        import json
+        data = json.loads(row["results"])
+        lb = data.get("leaderboard", [])
+
+        # Filter trades for this ticker across all combos
+        ticker_trades = []
+        best_combo = None
+        best_pf = 0
+
+        for combo in lb:
+            details = combo.get("details", [])
+            t_trades = [d for d in details if d["ticker"] == ticker]
+            if t_trades:
+                ticker_trades.extend(t_trades)
+                # Compute PF for this combo+ticker
+                gp = sum(t["profit"] for t in t_trades if t["profit"] > 0)
+                gl = abs(sum(t["profit"] for t in t_trades if t["profit"] <= 0))
+                pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
+                if pf > best_pf and len(t_trades) >= 1:
+                    best_pf = pf
+                    best_combo = {"entry": combo["entry"], "exit": combo["exit"], "pf": pf, "trades": len(t_trades)}
+
+        if not ticker_trades:
+            return jsonify({"ticker": ticker, "total_trades": 0})
+
+        wins = [t for t in ticker_trades if t["profit"] > 0]
+        losses = [t for t in ticker_trades if t["profit"] <= 0]
+        gross_profit = sum(t["profit"] for t in wins)
+        gross_loss = abs(sum(t["profit"] for t in losses))
+        pf = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0)
+
+        # Sparkline data: list of profits sorted by date
+        trades_sorted = sorted(ticker_trades, key=lambda t: t.get("entry_date", ""))
+        sparkline = [t["profit"] for t in trades_sorted]
+
+        return jsonify({
+            "ticker": ticker,
+            "total_trades": len(ticker_trades),
+            "win_rate": round(len(wins) / len(ticker_trades) * 100, 1),
+            "profit_factor": pf,
+            "avg_profit": round(sum(t["profit"] for t in ticker_trades) / len(ticker_trades), 2),
+            "best_combo": best_combo,
+            "sparkline": sparkline,
+            "wins": len(wins),
+            "losses": len(losses),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/admin/trigger-backtest")
 def trigger_backtest():
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")

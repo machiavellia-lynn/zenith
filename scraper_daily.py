@@ -43,8 +43,10 @@ TOPIC_BAD      = 219042
 TOPIC_MF_PLUS  = 1025256
 TOPIC_MF_MINUS = 1025260
 
-BACKFILL_HOUR = 17   # 17:00 WIB
-BACKFILL_MINUTE = 0
+BACKFILL_HOUR = 15   # 15:30 WIB first pass
+BACKFILL_MINUTE = 30
+RECOMPUTE_HOUR = 16  # 16:30 WIB second pass (new data after 15:30)
+RECOMPUTE_MINUTE = 30
 
 # ── Value parser (unified, handles +/- signs, Jt/M/T/rb units) ───────────────
 def parse_value(s: str) -> float | None:
@@ -1002,10 +1004,11 @@ async def scraper_main():
                 log.error(f"❌ Listener error: {e}")
 
         log.info("👂 Realtime listener active on 4 topics")
-        log.info(f"⏰ Daily backfill scheduled at {BACKFILL_HOUR:02d}:{BACKFILL_MINUTE:02d} WIB")
+        log.info(f"⏰ Daily: first pass {BACKFILL_HOUR:02d}:{BACKFILL_MINUTE:02d}, recompute {RECOMPUTE_HOUR:02d}:{RECOMPUTE_MINUTE:02d} WIB")
 
         # ── Scheduled backfill loop ───────────────────────────────────────
-        backfill_done_today = False
+        first_pass_done = False
+        second_pass_done = False
         backtest_done_today = False
         last_check_date = None
 
@@ -1015,25 +1018,39 @@ async def scraper_main():
 
             # Reset flags at midnight
             if today_str != last_check_date:
-                backfill_done_today = False
+                first_pass_done = False
+                second_pass_done = False
                 backtest_done_today = False
                 last_check_date = today_str
 
-            # Run backfill at scheduled time
-            if (not backfill_done_today
+            # First pass at 15:30 — early signal
+            if (not first_pass_done
                     and now_wib.hour >= BACKFILL_HOUR
                     and now_wib.minute >= BACKFILL_MINUTE):
                 try:
+                    log.info("🔔 FIRST PASS (15:30) — generating early signals...")
                     await run_backfill(client, conn)
-                    backfill_done_today = True
+                    first_pass_done = True
                 except Exception as e:
-                    log.error(f"❌ Backfill error: {e}")
-                    backfill_done_today = True
+                    log.error(f"❌ First pass error: {e}")
+                    first_pass_done = True
 
-            # Run nightly backtest at 18:00 WIB
+            # Second pass at 16:30 — recompute with new data
+            if (not second_pass_done
+                    and first_pass_done
+                    and now_wib.hour >= RECOMPUTE_HOUR
+                    and now_wib.minute >= RECOMPUTE_MINUTE):
+                try:
+                    log.info("🔄 SECOND PASS (16:30) — recomputing with updated data...")
+                    await run_backfill(client, conn)
+                    second_pass_done = True
+                except Exception as e:
+                    log.error(f"❌ Second pass error: {e}")
+                    second_pass_done = True
+
+            # Run backtest after second pass
             if (not backtest_done_today
-                    and now_wib.hour >= BACKTEST_HOUR
-                    and backfill_done_today):
+                    and second_pass_done):
                 try:
                     run_backtest(conn, days=30)
                     backtest_done_today = True

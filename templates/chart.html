@@ -296,6 +296,36 @@ main{flex:1;display:flex;flex-direction:column;padding:12px 24px;gap:12px}
     </div>
   </div>
 
+  <!-- Ticker Strategy Fitness -->
+  <div class="fitness-card" id="fitnessCard" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border)">
+      <span style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase">📊 Strategy Fitness</span>
+      <span id="fitTotalTrades" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">—</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:16px;padding:10px 14px;flex-wrap:wrap">
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:70px">
+        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Best Combo</div>
+        <div id="fitBestCombo" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:60px">
+        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Win Rate</div>
+        <div id="fitWinRate" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:60px">
+        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Profit Factor</div>
+        <div id="fitPF" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;min-width:60px">
+        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Avg Profit</div>
+        <div id="fitAvgProfit" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:100px">
+        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Track Record</div>
+        <canvas id="fitSparkline" width="120" height="32"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- TRANSAKSI SM & BM -->
   <div class="trx-section">
     <div class="trx-toolbar">
@@ -428,7 +458,7 @@ async function doLoad(){
     applyAutoScale(isAutoScale);hideLoading();
     if(data.name)document.getElementById('tName').textContent=data.name;
     if(data.price){document.getElementById('tPrice').textContent=data.price.toLocaleString('id-ID')}
-    loadOverlayData(candles);loadTransactions();loadMetrics();
+    loadOverlayData(candles);loadTransactions();loadMetrics();loadChartFitness();
   }catch(err){showError(err.message)}
 }
 
@@ -463,6 +493,42 @@ async function loadMetrics(){
 function getDateStr(){
   const d=document.getElementById('trxDateFrom').value;
   return d?displayToApi(d):'';
+}
+
+async function loadChartFitness(){
+  const card=document.getElementById('fitnessCard');
+  try{
+    const res=await fetch(`/api/ticker-fitness?ticker=${currentTicker}`);
+    const d=await res.json();
+    if(!d||d.total_trades===0||d.error){card.style.display='none';return}
+    card.style.display='block';
+    document.getElementById('fitTotalTrades').textContent=`${d.total_trades} trades (${d.wins}W / ${d.losses}L)`;
+    const bc=d.best_combo;
+    if(bc){
+      const phColors={SOS:'#00e8a2',SPRING:'#00e8a2',ACCUM:'#5abf8e',ABSORB:'#4d9fff',UPTHRUST:'#ff8c42',DISTRI:'#ff4d6a'};
+      document.getElementById('fitBestCombo').innerHTML=
+        `<span style="color:${phColors[bc.entry]||'var(--text)'}">${bc.entry}</span> → <span style="color:${phColors[bc.exit]||'var(--text)'}">${bc.exit}</span>`;
+    }else{document.getElementById('fitBestCombo').textContent='—'}
+    const wr=document.getElementById('fitWinRate');wr.textContent=d.win_rate+'%';
+    wr.style.color=d.win_rate>=60?'#00e8a2':d.win_rate>=45?'#ff8c42':'#ff4d6a';
+    const pf=document.getElementById('fitPF');pf.textContent=d.profit_factor+'×';
+    pf.style.color=d.profit_factor>=2?'#00e8a2':d.profit_factor>=1?'#ff8c42':'#ff4d6a';
+    const ap=document.getElementById('fitAvgProfit');ap.textContent=(d.avg_profit>0?'+':'')+d.avg_profit+'%';
+    ap.style.color=d.avg_profit>0?'#00e8a2':'#ff4d6a';
+    drawSparkline(d.sparkline||[]);
+  }catch(e){card.style.display='none'}
+}
+
+function drawSparkline(data){
+  const c=document.getElementById('fitSparkline');if(!c||!data.length)return;
+  const ctx=c.getContext('2d'),w=c.width,h=c.height;ctx.clearRect(0,0,w,h);
+  const mx=Math.max(...data.map(Math.abs),1),mid=h/2;
+  const bw=Math.max(2,Math.min(8,(w-data.length)/data.length));
+  data.forEach((v,i)=>{const x=i*(bw+1),bh=Math.max(1,(Math.abs(v)/mx)*(h/2-2));
+    ctx.fillStyle=v>=0?'#00e8a2':'#ff4d6a';
+    v>=0?ctx.fillRect(x,mid-bh,bw,bh):ctx.fillRect(x,mid,bw,bh)});
+  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=0.5;
+  ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(w,mid);ctx.stroke();
 }
 
 async function loadOverlayData(candles){
