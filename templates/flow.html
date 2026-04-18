@@ -196,16 +196,13 @@ header {
   grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 10px;
   padding: 14px 18px;
-  background: rgba(255,255,255,.02);
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin: 0 18px 12px;
 }
 .mm-item {
   display: flex; flex-direction: column; gap: 2px;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
 }
 .mm-label {
   font-family: 'Space Mono', monospace;
@@ -234,11 +231,12 @@ header {
 
 /* Ticker Strategy Fitness card */
 .fitness-card {
-  margin: 0 18px 12px;
-  background: rgba(255,255,255,.02);
+  margin: 0;
+  background: var(--surface2);
   border: 1px solid var(--border);
   border-radius: 10px;
   overflow: hidden;
+  margin-bottom: 12px;
 }
 .fitness-header {
   display: flex; align-items: center; justify-content: space-between;
@@ -1014,7 +1012,7 @@ td:first-child { text-align: left; }
         <span class="action-badge" id="mActionBadge" style="font-family:'Space Mono',monospace;font-size:11px;padding:4px 10px;border-radius:4px;font-weight:700;letter-spacing:.04em;display:none"></span>
       </div>
       <div class="tf-selector">
-        <button class="tf-arrow" onclick="cycleTF(-1)" title="Previous">▲</button>
+        <button class="tf-arrow" onclick="cycleTF(1)" title="Larger timeframe">▲</button>
         <select class="tf-dropdown" id="tfDropdown" onchange="setModalTF(this.value)">
           <option value="5m">5m</option>
           <option value="15m">15m</option>
@@ -1022,7 +1020,7 @@ td:first-child { text-align: left; }
           <option value="1h">1h</option>
           <option value="1d" selected>1D</option>
         </select>
-        <button class="tf-arrow" onclick="cycleTF(1)" title="Next">▼</button>
+        <button class="tf-arrow" onclick="cycleTF(-1)" title="Smaller timeframe">▼</button>
       </div>
       <div class="overlay-toggles">
         <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
@@ -1838,11 +1836,14 @@ async function loadTickerFitness(ticker) {
     apEl.textContent = (d.avg_profit > 0 ? '+' : '') + d.avg_profit + '%';
     apEl.className = 'fit-value ' + (d.avg_profit > 0 ? 'pos' : 'neg');
 
-    // Win rate progress bar
-    document.getElementById('fitWRLabel').textContent = `Win Rate ${d.win_rate}%`;
-    document.getElementById('fitWRFill').style.width = d.win_rate + '%';
-    document.getElementById('fitWins').textContent = d.wins + 'W';
-    document.getElementById('fitLosses').textContent = d.losses + 'L';
+    // Win rate progress bar — show BEST COMBO win rate only
+    const bestWR = bc ? (bc.win_rate || 0) : d.win_rate;
+    const bestWins = bc ? Math.round(bc.trades * (bc.win_rate/100)) : d.wins;
+    const bestLosses = bc ? (bc.trades - bestWins) : d.losses;
+    document.getElementById('fitWRLabel').textContent = `Win Rate ${bestWR}%`;
+    document.getElementById('fitWRFill').style.width = bestWR + '%';
+    document.getElementById('fitWins').textContent = bestWins + 'W';
+    document.getElementById('fitLosses').textContent = bestLosses + 'L';
 
     // Trade table
     const tbody = document.getElementById('fitTradesBody');
