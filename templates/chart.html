@@ -40,7 +40,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .t-name{font-size:11px;color:var(--muted)}
 .t-price{font-family:'Space Mono',monospace;font-size:15px;font-weight:700;color:var(--text)}
 .ihsg-wrap{display:flex;align-items:center;gap:8px;font-family:'Space Mono',monospace}
-.ihsg-label{font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.ihsg-label{font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
 .ihsg-price{font-size:12px;font-weight:700;color:var(--text)}
 .ihsg-gain{font-size:10px;font-weight:700}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:12px}
@@ -57,11 +57,11 @@ input[type="text"]:focus{border-color:var(--accent)}
 
 .metrics-panel{background:var(--surface);border:1px solid var(--border2);border-radius:10px;overflow:hidden}
 .mp-header{display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border);background:var(--surface2)}
-.mp-title{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
-.mp-phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:3px 10px;border-radius:20px;background:rgba(0,232,162,.1);color:var(--accent);border:1px solid rgba(0,232,162,.2);font-weight:700;letter-spacing:.06em}
+.mp-title{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+.mp-phase-badge{font-family:'Space Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;background:rgba(0,232,162,.1);color:var(--accent);border:1px solid rgba(0,232,162,.2);font-weight:700;letter-spacing:.06em}
 .mp-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:1px;background:var(--border)}
 .mp-item{background:var(--surface);padding:10px 12px;display:flex;flex-direction:column;gap:3px}
-.mp-label{font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
+.mp-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase}
 .mp-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--text)}
 @media(max-width:900px){.mp-grid{grid-template-columns:repeat(4,1fr)}}
 @media(max-width:560px){.mp-grid{grid-template-columns:repeat(3,1fr)}}
@@ -70,7 +70,7 @@ input[type="text"]:focus{border-color:var(--accent)}
 .hover-tooltip{position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:15;display:flex;align-items:center;gap:16px;background:rgba(14,19,24,.92);border:1px solid var(--border);border-radius:6px;padding:6px 14px;font-family:'Space Mono',monospace;font-size:11px;pointer-events:none;opacity:0;transition:opacity .15s;white-space:nowrap}
 .hover-tooltip.visible{opacity:1}
 .ht-item{display:flex;flex-direction:column;align-items:center;gap:2px}
-.ht-label{font-size:9px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.ht-label{font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
 .ht-val{font-size:12px;font-weight:700;color:var(--text)}
 .ht-val.up{color:var(--up)}.ht-val.down{color:var(--down)}
 .ht-sep{width:1px;height:28px;background:var(--border)}
@@ -93,7 +93,7 @@ input[type="text"]:focus{border-color:var(--accent)}
 .m-overlay-vals{position:absolute;top:12px;left:14px;z-index:10;display:flex;flex-direction:column;gap:2px;pointer-events:none}
 .m-ovl-row{font-family:'Space Mono',monospace;font-size:11px;font-weight:700;opacity:0;transition:opacity .15s}
 .m-ovl-row.visible{opacity:1}
-.m-ovl-row .m-ovl-label{font-size:9px;font-weight:400;letter-spacing:.08em;margin-right:6px}
+.m-ovl-row .m-ovl-label{font-size:10px;font-weight:400;letter-spacing:.08em;margin-right:6px}
 /* ── TRANSACTIONS */
 .trx-section{padding:16px 24px 20px}
 .trx-toolbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
@@ -108,16 +108,16 @@ input[type="text"]:focus{border-color:var(--accent)}
 .trx-date-arrow:hover{color:var(--accent)}
 .trx-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .trx-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;height:260px;display:flex;flex-direction:column;overflow:hidden}
-.trx-box-header{padding:6px 12px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;background:var(--bg);z-index:1}
+.trx-box-header{padding:6px 12px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;background:var(--bg);z-index:1}
 .trx-box-header.sm{color:var(--accent2)}
 .trx-box-header.bm{color:#ff8c42}
-.trx-box-header .trx-count{color:var(--muted);font-size:8px}
+.trx-box-header .trx-count{color:var(--muted);font-size:10px}
 .trx-table-wrap{flex:1 1 0;min-height:0;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
 .trx-table-wrap::-webkit-scrollbar{width:5px}
 .trx-table-wrap::-webkit-scrollbar-track{background:transparent}
 .trx-table-wrap::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
 .trx-table{width:100%;border-collapse:collapse}
-.trx-table thead th{position:sticky;top:0;z-index:1;background:var(--bg);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
+.trx-table thead th{position:sticky;top:0;z-index:1;background:var(--bg);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
 .trx-table th:first-child{text-align:left}
 .trx-table td{padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;color:var(--text);text-align:right;border-bottom:1px solid rgba(26,34,48,.5);white-space:nowrap}
 .trx-table td:first-child{text-align:left;color:var(--muted)}
@@ -183,7 +183,7 @@ input[type="text"]:focus{border-color:var(--accent)}
   .nav-btn{padding:4px 10px;font-size:10px}
   .search-wrap{order:5;flex:0 1 auto;min-width:0}
   .search-wrap input{width:60px}
-  .search-btn{padding:4px 10px;font-size:9px}
+  .search-btn{padding:4px 10px;font-size:10px}
   .ticker-info{gap:6px}
   .t-name{font-size:10px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .t-price{font-size:13px}
@@ -191,15 +191,15 @@ input[type="text"]:focus{border-color:var(--accent)}
   .ihsg-wrap{display:none}
   main{padding:8px 10px;gap:6px}
   .tf-row{gap:4px}
-  .tf-label{font-size:9px;margin-right:0}
+  .tf-label{font-size:10px;margin-right:0}
   .tf-btn{padding:4px 8px;font-size:10px}
-  .ovl-btn{padding:3px 7px;font-size:9px}
+  .ovl-btn{padding:3px 7px;font-size:10px}
   .chart-card{height:max(420px,calc(100vh - 220px))}
-  .hover-tooltip{font-size:9px;gap:6px;padding:4px 8px;top:8px}
-  .ht-label{font-size:7px}
+  .hover-tooltip{font-size:10px;gap:6px;padding:4px 8px;top:8px}
+  .ht-label{font-size:10px}
   .ht-val{font-size:10px}
   .ht-sep{height:20px}
-  .m-overlay-vals{font-size:9px}
+  .m-overlay-vals{font-size:10px}
   .trx-section{padding:10px}
   .trx-toolbar{flex-direction:column;align-items:flex-start;gap:6px}
   .trx-grid{grid-template-columns:1fr}
@@ -209,17 +209,19 @@ input[type="text"]:focus{border-color:var(--accent)}
 @media(max-width:420px){
   header{gap:4px;padding:6px 10px}
   .logo span{display:none}
-  .nav-btn{padding:3px 7px;font-size:9px}
+  .nav-btn{padding:3px 7px;font-size:10px}
   .search-wrap input{width:50px;font-size:11px}
-  .t-name{max-width:80px;font-size:9px}
+  .t-name{max-width:80px;font-size:10px}
   .t-price{font-size:11px}
-  .tf-btn{padding:3px 6px;font-size:9px}
-  .ovl-btn{padding:2px 5px;font-size:8px}
+  .tf-btn{padding:3px 6px;font-size:10px}
+  .ovl-btn{padding:2px 5px;font-size:10px}
   .chart-card{height:max(360px,calc(100vh - 200px))}
 }
 </style>
+  <link rel="stylesheet" href="/static/tokens.css">
 </head>
 <body>
+<a href="#main" class="skip-link">Skip to main content</a>
 <header>
   <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH</a>
   <div class="nav-group">
@@ -246,15 +248,16 @@ input[type="text"]:focus{border-color:var(--accent)}
     <button class="info-btn pulse" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
   </div>
 </header>
+<main id="main">
 
 <main>
   <div class="tf-row">
     <div class="tf-selector" style="display:flex;align-items:center;gap:2px">
-      <button onclick="chartCycleTF(1)" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;width:22px;height:22px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">▲</button>
+      <button onclick="chartCycleTF(1)" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;width:22px;height:22px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">▲</button>
       <select id="chartTFDropdown" onchange="setTF(this.value)" style="background:var(--bg);border:1px solid var(--border);color:var(--accent);border-radius:4px;padding:4px 8px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;outline:none;appearance:none;-webkit-appearance:none;text-align:center;min-width:44px">
         <option value="5m">5m</option><option value="15m">15m</option><option value="30m">30m</option><option value="1h">1h</option><option value="1d" selected>1D</option>
       </select>
-      <button onclick="chartCycleTF(-1)" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;width:22px;height:22px;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">▼</button>
+      <button onclick="chartCycleTF(-1)" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;width:22px;height:22px;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;padding:0" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">▼</button>
     </div>
     <div class="overlay-toggles">
       <button class="ovl-btn active cm" id="ovlBtnCM" onclick="toggleOverlay('cm')" title="Clean Money"><span class="ovl-dot" style="background:#00e8a2"></span>CM</button>
@@ -314,27 +317,27 @@ input[type="text"]:focus{border-color:var(--accent)}
   <div class="fitness-card" id="fitnessCard" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:hidden">
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;border-bottom:1px solid var(--border)">
       <span style="font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--accent);text-transform:uppercase">📊 Strategy Fitness</span>
-      <span id="fitPeriod" style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted)">—</span>
+      <span id="fitPeriod" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">—</span>
     </div>
     <div style="display:flex;align-items:center;gap:16px;padding:10px 14px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
       <div style="display:flex;flex-direction:column;gap:2px;min-width:70px">
-        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Best Combo</div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Best Combo</div>
         <div id="fitBestCombo" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;min-width:60px">
-        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Profit Factor</div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Profit Factor</div>
         <div id="fitPF" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;min-width:60px">
-        <div style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Avg Profit</div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Avg Profit</div>
         <div id="fitAvgProfit" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:120px">
-        <div id="fitWRLabel" style="font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Win Rate —</div>
+        <div id="fitWRLabel" style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Win Rate —</div>
         <div style="height:6px;background:var(--down);border-radius:3px;overflow:hidden;margin-top:4px">
           <div id="fitWRFill" style="height:100%;background:var(--up);border-radius:3px;transition:width .3s;width:0%"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:9px;margin-top:2px">
+        <div style="display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:10px;margin-top:2px">
           <span id="fitWins" style="color:var(--up)">0W</span>
           <span id="fitLosses" style="color:var(--down)">0L</span>
         </div>
@@ -343,12 +346,12 @@ input[type="text"]:focus{border-color:var(--accent)}
     <div style="max-height:150px;overflow-y:auto">
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:left;white-space:nowrap">ENTRY</th>
-          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:left;white-space:nowrap">EXIT</th>
-          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">ENTRY ₽</th>
-          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">EXIT ₽</th>
-          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">DAYS</th>
-          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">PROFIT</th>
+          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:left;white-space:nowrap">ENTRY</th>
+          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:left;white-space:nowrap">EXIT</th>
+          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">ENTRY ₽</th>
+          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">EXIT ₽</th>
+          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">DAYS</th>
+          <th style="position:sticky;top:0;z-index:2;background:var(--surface);padding:5px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap">PROFIT</th>
         </tr></thead>
         <tbody id="fitTradesBody"></tbody>
       </table>
@@ -544,7 +547,7 @@ async function loadChartFitness(){
     if(bc){
       const pc={SOS:'#00e8a2',SPRING:'#00e8a2',ACCUM:'#5abf8e',ABSORB:'#4d9fff',UPTHRUST:'#ff8c42',DISTRI:'#ff4d6a'};
       document.getElementById('fitBestCombo').innerHTML=
-        `<span style="color:${pc[bc.entry]||'var(--text)'}">${bc.entry}</span> → <span style="color:${pc[bc.exit]||'var(--text)'}">${bc.exit}</span><span style="font-size:9px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% · ${bc.trades}t</span>`;
+        `<span style="color:${pc[bc.entry]||'var(--text)'}">${bc.entry}</span> → <span style="color:${pc[bc.exit]||'var(--text)'}">${bc.exit}</span><span style="font-size:10px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% · ${bc.trades}t</span>`;
     }else{document.getElementById('fitBestCombo').textContent='—'}
     const bestPF=bc?bc.pf:d.profit_factor;
     const pf=document.getElementById('fitPF');pf.textContent=bestPF+'×';
@@ -711,6 +714,8 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
 
 </script>
 
+</main>
+
 <div class="info-backdrop" id="infoBackdrop" onclick="handleInfoBackdrop(event)">
   <div class="info-modal" id="infoModal">
     <div class="info-header">
@@ -724,5 +729,6 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
   </div>
 </div>
 
+<script src="/static/shortcuts.js" defer></script>
 </body>
 </html>

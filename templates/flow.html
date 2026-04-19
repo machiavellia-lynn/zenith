@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
 :root {
   --bg:       #080c10;
@@ -107,7 +108,7 @@ header::before {
   margin-left: auto; display: flex; align-items: center; gap: 8px;
   font-family: 'Space Mono', monospace;
 }
-.ihsg-label { font-size: 9px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
+.ihsg-label { font-size:10px; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
 .ihsg-price { font-size: 13px; font-weight: 700; color: var(--text); }
 .ihsg-gain { font-size: 11px; font-weight: 700; }
 
@@ -117,7 +118,7 @@ header::before {
   font-family: 'Space Mono', monospace;
 }
 .sector-badge-label {
-  font-size: 9px; color: var(--muted); letter-spacing: .06em;
+  font-size:10px; color: var(--muted); letter-spacing: .06em;
 }
 .sector-badge-name {
   font-size: 11px; font-weight: 700; color: var(--accent);
@@ -147,7 +148,7 @@ header::before {
 .stat-item.highlight { background: rgba(0,232,162,.025); }
 .stat-item .s-label {
   font-family: 'Space Mono', monospace;
-  font-size: 8px; letter-spacing: .1em;
+  font-size:10px; letter-spacing: .1em;
   color: var(--muted); text-transform: uppercase;
 }
 .stat-item .s-val {
@@ -246,7 +247,7 @@ header::before {
 }
 .mm-label {
   font-family: 'Space Mono', monospace;
-  font-size: 8px; letter-spacing: .1em;
+  font-size:10px; letter-spacing: .1em;
   color: var(--muted); text-transform: uppercase;
 }
 .mm-value {
@@ -261,7 +262,7 @@ header::before {
 .mm-value.bm-c { color: #ff8c42; }
 .mm-sub {
   font-family: 'Space Mono', monospace;
-  font-size: 9px; color: var(--muted);
+  font-size:10px; color: var(--muted);
   margin-top: 1px;
 }
 @media (max-width: 640px) {
@@ -291,7 +292,7 @@ header::before {
 }
 .fitness-period {
   font-family: 'Space Mono', monospace;
-  font-size: 9px; color: var(--muted);
+  font-size:10px; color: var(--muted);
 }
 .fitness-stats {
   display: flex; align-items: center; gap: 16px;
@@ -302,7 +303,7 @@ header::before {
 .fit-col { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
 .fit-label {
   font-family: 'Space Mono', monospace;
-  font-size: 8px; letter-spacing: .1em;
+  font-size:10px; letter-spacing: .1em;
   color: var(--muted); text-transform: uppercase;
 }
 .fit-value {
@@ -323,7 +324,7 @@ header::before {
 }
 .fit-wr-nums {
   display: flex; justify-content: space-between;
-  font-family: 'Space Mono', monospace; font-size: 9px; margin-top: 2px;
+  font-family: 'Space Mono', monospace; font-size:10px; margin-top: 2px;
 }
 .fit-wr-w { color: var(--up); }
 .fit-wr-l { color: var(--down); }
@@ -336,7 +337,7 @@ header::before {
 .fitness-trades-table th {
   position: sticky; top: 0; z-index: 2;
   background: var(--surface2); padding: 5px 10px;
-  font-family: 'Space Mono', monospace; font-size: 8px;
+  font-family: 'Space Mono', monospace; font-size:10px;
   font-weight: 700; letter-spacing: .08em;
   color: var(--muted); text-transform: uppercase;
   text-align: right; white-space: nowrap;
@@ -386,7 +387,7 @@ thead th {
   border-bottom: 2px solid var(--border2);
   padding: 10px 10px;
   font-family: 'Space Mono', monospace;
-  font-size: 9px; font-weight: 700;
+  font-size:10px; font-weight: 700;
   letter-spacing: .12em; color: var(--muted);
   text-align: right; text-transform: uppercase;
   white-space: nowrap; cursor: pointer;
@@ -396,7 +397,7 @@ thead th {
 thead th:first-child { text-align: left; }
 thead th:hover { color: var(--text); }
 thead th.sorted { color: var(--accent); }
-thead th .sort-icon { margin-left: 4px; font-size: 8px; }
+thead th .sort-icon { margin-left: 4px; font-size:10px; }
 
 tbody tr {
   border-bottom: 1px solid var(--border);
@@ -546,7 +547,7 @@ td:first-child { text-align: left; }
 .tf-dropdown option { background: var(--surface); color: var(--text); }
 .tf-arrow {
   background: none; border: 1px solid var(--border); color: var(--muted);
-  border-radius: 4px; width: 22px; height: 22px; font-size: 9px;
+  border-radius: 4px; width: 22px; height: 22px; font-size:10px;
   cursor: pointer; display: flex; align-items: center; justify-content: center;
   transition: all .15s; padding: 0;
 }
@@ -587,7 +588,7 @@ td:first-child { text-align: left; }
 }
 .m-hover-tooltip.visible { opacity: 1; }
 .mht-item { display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.mht-lbl { font-size: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.mht-lbl { font-size:10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
 .mht-v { font-size: 11px; font-weight: 700; color: var(--text); }
 .mht-v.up { color: var(--up); }
 .mht-v.down { color: var(--down); }
@@ -684,7 +685,7 @@ td:first-child { text-align: left; }
 .trx-box-header {
   padding: 6px 12px;
   font-family: 'Space Mono', monospace;
-  font-size: 9px; letter-spacing: .1em;
+  font-size:10px; letter-spacing: .1em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
   display: flex; gap: 8px; align-items: center;
@@ -695,7 +696,7 @@ td:first-child { text-align: left; }
 .trx-box-header.sm { color: var(--accent2); }
 .trx-box-header.bm { color: #ff8c42; }
 .trx-box-header .trx-count {
-  color: var(--muted); font-size: 8px;
+  color: var(--muted); font-size:10px;
 }
 .trx-table-wrap {
   flex: 1 1 0;
@@ -716,7 +717,7 @@ td:first-child { text-align: left; }
 .trx-table th {
   padding: 5px 10px;
   font-family: 'Space Mono', monospace;
-  font-size: 8px; letter-spacing: .1em;
+  font-size:10px; letter-spacing: .1em;
   color: var(--muted); text-transform: uppercase;
   text-align: right; border-bottom: 1px solid var(--border);
   white-space: nowrap;
@@ -772,7 +773,7 @@ td:first-child { text-align: left; }
 }
 .m-ovl-row.visible { opacity: 1; }
 .m-ovl-row .m-ovl-label {
-  font-size: 9px; font-weight: 400;
+  font-size:10px; font-weight: 400;
   letter-spacing: .08em; margin-right: 6px;
 }
 
@@ -869,14 +870,14 @@ td:first-child { text-align: left; }
   .stats-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:0;padding:0}
   .stat-item{padding:8px 10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
   .stat-item:nth-child(3n){border-right:none}
-  .s-label{font-size:7px;letter-spacing:.08em}
+  .s-label{font-size:10px;letter-spacing:.08em}
   .s-val{font-size:12px}
   .toolbar{flex-wrap:wrap;gap:6px;padding:8px 12px}
   .date-input{width:88px;font-size:10px;padding:5px 6px}
   .date-arrow{width:24px;height:24px;font-size:11px}
   .table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;padding:0 0 12px}
   .flow-table{min-width:1080px}
-  .flow-table thead th{padding:7px 8px;font-size:8px}
+  .flow-table thead th{padding:7px 8px;font-size:10px}
   .flow-table td{padding:7px 8px}
   .td-ticker{font-size:11px}
   .td-num{font-size:10px}
@@ -888,24 +889,24 @@ td:first-child { text-align: left; }
   .modal-header{flex-wrap:wrap;gap:6px;padding:8px 12px}
   .modal-ticker{font-size:14px}
   .modal-tfs{gap:3px}
-  .mtf-btn{padding:3px 8px;font-size:9px}
+  .mtf-btn{padding:3px 8px;font-size:10px}
   .overlay-toggles{gap:3px}
-  .ovl-btn{padding:2px 6px;font-size:8px}
+  .ovl-btn{padding:2px 6px;font-size:10px}
   .modal-scale-btns{gap:3px}
   .modal-chart-wrap{height:340px}
-  .m-hover-tooltip{font-size:8px;gap:5px;padding:3px 6px}
-  .mht-lbl{font-size:7px}
-  .mht-v{font-size:9px}
+  .m-hover-tooltip{font-size:10px;gap:5px;padding:3px 6px}
+  .mht-lbl{font-size:10px}
+  .mht-v{font-size:10px}
   .mht-sep{height:18px}
   .trx-toolbar{flex-direction:column;align-items:flex-start;gap:6px}
   .trx-grid{grid-template-columns:1fr}
   .trx-box{height:200px}
-  .trx-date-input{width:88px;font-size:9px}
+  .trx-date-input{width:88px;font-size:10px}
 }
 @media(max-width:420px){
   header{gap:4px;padding:6px 10px}
   .logo span{display:none}
-  .nav-btn{padding:3px 7px;font-size:9px}
+  .nav-btn{padding:3px 7px;font-size:10px}
   .stats-bar{grid-template-columns:repeat(2,1fr)}
   .stat-item{padding:6px 8px}
   .s-val{font-size:11px}
@@ -916,7 +917,7 @@ td:first-child { text-align: left; }
 .filter-btn{position:relative;background:var(--bg);border:1px solid var(--border2);color:var(--muted);border-radius:6px;padding:7px 12px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:4px;white-space:nowrap}
 .filter-btn:hover,.filter-btn.active{border-color:var(--accent);color:var(--accent)}
 .filter-btn.has-filter::before{content:'';position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--accent)}
-.filter-btn .arrow{font-size:7px;transition:transform .2s}
+.filter-btn .arrow{font-size:10px;transition:transform .2s}
 .filter-btn.open .arrow{transform:rotate(180deg)}
 .filter-menu{position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border2);border-radius:6px;padding:6px 0;min-width:140px;z-index:50;display:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}
 .filter-menu.show{display:block}
@@ -924,10 +925,10 @@ td:first-child { text-align: left; }
 .filter-opt:hover{background:rgba(255,255,255,.04)}
 .filter-opt input[type="checkbox"]{accent-color:var(--accent);width:13px;height:13px;cursor:pointer}
 .filter-opt .dot-sm{width:6px;height:6px;border-radius:50%;display:inline-block}
-.filter-count{background:var(--accent);color:var(--bg);border-radius:8px;padding:0 5px;font-size:8px;font-weight:700;margin-left:2px}
+.filter-count{background:var(--accent);color:var(--bg);border-radius:8px;padding:0 5px;font-size:10px;font-weight:700;margin-left:2px}
 
 /* Phase & Action badges */
-.phase-badge{font-family:'Space Mono',monospace;font-size:9px;padding:3px 10px;border-radius:20px;border:1px solid transparent;font-weight:700;letter-spacing:.04em;white-space:nowrap}
+.phase-badge{font-family:'Space Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;border:1px solid transparent;font-weight:700;letter-spacing:.04em;white-space:nowrap}
 .phase-badge.spring{background:rgba(0,232,162,.1);color:#00e8a2;border-color:rgba(0,232,162,.2)}
 .phase-badge.absorb{background:rgba(77,159,255,.1);color:#4d9fff;border-color:rgba(77,159,255,.2)}
 .phase-badge.sos{background:rgba(0,232,162,.15);color:#00e8a2;border-color:rgba(0,232,162,.25)}
@@ -942,6 +943,7 @@ td:first-child { text-align: left; }
 </style>
 </head>
 <body>
+<a href="#main" class="skip-link">Skip to main content</a>
 
 <!-- HEADER -->
 <header>
@@ -957,8 +959,10 @@ td:first-child { text-align: left; }
   </div>
   <a href="/backtest" class="info-btn" title="Backtest Leaderboard" aria-label="Backtest Leaderboard"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></a>
   <a href="/hub" class="info-btn" title="Kembali ke Hub" aria-label="Kembali ke Hub"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z"/></svg></a>
-  <button class="info-btn pulse" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
+  <button class="info-btn pulse" onclick="openInfoModal()" title="Panduan membaca data (tekan ?)" aria-label="Panduan membaca data">?</button>
 </header>
+
+<main id="main">
 
 <!-- STATS BAR -->
 <div class="stats-bar" id="statsBar">
@@ -1013,11 +1017,11 @@ td:first-child { text-align: left; }
   <div class="filter-dropdown" id="filterDropdown">
     <button class="filter-btn" onclick="toggleDropdown('filter')">FILTER <span class="arrow">▼</span><span class="filter-count" id="filterCount" style="display:none"></span></button>
     <div class="filter-menu" id="filterMenu">
-      <div style="padding:4px 12px 6px;font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:4px">ACTION</div>
+      <div style="padding:4px 12px 6px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);margin-bottom:4px">ACTION</div>
       <label class="filter-opt"><input type="checkbox" data-group="action" value="BUY" checked onchange="applyFilter()"><span style="font-size:11px">🚀</span>BUY</label>
       <label class="filter-opt"><input type="checkbox" data-group="action" value="HOLD" checked onchange="applyFilter()"><span style="font-size:11px">⌛</span>HOLD</label>
       <label class="filter-opt"><input type="checkbox" data-group="action" value="SELL" checked onchange="applyFilter()"><span style="font-size:11px">⚠️</span>SELL</label>
-      <div style="padding:6px 12px 6px;font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:4px 0">PHASE</div>
+      <div style="padding:6px 12px 6px;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:4px 0">PHASE</div>
       <label class="filter-opt"><input type="checkbox" data-group="phase" value="SPRING" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SPRING</label>
       <label class="filter-opt"><input type="checkbox" data-group="phase" value="ABSORB" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4d9fff"></span>ABSORB</label>
       <label class="filter-opt"><input type="checkbox" data-group="phase" value="SOS" checked onchange="applyFilter()"><span class="dot-sm" style="background:#00e8a2"></span>SOS</label>
@@ -1026,7 +1030,7 @@ td:first-child { text-align: left; }
       <label class="filter-opt"><input type="checkbox" data-group="phase" value="DISTRI" checked onchange="applyFilter()"><span class="dot-sm" style="background:#ff4d6a"></span>DISTRI</label>
       <label class="filter-opt"><input type="checkbox" data-group="phase" value="NEUTRAL" checked onchange="applyFilter()"><span class="dot-sm" style="background:#4a6070"></span>NEUTRAL</label>
       <div style="padding:6px 12px;border-top:1px solid var(--border);margin-top:4px">
-        <button onclick="clearFilters()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:9px;cursor:pointer;width:100%;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">CLEAR ALL</button>
+        <button onclick="clearFilters()" style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:4px;padding:3px 10px;font-family:'Space Mono',monospace;font-size:10px;cursor:pointer;width:100%;transition:all .15s" onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'">CLEAR ALL</button>
       </div>
     </div>
   </div>
@@ -1054,10 +1058,16 @@ td:first-child { text-align: left; }
       </tr>
     </thead>
     <tbody id="flowBody">
-      <tr class="state-row"><td colspan="13"><span class="spinner-inline"></span>Memuat data...</td></tr>
+      {% for _ in range(10) %}
+      <tr class="skeleton-row">
+        {% for _ in range(13) %}<td><span class="skeleton" style="width:60%;min-width:40px;"></span></td>{% endfor %}
+      </tr>
+      {% endfor %}
     </tbody>
   </table>
 </div>
+
+</main>
 
 <!-- MODAL -->
 <div class="modal-backdrop" id="modalBackdrop" onclick="handleBackdropClick(event)">
@@ -1662,7 +1672,16 @@ function renderTable() {
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="13">Tidak ada data untuk tanggal ini</td></tr>`;
+    tbody.innerHTML = `<tr class="state-row"><td colspan="13">
+      <div class="empty-state">
+        <span class="empty-state-ascii">┌─────────────────────────┐
+│   ·  ·  ·   NO DATA   ·  ·  ·   │
+└─────────────────────────┘</span>
+        <div style="margin-top:10px;">Tidak ada data untuk tanggal ini.</div>
+        <div style="margin-top:4px; font-size:10px; color:var(--border2);">Coba pilih tanggal lain atau reset filter.</div>
+        <button type="button" class="empty-state-cta" onclick="document.getElementById('tickerFilter').value='';document.getElementById('tickerFilter').dispatchEvent(new Event('input',{bubbles:true}));load();">↻ Reset &amp; muat ulang</button>
+      </div>
+    </td></tr>`;
     return;
   }
 
@@ -1676,7 +1695,9 @@ function renderTable() {
 
     const rsmColor = rsmToColor(r.rsm || 0);
     const gainCls  = r.gain_pct === null ? 'zero' : r.gain_pct > 0 ? 'pos' : r.gain_pct < 0 ? 'neg' : 'zero';
-    const gainStr  = r.gain_pct === null ? '—' : (r.gain_pct > 0 ? '+' : '') + r.gain_pct.toFixed(2) + '%';
+    const gainStr  = r.gain_pct === null ? '—' : (r.gain_pct > 0 ? '▲ +' : r.gain_pct < 0 ? '▼ ' : '◆ ') + r.gain_pct.toFixed(2) + '%';
+    const cmArrow  = (r.clean_money || 0) > 0 ? '▲ ' : (r.clean_money || 0) < 0 ? '▼ ' : '';
+    const nmfArrow = (r.net_mf || 0) > 0 ? '▲ ' : (r.net_mf || 0) < 0 ? '▼ ' : '';
     const rsmStr   = r.rsm !== null && r.rsm !== undefined ? r.rsm.toFixed(1) + '%' : '—';
 
     const vwapSm = r.vwap_sm ? r.vwap_sm.toLocaleString('id-ID') : '—';
@@ -1690,14 +1711,14 @@ function renderTable() {
       <td><span class="td-num" style="color:var(--muted)">${r.tx ? r.tx.toLocaleString('id-ID') : '—'}</span></td>
       <td class="cm-cell" title="Avg SM: ${vwapSm} | Avg BM: ${vwapBm}${r.atr_pct ? ' | ATR: '+atrStr : ''}">
         <div class="cm-bar ${barPos ? 'pos' : 'neg'}" style="${barStyle}"></div>
-        <span class="cm-val ${barPos ? 'pos' : 'neg'}">${fmtM(r.clean_money)}</span>
+        <span class="cm-val ${barPos ? 'pos' : 'neg'}">${cmArrow}${fmtM(Math.abs(r.clean_money || 0))}</span>
       </td>
       <td title="Avg buy price: ${vwapSm}"><span class="td-num sm">${fmtM(r.sm_val)}</span></td>
       <td title="Avg sell price: ${vwapBm}"><span class="td-num bm">${fmtM(r.bm_val)}</span></td>
       <td><span class="rsm-val" style="color:${rsmColor}">${rsmStr}</span></td>
       <td><span class="td-num mfp">${r.mf_plus  !== null ? fmtM(r.mf_plus)  : '—'}</span></td>
       <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
-      <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? fmtM(r.net_mf) : '—'}</span></td>
+      <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? nmfArrow + fmtM(Math.abs(r.net_mf)) : '—'}</span></td>
       <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
       <td><span class="phase-badge ${r.phase ? r.phase.toLowerCase() : ''}">${r.phase || '—'}</span></td>
       <td><span class="action-badge ${r.action ? r.action.toLowerCase() : ''}" title="SRI:${r.sri!=null?r.sri:'-'} MES:${r.mes!=null?r.mes:'-'} RPR:${r.rpr!=null?r.rpr:'-'} VxGap:${r.volx_gap!=null?r.volx_gap+'%':'-'}">${r.action==='BUY'?'🚀 BUY':r.action==='SELL'?'⚠️ SELL':r.action==='HOLD'?'⌛ HOLD':'—'}</span></td>
@@ -1714,12 +1735,23 @@ function rsmToColor(rsm) {
 }
 
 function showLoading() {
-  document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="13"><span class="spinner-inline"></span>Memuat data...</td></tr>`;
+  // Skeleton rows — mimic final layout so layout doesn't jump when data arrives
+  const skelCell = `<td><span class="skeleton" style="width:60%;min-width:40px;"></span></td>`;
+  const skelRow  = `<tr class="skeleton-row">${skelCell.repeat(13)}</tr>`;
+  document.getElementById('flowBody').innerHTML = skelRow.repeat(10);
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="13">⚠ ${msg}</td></tr>`;
+    `<tr class="state-row"><td colspan="13">
+      <div class="empty-state">
+        <span class="empty-state-ascii">┌─────────────────────────┐
+│  ⚠   CONNECTION  LOST   ⚠  │
+└─────────────────────────┘</span>
+        <div style="margin-top:10px; color:var(--danger);">${msg}</div>
+        <div style="margin-top:4px; font-size:10px; color:var(--border2);">Periksa koneksi atau ulangi beberapa saat lagi.</div>
+        <button type="button" class="empty-state-cta" onclick="load()">↻ Coba lagi</button>
+      </div>
+    </td></tr>`;
 }
 
 // ── MODAL ─────────────────────────────────────────────────────────────
@@ -1883,9 +1915,9 @@ async function loadTickerFitness(ticker) {
     const bc = d.best_combo;
     if (bc) {
       document.getElementById('fitBestCombo').innerHTML =
-        `<span class="phase-badge ${bc.entry.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.entry}</span>` +
-        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:9px;padding:2px 6px">${bc.exit}</span>` +
-        `<span style="font-size:9px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% win · ${bc.trades} trades</span>`;
+        `<span class="phase-badge ${bc.entry.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bc.entry}</span>` +
+        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bc.exit}</span>` +
+        `<span style="font-size:10px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% win · ${bc.trades} trades</span>`;
     } else {
       document.getElementById('fitBestCombo').textContent = '—';
     }
@@ -1921,8 +1953,8 @@ async function loadTickerFitness(ticker) {
         const eCls = (t.entry_phase || '').toLowerCase();
         const xCls = (t.exit_phase || '').toLowerCase();
         return `<tr>
-          <td style="text-align:left"><span class="phase-badge ${eCls}" style="font-size:8px;padding:1px 5px">${t.entry_phase||'—'}</span> ${t.entry_date||''}</td>
-          <td style="text-align:left"><span class="phase-badge ${xCls}" style="font-size:8px;padding:1px 5px">${t.exit_phase||'—'}</span> ${t.exit_date||''}</td>
+          <td style="text-align:left"><span class="phase-badge ${eCls}" style="font-size:10px;padding:1px 5px">${t.entry_phase||'—'}</span> ${t.entry_date||''}</td>
+          <td style="text-align:left"><span class="phase-badge ${xCls}" style="font-size:10px;padding:1px 5px">${t.exit_phase||'—'}</span> ${t.exit_date||''}</td>
           <td>${t.entry_price ? t.entry_price.toLocaleString('id-ID') : '—'}</td>
           <td>${t.exit_price ? t.exit_price.toLocaleString('id-ID') : '—'}</td>
           <td style="color:var(--muted)">${t.duration}d</td>
@@ -2417,5 +2449,6 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
   </div>
 </div>
 
+<script src="/static/shortcuts.js" defer></script>
 </body>
 </html>

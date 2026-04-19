@@ -6,6 +6,7 @@
 <title>Zenith — Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/tokens.css">
 <style>
 :root{--bg:#080c10;--surface:#0e1318;--surface2:#121920;--border:#1a2230;--border2:#243040;--accent:#00e8a2;--accent2:#4d9fff;--danger:#ff4d6a;--text:#c8d8e8;--muted:#bfcbd4;--up:#00e8a2;--down:#ff4d6a}
 *{box-sizing:border-box;margin:0;padding:0;scrollbar-width:thin;scrollbar-color:var(--border2) transparent}
@@ -29,9 +30,9 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;font-family:'Space Mono',monospace}
 .ihsg-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:1px;font-family:'Space Mono',monospace}
-.ihsg-label{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ihsg-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .ihsg-price{font-size:13px;font-weight:700;color:var(--text)}
-.ihsg-gain{font-size:9px;font-weight:700}
+.ihsg-gain{font-size:10px;font-weight:700}
 
 .info-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:50%;width:28px;height:28px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-decoration:none;position:relative}
 .info-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 8px rgba(0,232,162,.25)}
@@ -52,7 +53,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 /* ── HERO ── */
 .hero{text-align:center;padding:44px 24px 8px;position:relative}
 .hero::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:280px;height:1px;background:linear-gradient(90deg,transparent,rgba(0,232,162,.4),transparent)}
-.hero-eyebrow{font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:10px}
+.hero-eyebrow{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:10px}
 .hero-eyebrow::before,.hero-eyebrow::after{content:'';width:24px;height:1px;background:var(--border2)}
 .hero-logo{font-family:'Space Mono',monospace;font-size:36px;font-weight:700;letter-spacing:.35em;color:var(--accent);line-height:1}
 .hero-tag{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin-top:10px}
@@ -62,7 +63,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .stats-row-inner{display:flex;align-items:stretch;background:var(--surface);border:1px solid var(--border);border-radius:8px;overflow:hidden}
 .sr-item{display:flex;flex-direction:column;gap:3px;padding:10px 24px;align-items:center}
 .sr-sep{width:1px;background:var(--border);align-self:stretch}
-.sr-label{font-family:'Space Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.sr-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
 .sr-val{font-family:'Space Mono',monospace;font-size:14px;font-weight:700}
 
 /* ── CARDS ── */
@@ -139,7 +140,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
   .hero{padding:28px 16px 0}
   .hero-logo{font-size:26px;letter-spacing:.22em}
   .hero-tag{font-size:9px;letter-spacing:.14em}
-  .hero-eyebrow{font-size:8px;letter-spacing:.18em;margin-bottom:10px}
+  .hero-eyebrow{font-size:10px;letter-spacing:.18em;margin-bottom:10px}
   .stats-row{padding:14px 16px}
   .sr-item{padding:8px 14px}
   .sr-val{font-size:12px}
@@ -154,20 +155,22 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
   .hero-logo{font-size:22px}
   .stats-row{padding:10px 14px}
   .sr-item{padding:6px 10px}
-  .sr-label{font-size:7px}
+  .sr-label{font-size:10px}
   .sr-val{font-size:11px}
   .cards{padding:10px;gap:10px}
   .card{padding:14px;gap:8px}
   .card-title{font-size:12px}
-  .card-sub{font-size:9px}
+  .card-sub{font-size:10px}
   .card-desc{font-size:10px}
   .footer{font-size:9px;padding:14px}
 }
 </style>
 </head>
 <body>
-<button class="info-btn pulse floating-help" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
+<a href="#main" class="skip-link">Skip to main content</a>
+<button class="info-btn pulse floating-help" onclick="openInfoModal()" title="Panduan membaca data (tekan ?)" aria-label="Panduan membaca data">?</button>
 
+<main id="main">
 <div class="hero">
   <div class="hero-eyebrow">Smart Money Analysis</div>
   <div class="hero-logo">ZENITH</div>
@@ -215,7 +218,9 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
   </a>
 </div>
 
-<div class="footer">zenith project v1.0 | by machiavellia</div>
+</main>
+<div class="footer">zenith project v1.0 | by machiavellia · <span class="kbd">?</span> help · <span class="kbd">H</span> hub</div>
+<script src="/static/shortcuts.js" defer></script>
 
 <script>
 function fmtM(v){if(v===null||v===undefined)return'—';const a=Math.abs(v),s=v<0?'-':'';if(a>=1000)return s+(a/1000).toFixed(1)+'B';if(a>=1)return s+a.toFixed(1)+'M';if(a>0)return s+(a*1000).toFixed(0)+'K';return'0'}

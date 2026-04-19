@@ -30,7 +30,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .nav-btn{background:none;border:1px solid transparent;color:var(--muted);border-radius:4px;padding:4px 12px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
 .nav-btn:hover{color:var(--accent)}
 .nav-btn.active{background:var(--surface);border-color:rgba(0,232,162,.25);color:var(--accent)}
-.header-tag{margin-left:auto;font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.header-tag{margin-left:auto;font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
 .info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:28px;height:28px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-decoration:none}
 .info-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 8px rgba(0,232,162,.2)}
 .info-btn svg{width:13px;height:13px}
@@ -46,7 +46,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .card-sub{font-size:10px;color:var(--muted);font-family:'Space Mono',monospace;letter-spacing:.04em}
 .card-row{display:flex;flex-direction:column;gap:8px;padding-top:12px;border-top:1px solid var(--border)}
 .card-row:first-child{border-top:none;padding-top:0}
-.row-label{font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
+.row-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.12em;text-transform:uppercase}
 
 /* ── BUTTONS ── */
 .btn{position:relative;overflow:hidden;background:var(--accent);color:var(--bg);border:none;border-radius:6px;padding:9px 18px;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:opacity .15s;text-transform:uppercase}
@@ -90,7 +90,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .stat-box.down{border-left-color:var(--down)}
 .stat-box.sm{border-left-color:var(--accent2)}
 .stat-box.bm{border-left-color:#ff8c42}
-.stat-label{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.stat-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
 .stat-val{font-family:'Space Mono',monospace;font-size:12px;font-weight:700;color:var(--text)}
 .stat-val.up{color:var(--up)}.stat-val.down{color:var(--down)}.stat-val.sm{color:var(--accent2)}.stat-val.bm{color:#ff8c42}
 .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:6px}
@@ -117,21 +117,23 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
   .btn-row{flex-wrap:wrap;gap:6px}
   .mascot-wrap{bottom:8px;right:10px}
   .mascot-img{width:64px}
-  .mascot-bubble{font-size:9px;max-width:150px;padding:6px 10px}
+  .mascot-bubble{font-size:10px;max-width:150px;padding:6px 10px}
 }
 @media(max-width:420px){
   .content{padding:10px;gap:10px}
   .card-body{padding:12px;gap:10px}
   .stat-grid{grid-template-columns:1fr}
   .mascot-img{width:50px}
-  .mascot-bubble{max-width:120px;font-size:8px}
+  .mascot-bubble{max-width:120px;font-size:10px}
   .btn{padding:8px 14px;font-size:10px}
   .file-label{font-size:10px;padding:7px 10px}
   .num-input{width:60px;font-size:11px;padding:6px 8px}
 }
 </style>
+  <link rel="stylesheet" href="/static/tokens.css">
 </head>
 <body>
+<a href="#main" class="skip-link">Skip to main content</a>
 <header>
   <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH</a>
   <div class="nav-group">
@@ -143,6 +145,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
   <a href="/backtest" class="info-btn" title="Backtest Leaderboard" aria-label="Backtest Leaderboard"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></a>
   <a href="/hub" class="info-btn" title="Kembali ke Hub" aria-label="Kembali ke Hub"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z"/></svg></a>
 </header>
+<main id="main">
 
 <div class="content">
   <!-- DATABASE -->
@@ -505,5 +508,7 @@ let statusInterval;
 function startPolling(){statusInterval=setInterval(()=>{if(!document.hidden){refreshStatus();loadAnalytics()}},5000)}
 document.addEventListener('DOMContentLoaded',()=>{refreshStatus();loadAnalytics();startPolling()});
 </script>
+<script src="/static/shortcuts.js" defer></script>
+</main>
 </body>
 </html>
