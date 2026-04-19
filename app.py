@@ -639,15 +639,30 @@ def flow():
             for ar in a_rows:
                 analytics_map[ar["ticker"]] = dict(ar)
 
+        # ── Build data dict from eod_summary rows ────────────────────────
+        data = {}
+        for row in rows:
+            t = row["ticker"]
+            data[t] = {
+                "sm_val":  row["sm_val"]  or 0,
+                "bm_val":  row["bm_val"]  or 0,
+                "tx":      row["tx"]      or 0,
+                "tx_sm":   row["tx_sm"]   or 0,
+                "tx_bm":   row["tx_bm"]   or 0,
+                "mf_plus": row["mf_plus"],
+                "mf_minus":row["mf_minus"],
+                "net_mf":  None,
+            }
+            d = data[t]
+            if d["mf_plus"] is not None or d["mf_minus"] is not None:
+                d["net_mf"] = round((d["mf_plus"] or 0) - (d["mf_minus"] or 0), 2)
+
         # ── Gain% from daily_price table (no Yahoo per-request) ──────────
-        # Extend date window backward so prev-trading-day close is available
         price_window_from = (parse_date(date_from) - timedelta(days=12)).strftime("%d-%m-%Y")
 
-        # Tickers we care about = everything in data + sector/kompas members (added later)
-        # We'll do a broad fetch: all tickers for this date window from daily_price
         price_rows = conn.execute(
-            f"SELECT ticker, date, close_price FROM daily_price "
-            f"WHERE date >= ? AND date <= ? AND close_price IS NOT NULL",
+            "SELECT ticker, date, close_price FROM daily_price "
+            "WHERE date >= ? AND date <= ? AND close_price IS NOT NULL",
             [price_window_from, date_to],
         ).fetchall()
 
@@ -656,31 +671,13 @@ def flow():
             price_map.setdefault(pr[0], {})[pr[1]] = pr[2]
 
         gains_map = {}
-        for t in list(data.keys()):
+        for t in data:
             gain, price = _gain_from_prices(t, date_from, date_to, price_map)
             if price is not None:
                 gains_map[t] = {"gain": gain, "price": price}
 
     except Exception as e:
         return _server_error(e)
-
-    # Build data dict
-    data = {}
-    for row in rows:
-        t = row["ticker"]
-        data[t] = {
-            "sm_val": row["sm_val"] or 0,
-            "bm_val": row["bm_val"] or 0,
-            "tx": row["tx"] or 0,
-            "tx_sm": row["tx_sm"] or 0,
-            "tx_bm": row["tx_bm"] or 0,
-            "mf_plus": row["mf_plus"],
-            "mf_minus": row["mf_minus"],
-            "net_mf": None,
-        }
-        d = data[t]
-        if d["mf_plus"] is not None or d["mf_minus"] is not None:
-            d["net_mf"] = round((d["mf_plus"] or 0) - (d["mf_minus"] or 0), 2)
 
     if not data:
         # If sector param given, still need to return sector tickers with gains
