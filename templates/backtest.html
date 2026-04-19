@@ -54,16 +54,16 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .ctrl-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
 .summary{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
 .sum-item{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:12px 18px;display:flex;flex-direction:column;gap:3px;min-width:120px}
-.sum-label{font-family:'Space Mono',monospace;font-size:8px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.sum-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
 .sum-val{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--text)}
 .sum-val.accent{color:var(--accent)}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:auto}
 table{width:100%;border-collapse:collapse}
-thead th{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:2px solid var(--border2);padding:10px 10px;font-family:'Space Mono',monospace;font-size:9px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-align:right;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
+thead th{position:sticky;top:0;z-index:10;background:var(--bg);border-bottom:2px solid var(--border2);padding:10px 10px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-align:right;text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none;transition:color .15s}
 thead th:first-child,thead th:nth-child(2),thead th:nth-child(3){text-align:left}
 thead th:hover{color:var(--text)}
 thead th.sorted{color:var(--accent)}
-thead th .si{margin-left:3px;font-size:7px}
+thead th .si{margin-left:3px;font-size:10px}
 tbody tr{border-bottom:1px solid var(--border);transition:background .1s;cursor:pointer}
 tbody tr:hover{background:rgba(0,232,162,.025)}
 td{padding:9px 10px;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -100,7 +100,7 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 .modal-close:hover{color:var(--text)}
 .modal-body{overflow:auto;padding:0}
 .detail-table{width:100%;border-collapse:collapse}
-.detail-table th{position:sticky;top:0;background:var(--surface2);padding:8px 12px;font-family:'Space Mono',monospace;font-size:8px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap}
+.detail-table th{position:sticky;top:0;background:var(--surface2);padding:8px 12px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;text-align:right;white-space:nowrap}
 .detail-table th:first-child{text-align:left}
 .detail-table td{padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap}
 .detail-table td:first-child{text-align:left;color:var(--accent2);font-weight:700}
@@ -108,10 +108,12 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 .detail-summary{padding:12px 20px;border-top:1px solid var(--border);font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);display:flex;gap:20px;flex-wrap:wrap}
 .detail-summary span{color:var(--text)}
 
-@media(max-width:768px){header{gap:8px;padding:10px 12px}.nav-btn{padding:3px 10px;font-size:9px}.content{padding:14px}.summary{gap:8px}.sum-item{padding:10px 14px;min-width:100px}.sum-val{font-size:15px}table{min-width:800px}.modal{max-width:100%;max-height:90vh;border-radius:8px}.detail-table{min-width:600px}}
+@media(max-width:768px){header{gap:8px;padding:10px 12px}.nav-btn{padding:3px 10px;font-size:10px}.content{padding:14px}.summary{gap:8px}.sum-item{padding:10px 14px;min-width:100px}.sum-val{font-size:15px}table{min-width:800px}.modal{max-width:100%;max-height:90vh;border-radius:8px}.detail-table{min-width:600px}}
 </style>
+  <link rel="stylesheet" href="/static/tokens.css">
 </head>
 <body>
+<a href="#main" class="skip-link">Skip to main content</a>
 <header>
   <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH</a>
   <div class="nav-group">
@@ -123,6 +125,7 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
   <span class="info-btn active" title="Halaman Backtest" aria-label="Halaman Backtest" style="cursor:default"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></span>
   <a href="/hub" class="info-btn" title="Kembali ke Hub" aria-label="Kembali ke Hub"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z"/></svg></a>
 </header>
+<main id="main">
 <div class="content">
   <div class="controls">
     <span class="ctrl-label">Lookback</span>
@@ -373,5 +376,7 @@ function closeModal() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 document.addEventListener('DOMContentLoaded', loadResults);
 </script>
+<script src="/static/shortcuts.js" defer></script>
+</main>
 </body>
 </html>

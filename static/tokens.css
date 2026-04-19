@@ -1,0 +1,305 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ZENITH — DESIGN TOKENS + A11Y UTILITIES
+   Source of truth — linked from every template.
+   Override rules are by specificity, not by later declarations.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root{
+  /* ── Color Palette ────────────────────────────────────────── */
+  --bg:          #080c10;
+  --surface:     #0e1318;
+  --surface2:    #121920;
+  --border:      #1a2230;
+  --border2:     #243040;
+  --accent:      #00e8a2;
+  --accent2:     #4d9fff;
+  --danger:      #ff4d6a;
+  --warn:        #ff8c42;
+  --text:        #c8d8e8;
+  --muted:       #bfcbd4;
+  --up:          #00e8a2;
+  --down:        #ff4d6a;
+
+  /* ── Typography ───────────────────────────────────────────── */
+  --font-mono:   'Space Mono', ui-monospace, monospace;
+  --font-sans:   'DM Sans', system-ui, sans-serif;
+
+  /* ── Radii ────────────────────────────────────────────────── */
+  --radius-sm:   4px;   /* chip, badge */
+  --radius:      6px;   /* input, button, nav-btn */
+  --radius-md:   8px;   /* stats-bar, small card */
+  --radius-lg:   10px;  /* large card */
+  --radius-full: 50%;   /* icon button */
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  --t-fast:      .15s;
+  --t-med:       .25s;
+  --ease-out:    cubic-bezier(.4,0,.2,1);
+
+  /* ── Focus Ring ───────────────────────────────────────────── */
+  --focus-ring:  0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — FOCUS VISIBILITY
+   Only shows on keyboard nav (not mouse click) via :focus-visible.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+*:focus-visible{
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.nav-btn:focus-visible,
+.info-btn:focus-visible{
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  box-shadow: 0 0 12px rgba(0,232,162,.3);
+}
+
+/* Remove default browser focus on mouse click */
+*:focus:not(:focus-visible){
+  outline: none;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — SKIP LINK
+   Hidden by default, visible on focus for keyboard users.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.skip-link{
+  position: absolute;
+  top: -40px;
+  left: 8px;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--bg);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  text-decoration: none;
+  border-radius: var(--radius);
+  transition: top var(--t-fast) var(--ease-out);
+}
+.skip-link:focus{ top: 8px; }
+
+.sr-only{
+  position: absolute !important;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0);
+  white-space: nowrap; border: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — TOUCH TARGETS
+   On touch devices (pointer: coarse), every interactive element ≥ 40px.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (pointer: coarse){
+  .info-btn{
+    min-width: 40px !important;
+    min-height: 40px !important;
+    width: 40px !important;
+    height: 40px !important;
+  }
+  .nav-btn{
+    min-height: 40px !important;
+    padding: 8px 14px !important;
+  }
+  .form-btn,
+  button.primary,
+  .td-ticker,
+  a.nav-btn{
+    min-height: 40px;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ACCESSIBILITY — REDUCED MOTION
+   Kills pulse, shimmer, hover transforms for users with vestibular issues.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@media (prefers-reduced-motion: reduce){
+  *,
+  *::before,
+  *::after{
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .info-btn.pulse,
+  .logo-dot,
+  .card:hover,
+  .spotlight-target::after{
+    animation: none !important;
+    transform: none !important;
+    box-shadow: 0 0 8px var(--accent) !important;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   COLORBLIND-SAFE SEMANTICS
+   Utility classes that pair color with a directional arrow.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.dir-up::before{ content: "▲ "; font-size: .8em; }
+.dir-down::before{ content: "▼ "; font-size: .8em; }
+.dir-flat::before{ content: "◆ "; font-size: .8em; opacity: .6; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   SKELETON LOADER
+   Replaces "—" placeholders during first paint with shimmer bars.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.skeleton{
+  display: inline-block;
+  height: 1em;
+  min-width: 3em;
+  background: linear-gradient(
+    90deg,
+    var(--surface) 0%,
+    var(--border2) 50%,
+    var(--surface) 100%
+  );
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s linear infinite;
+  border-radius: var(--radius-sm);
+  vertical-align: middle;
+}
+.skeleton.wide{ min-width: 5em; }
+.skeleton.narrow{ min-width: 2em; }
+
+/* Skeleton table row — disable hover/cursor so user knows it's a placeholder */
+.skeleton-row{ cursor: default !important; pointer-events: none; }
+.skeleton-row:hover{ background: transparent !important; }
+.skeleton-row td{ vertical-align: middle; }
+
+@keyframes skel-shimmer{
+  0%{ background-position: 200% 0; }
+  100%{ background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce){
+  .skeleton{ animation: none; background: var(--border); }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   EMPTY STATE — ASCII FRAME
+   Used inside tables and panels. Preserves terminal aesthetic.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.empty-state{
+  text-align: center;
+  padding: 32px 16px;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+.empty-state-ascii{
+  display: block;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--border2);
+  white-space: pre;
+  margin-bottom: 10px;
+  letter-spacing: .08em;
+}
+.empty-state-msg{
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+.empty-state-cta{
+  display: inline-block;
+  margin-top: 12px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px solid var(--border2);
+  border-radius: var(--radius);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.empty-state-cta:hover{
+  border-color: var(--accent);
+  box-shadow: 0 0 8px rgba(0,232,162,.25);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STATUS BANNER — small info strip above tables
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.status-banner{
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(0,232,162,.04);
+  border: 1px solid rgba(0,232,162,.15);
+  border-radius: var(--radius);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: .04em;
+  color: var(--muted);
+  margin: 6px 16px 0;
+}
+.status-banner .dot{
+  display: inline-block;
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent);
+  flex-shrink: 0;
+}
+.status-banner .last-update{ color: var(--text); }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   CLEAR BUTTON for text inputs (ticker filter etc)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.input-clear{
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  transition: color var(--t-fast);
+  display: none; /* shown via JS when input has value */
+}
+.input-clear:hover{ color: var(--danger); }
+.input-clear.visible{ display: inline-flex; align-items: center; }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   KEYBOARD-SHORTCUT HINT CHIP
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.kbd{
+  display: inline-block;
+  padding: 1px 6px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: .04em;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.5;
+}
