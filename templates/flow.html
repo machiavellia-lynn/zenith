@@ -1731,10 +1731,8 @@ function renderTable() {
       <td><span class="action-badge ${r.action ? r.action.toLowerCase() : ''}" title="SRI:${r.sri!=null?r.sri:'-'} MES:${r.mes!=null?r.mes:'-'} RPR:${r.rpr!=null?r.rpr:'-'} VxGap:${r.volx_gap!=null?r.volx_gap+'%':'-'}">${r.action==='BUY'?'🚀 BUY':r.action==='SELL'?'⚠️ SELL':r.action==='HOLD'?'⌛ HOLD':'—'}</span></td>
     </tr>`;
   }).join('');
-  if (window.ZenithAnim) {
-    ZenithAnim.staggerRows(tbody);
-    ZenithAnim.cmBars(tbody);
-  }
+  // cmBars only — rows already have CSS rowIn animation with per-row delay
+  if (window.ZenithAnim) ZenithAnim.cmBars(tbody);
 }
 
 function rsmToColor(rsm) {
@@ -1806,6 +1804,8 @@ function openModal(ticker) {
   document.getElementById('modalBackdrop').classList.add('open');
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
+      // Animate metric panel after modal is visible (not before)
+      if (window.ZenithAnim) ZenithAnim.metricsPanel(document.getElementById('modalMetricsPanel'));
       initModalChart();
       loadModalChart();
       loadTransactions();
@@ -1816,7 +1816,6 @@ function openModal(ticker) {
 
 function populateMetricsPanel(r) {
   const fmtNum = (v, suffix='') => v !== null && v !== undefined ? v.toLocaleString('id-ID') + suffix : '—';
-  if (window.ZenithAnim) ZenithAnim.metricsPanel(document.getElementById('modalMetricsPanel'));
   const fmtPct = (v) => v !== null && v !== undefined ? v.toFixed(2) + '%' : '—';
   const fmtDec = (v) => v !== null && v !== undefined ? v.toFixed(2) : '—';
   const close = r && (r.price || r.price_close);
