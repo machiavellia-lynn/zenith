@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request, session, redirect
+from flask import Flask, jsonify, render_template, request, session, redirect, make_response
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
@@ -6,13 +6,205 @@ import sqlite3
 import os
 import time
 import threading
+import hmac
+import secrets as _secrets
+import logging
 
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET", "zenith-secret-key")
+
+# ═══════════════════════════════════════════════════════════════════════
+# SECURITY CONFIG
+# ═══════════════════════════════════════════════════════════════════════
+
+def _require_env(name: str, min_len: int = 0) -> str:
+    """Fail loudly if a critical env var is missing or too short."""
+    val = os.environ.get(name, "")
+    if not val or (min_len and len(val) < min_len):
+        hint = f"(min length {min_len})" if min_len else ""
+        # Fallback for local dev only — generate a random key so dev still works,
+        # but log a warning so user knows production must set this.
+        if os.environ.get("FLASK_ENV") == "development" or os.environ.get("ZENITH_DEV") == "1":
+            logging.warning(f"[SECURITY] {name} not set {hint}; using ephemeral dev value.")
+            return _secrets.token_urlsafe(48)
+        raise RuntimeError(
+            f"[SECURITY] Environment variable {name} is required {hint}. "
+            f"Set it in Railway / your host dashboard before starting the app."
+        )
+    return val
+
+# Flask session signing key — must be set in production, min 32 chars.
+app.secret_key = _require_env("FLASK_SECRET", min_len=32)
+
+# Shared secret for admin endpoints (upload-db, pull-db, scraper-*, etc.)
+ADMIN_SECRET       = _require_env("ADMIN_SECRET",       min_len=16) if os.environ.get("ADMIN_SECRET")       else _require_env("UPLOAD_SECRET", min_len=16)
+# Separate, rarely-used kill-switch secret for /admin/darurat-nuke-db.
+NUKE_SECRET        = os.environ.get("NUKE_SECRET", "") or ADMIN_SECRET
+# Login password.
+ACCESS_KEY         = _require_env("ACCESS_KEY",         min_len=8)
+# Optional external resources (DB snapshot download, Telegram, etc.)
+DROPBOX_DB_URL     = os.environ.get("DROPBOX_DB_URL", "")
+
+# Session cookies: HTTPS only, no JS access, CSRF-resistant.
+app.config.update(
+    SESSION_COOKIE_SECURE   = os.environ.get("COOKIE_INSECURE", "0") != "1",  # set COOKIE_INSECURE=1 for local http dev
+    SESSION_COOKIE_HTTPONLY = True,
+    SESSION_COOKIE_SAMESITE = "Lax",   # Strict would break /logout redirect from emails etc.
+    PERMANENT_SESSION_LIFETIME = timedelta(hours=12),
+    MAX_CONTENT_LENGTH      = 300 * 1024 * 1024,  # 300 MB cap for admin uploads
+)
+
+
+def _safe_eq(a: str, b: str) -> bool:
+    """Constant-time string compare — resists timing sidechannel."""
+    try:
+        return hmac.compare_digest(str(a or ""), str(b or ""))
+    except Exception:
+        return False
+
+
+def _check_admin_secret() -> bool:
+    """True if the request carries the correct admin secret (query or header)."""
+    candidate = request.args.get("secret", "") or request.headers.get("X-Admin-Secret", "")
+    return _safe_eq(candidate, ADMIN_SECRET)
+
+
+def _deny():
+    return "❌ Access denied", 403
+
 
 def is_authed():
     return session.get("authed") is True
+
+
+# ── Security headers ────────────────────────────────────────────────────
+@app.after_request
+def _set_security_headers(resp):
+    # Content Security Policy — inline styles/scripts allowed (templates use them
+    # heavily). External resources: Google Fonts + lightweight-charts CDN + Pikaday.
+    resp.headers.setdefault(
+        "Content-Security-Policy",
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
+        "font-src 'self' https://fonts.gstatic.com data:; "
+        "img-src 'self' data:; "
+        "connect-src 'self' https://query1.finance.yahoo.com; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'"
+    )
+    resp.headers.setdefault("X-Frame-Options",        "DENY")
+    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
+    resp.headers.setdefault("Referrer-Policy",        "strict-origin-when-cross-origin")
+    resp.headers.setdefault("Permissions-Policy",     "camera=(), microphone=(), geolocation=()")
+    # HSTS only over TLS.
+    if request.is_secure:
+        resp.headers.setdefault(
+            "Strict-Transport-Security",
+            "max-age=31536000; includeSubDomains"
+        )
+    return resp
+
+
+# ── Login rate limiter (in-memory, per-IP) ──────────────────────────────
+_login_attempts_lock = threading.Lock()
+_login_attempts      = {}   # ip → [(ts, ok?), ...]
+LOGIN_WINDOW_SEC     = 300  # 5-minute window
+LOGIN_MAX_FAIL       = 8    # lock after 8 fails in window
+
+
+def _login_allowed(ip: str) -> bool:
+    now = time.time()
+    with _login_attempts_lock:
+        bucket = [(t, ok) for (t, ok) in _login_attempts.get(ip, []) if now - t < LOGIN_WINDOW_SEC]
+        fails = sum(1 for (_t, ok) in bucket if not ok)
+        _login_attempts[ip] = bucket
+        return fails < LOGIN_MAX_FAIL
+
+
+def _login_record(ip: str, ok: bool):
+    now = time.time()
+    with _login_attempts_lock:
+        _login_attempts.setdefault(ip, []).append((now, ok))
+        # Purge stale entries + prune dict from going unbounded.
+        if len(_login_attempts) > 2048:
+            cutoff = now - LOGIN_WINDOW_SEC
+            for k in list(_login_attempts.keys()):
+                pruned = [t for t in _login_attempts[k] if t[0] > cutoff]
+                if pruned:
+                    _login_attempts[k] = pruned
+                else:
+                    _login_attempts.pop(k, None)
+
+
+def _client_ip() -> str:
+    # Respect Railway / reverse proxy forwarded-for.
+    xff = request.headers.get("X-Forwarded-For", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.remote_addr or "0.0.0.0"
+
+
+# ── Generic error response (don't leak internals) ────────────────────────
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+_err_log = logging.getLogger("zenith.err")
+
+
+def _server_error(exc: Exception, where: str = "", status: int = 500):
+    """Log full exception server-side, return sanitized JSON to client."""
+    try:
+        _err_log.exception(f"[{where or request.path}] {exc}")
+    except Exception:
+        pass
+    return jsonify({"error": "Internal error. Please try again."}), status
+
+
+@app.errorhandler(404)
+def _404(_e):
+    # Don't leak registered routes.
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Not found"}), 404
+    return "404 — not found", 404
+
+
+@app.errorhandler(500)
+def _500(e):
+    try:
+        _err_log.exception(f"[500] {request.path}: {e}")
+    except Exception:
+        pass
+    if request.path.startswith("/api/"):
+        return jsonify({"error": "Internal error."}), 500
+    return "500 — internal error", 500
+
+
+@app.errorhandler(413)
+def _413(_e):
+    return jsonify({"error": "Payload too large."}), 413
+
+
+# ── API query-range guardrails ──────────────────────────────────────────
+MAX_QUERY_RANGE_DAYS = int(os.environ.get("MAX_QUERY_RANGE_DAYS", "180"))
+
+
+def _clamp_date_range(date_from: str, date_to: str):
+    """
+    Return (df_str, dt_str, err) where err is None if the range is valid.
+    Caps range to MAX_QUERY_RANGE_DAYS to prevent full-table scans.
+    Expects DD-MM-YYYY inputs (matching the rest of the app).
+    """
+    try:
+        df = datetime.strptime(date_from, "%d-%m-%Y").date()
+        dt = datetime.strptime(date_to,   "%d-%m-%Y").date()
+    except Exception:
+        return None, None, "Invalid date format (expected DD-MM-YYYY)."
+    if dt < df:
+        df, dt = dt, df  # tolerate swapped inputs
+    span = (dt - df).days + 1
+    if span > MAX_QUERY_RANGE_DAYS:
+        return None, None, f"Date range too large (max {MAX_QUERY_RANGE_DAYS} days)."
+    return df.strftime("%d-%m-%Y"), dt.strftime("%d-%m-%Y"), None
 
 # ── Config ──────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("DB_PATH", r"C:\Users\rabim\Downloads\zenith_project\zenith.db")
@@ -269,14 +461,23 @@ def login():
     if is_authed():
         return redirect("/hub")
     if request.method == "POST":
+        ip = _client_ip()
+        if not _login_allowed(ip):
+            # Generic message — don't reveal lockout state to attacker details.
+            return jsonify({"ok": False, "error": "Too many attempts. Try again later."}), 429
         key = request.form.get("key", "").strip()
-        if key == os.environ.get("ACCESS_KEY", "zenith2026"):
+        ok = _safe_eq(key, ACCESS_KEY)
+        _login_record(ip, ok)
+        if ok:
+            # Rotate session on login → defeats fixation.
+            session.clear()
             session["authed"] = True
+            session.permanent = True
             return jsonify({"ok": True})
         return jsonify({"ok": False})
     return render_template("login.html")
 
-@app.route("/logout")
+@app.route("/logout", methods=["GET", "POST"])
 def logout():
     session.clear()
     return redirect("/")
@@ -369,11 +570,9 @@ def flow():
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
 
-    try:
-        parse_date(date_from)
-        parse_date(date_to)
-    except ValueError:
-        return jsonify({"error": "Format tanggal salah, gunakan DD-MM-YYYY"}), 400
+    date_from, date_to, err = _clamp_date_range(date_from, date_to)
+    if err:
+        return jsonify({"error": err}), 400
 
     # Buat list tanggal valid dalam rentang (DD-MM-YYYY)
     try:
@@ -663,14 +862,14 @@ def transactions():
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
 
-    if not ticker:
-        return jsonify({"error": "ticker required"}), 400
+    # Ticker whitelist — alphanumeric 1-6 chars only. Prevents abuse even
+    # though queries are already parameterized.
+    if not ticker or not ticker.isalnum() or len(ticker) > 6:
+        return jsonify({"error": "invalid ticker"}), 400
 
-    try:
-        parse_date(date_from)
-        parse_date(date_to)
-    except ValueError:
-        return jsonify({"error": "Format tanggal salah"}), 400
+    date_from, date_to, err = _clamp_date_range(date_from, date_to)
+    if err:
+        return jsonify({"error": err}), 400
 
     d0 = parse_date(date_from)
     d1 = parse_date(date_to)
@@ -696,7 +895,7 @@ def transactions():
                 time
         """, params).fetchall()
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
     sm_rows, bm_rows = [], []
     for r in rows:
@@ -746,7 +945,7 @@ def overlay():
                 time
         """, [ticker]).fetchall()
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
     if not rows:
         return jsonify({"ticker": ticker, "tf": tf, "points": []})
@@ -903,20 +1102,18 @@ def ohlcv():
         })
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/admin")
 def admin_page():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Access denied", 403
     return render_template("admin.html")
 
 
 @app.route("/admin/upload-db", methods=["GET", "POST"])
 def upload_db():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.method == "GET":
         return """
         <!DOCTYPE html><html><head>
@@ -971,7 +1168,7 @@ def upload_db():
         """
     # POST — secret dari query param, body = raw bytes file
     secret = request.args.get("secret", "")
-    if secret != SECRET:
+    if not _safe_eq(secret, ADMIN_SECRET):
         return "❌ Secret salah", 403
     os.makedirs("/data", exist_ok=True)
     tmp_path = "/data/zenith.db.tmp"
@@ -1014,7 +1211,7 @@ def upload_db():
             "price": int(round(float(price_raw))) if price_raw else None,
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 
@@ -1026,11 +1223,9 @@ def sector_api():
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
 
-    try:
-        parse_date(date_from)
-        parse_date(date_to)
-    except ValueError:
-        return jsonify({"error": "Format tanggal salah"}), 400
+    date_from, date_to, err = _clamp_date_range(date_from, date_to)
+    if err:
+        return jsonify({"error": err}), 400
 
     d0 = parse_date(date_from)
     d1 = parse_date(date_to)
@@ -1066,7 +1261,7 @@ def sector_api():
             GROUP BY ticker, channel
         """, all_tickers + dates).fetchall()
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
     # Per-ticker data
     tdata = {}
@@ -1123,14 +1318,15 @@ def sector_api():
 
 @app.route("/admin/pull-db")
 def pull_db():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
 
     with _flow_cache_lock:
         _flow_cache.clear()
 
-    DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
+    DROPBOX_URL = DROPBOX_DB_URL
+    if not DROPBOX_URL:
+        return "❌ DROPBOX_DB_URL not configured on server", 500
 
     try:
         os.makedirs("/data", exist_ok=True)
@@ -1156,7 +1352,6 @@ def pull_db():
 
 @app.route("/admin/upload-session", methods=["GET", "POST"])
 def upload_session():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.method == "GET":
         return """
         <!DOCTYPE html><html><head>
@@ -1195,7 +1390,7 @@ def upload_session():
         </body></html>
         """
     secret = request.args.get("secret", "")
-    if secret != SECRET:
+    if not _safe_eq(secret, ADMIN_SECRET):
         return "❌ Secret salah", 403
     os.makedirs("/data", exist_ok=True)
     dst_path = os.environ.get("TG_SESSION_PATH", "/data/session_joker") + ".session"
@@ -1229,8 +1424,15 @@ ensure_indexes()
 SCRAPER_ENABLED = os.environ.get("SCRAPER_ENABLED", "1") == "1"
 _scraper_thread = None
 if SCRAPER_ENABLED:
-    # Ensure only ONE gunicorn worker starts the scraper
-    _lock_path = "/tmp/zenith_scraper.lock"
+    # Ensure only ONE gunicorn worker starts the scraper.
+    # Prefer a private data dir over shared /tmp; fall back if unwritable.
+    _lock_dir  = os.environ.get("SCRAPER_LOCK_DIR", "/data")
+    try:
+        os.makedirs(_lock_dir, exist_ok=True)
+    except Exception:
+        _lock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".run")
+        os.makedirs(_lock_dir, exist_ok=True)
+    _lock_path = os.path.join(_lock_dir, "zenith_scraper.lock")
     try:
         # Clean stale lock from previous deploy
         if os.path.exists(_lock_path):
@@ -1242,7 +1444,8 @@ if SCRAPER_ENABLED:
             except (ValueError, ProcessLookupError, PermissionError):
                 os.remove(_lock_path)  # stale — remove
 
-        _lock_fd = os.open(_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        # O_EXCL prevents races; mode 0600 keeps PID private to this user.
+        _lock_fd = os.open(_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         os.write(_lock_fd, str(os.getpid()).encode())
         os.close(_lock_fd)
         from scraper_daily import start_scraper_thread
@@ -1250,13 +1453,12 @@ if SCRAPER_ENABLED:
     except FileExistsError:
         pass  # Another worker already owns the scraper
     except Exception as e:
-        print(f"⚠️ Scraper failed to start: {e}")
+        _err_log.warning(f"Scraper failed to start: {e}")
 
 
 @app.route("/admin/scraper-status")
 def scraper_status():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     alive = _scraper_thread is not None and _scraper_thread.is_alive()
     try:
@@ -1295,8 +1497,7 @@ def scraper_status():
 @app.route("/admin/scraper-weekly")
 def trigger_weekly():
     """Queue a weekly backfill request — runs in scraper thread, not HTTP thread."""
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "7"))
     try:
@@ -1313,8 +1514,7 @@ def trigger_weekly():
 @app.route("/admin/rebuild-summary")
 def rebuild_summary():
     """Queue summary rebuild — runs in scraper thread."""
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     try:
         from scraper_daily import request_rebuild
@@ -1376,7 +1576,7 @@ def api_backtest():
             return jsonify(result)
         return jsonify({"error": f"No backtest for {days} days. Click RUN BACKTEST.", "total_trades": 0})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 _bt_thread = None
@@ -1466,13 +1666,12 @@ def api_ticker_fitness():
             "trades": trades_sorted,
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        return _server_error(e)
 
 
 @app.route("/admin/trigger-backtest")
 def trigger_backtest():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "30"))
     try:
@@ -1486,8 +1685,7 @@ def trigger_backtest():
 @app.route("/admin/backfill-prices")
 def admin_backfill_prices():
     """Bulk-fetch Yahoo close prices for last N days into eod_summary."""
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "30"))
     try:
@@ -1502,8 +1700,7 @@ def admin_backfill_prices():
 @app.route("/admin/download-db")
 def download_db():
     """Download zenith.db for local backup."""
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     from flask import send_file
     if not os.path.exists(DB_PATH):
@@ -1549,8 +1746,7 @@ def track_analytics():
 
 @app.route("/admin/analytics")
 def analytics():
-    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
-    if request.args.get("secret", "") != SECRET:
+    if not _check_admin_secret():
         return "❌ Secret salah", 403
     with _analytics_lock:
         active_count = len(_analytics["active_sessions"])
@@ -1568,7 +1764,7 @@ def analytics():
 @app.route('/admin/darurat-nuke-db')
 def darurat_nuke_db():
     secret = request.args.get('secret')
-    if secret != 'machiavellia198161':  # Sesuaikan dengan secret-mu
+    if not _safe_eq(secret, NUKE_SECRET):  # separate env-only kill switch
         return "Akses ditolak", 403
         
     logs = []
@@ -1590,7 +1786,7 @@ def darurat_nuke_db():
 @app.route('/admin/fix-schema')
 def fix_schema():
     secret = request.args.get('secret')
-    if secret != 'zenith2026':
+    if not _safe_eq(secret, ADMIN_SECRET):
         return "Akses ditolak", 403
     
     import sqlite3
@@ -1692,7 +1888,7 @@ def fix_schema():
 @app.route('/admin/reinit-channels')
 def reinit_channels():
     secret = request.args.get('secret')
-    if secret != 'zenith2026':
+    if not _safe_eq(secret, ADMIN_SECRET):
         return "Unauthorized", 403
     
     # Kita panggil fungsi internal scraper untuk refresh dialogs
@@ -1711,8 +1907,10 @@ def reinit_channels():
 def check_logs_raw():
     # Endpoint pembantu untuk melihat apakah ada pesan yang masuk tapi "dibuang"
     # karena tidak cocok dengan kategori manapun
+    if not _check_admin_secret():
+        return _deny()
     import sqlite3
-    conn = sqlite3.connect('/data/zenith.db')
+    conn = sqlite3.connect(os.environ.get("DB_PATH", "/data/zenith.db"))
     c = conn.cursor()
     res = c.execute("SELECT channel, COUNT(*) FROM raw_messages GROUP BY channel").fetchall()
     res_mf = c.execute("SELECT channel, COUNT(*) FROM raw_mf_messages GROUP BY channel").fetchall()
@@ -1723,7 +1921,7 @@ def check_logs_raw():
 def direct_backfill():
     secret = request.args.get('secret')
     days = request.args.get('days', type=int, default=3)
-    if secret != 'zenith2026':
+    if not _safe_eq(secret, ADMIN_SECRET):
         return "Unauthorized", 403
         
     try:
@@ -1742,4 +1940,4 @@ def direct_backfill():
         return f"❌ Gagal memicu direct backfill: {e}"
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=os.environ.get("FLASK_DEBUG","0")=="1", port=int(os.environ.get("PORT","5000")))
