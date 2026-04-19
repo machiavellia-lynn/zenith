@@ -35,6 +35,28 @@ SECTORS = {
     "Transport": ['AKSI', 'SMDR', 'PPGL', 'ASSA', 'TAXI', 'TRJA', 'BIRD', 'TMAS', 'HAIS', 'BLTA', 'WEHA', 'HATM', 'CMPP', 'HELI', 'RCCC', 'GIAA', 'TRUK', 'ELPI', 'IMJS', 'TNCA', 'LAJU', 'LRNA', 'BPTR', 'GTRA', 'MIRA', 'SAPX', 'MPXL', 'MITI', 'DEAL', 'KLAS', 'NELY', 'JAYA', 'LOPI', 'SAFE', 'KJEN', 'BLOG', 'SDMU', 'PURA', 'PJHB'],
 }
 
+# ── Kompas100 Index Constituents (IDX) ──────────────────────────────────
+KOMPAS100 = [
+    'ACES','ADMR','ADRO','AKRA','AMMN','AMRT','ANTM','ARTO','ASII','AUTO',
+    'AVIA','BBCA','BBNI','BBRI','BBTN','BBYB','BDKR','BFIN','BIPI','BMRI',
+    'BMTR','BRIS','BRPT','BSDE','BUKA','BUMI','CPIN','CTRA','CUAN','DEWA',
+    'DOID','DSNG','ELSA','ENRG','ERAA','ESSA','EXCL','GGRM','GOTO','HEAL',
+    'HMSP','HRUM','ICBP','INCO','INDF','INDY','INKP','INTP','ISAT','ITMG',
+    'JPFA','JSMR','KLBF','LPPF','MAPA','MAPI','MBMA','MDKA','MEDC','MIKA',
+    'MNCN','MTEL','MYOR','NCKL','NISP','PANI','PGAS','PGEO','PNLF','PTBA',
+    'PTRO','PTPP','PWON','RAJA','SCMA','SIDO','SMGR','SMRA','SRTG','SSIA',
+    'TAPG','TBIG','TKIM','TLKM','TOBA','TOWR','TPIA','ULTJ','UNTR','UNVR',
+    'WIFI','WIKA','WSKT','AADI','BREN','CDIA','DSSA','EMTK','JSPT','KPIG',
+]
+
+# ── Kompas100 ESG subset (Indonesian issuers disclosing ESG programs) ──
+KOMPAS100_ESG = {
+    'ADRO','AKRA','ANTM','ASII','BBCA','BBNI','BBRI','BBTN','BMRI','BRIS',
+    'BRPT','BSDE','CPIN','EXCL','ICBP','INDF','INKP','INTP','ISAT','JPFA',
+    'JSMR','KLBF','MDKA','MEDC','MYOR','PGAS','PTBA','SIDO','SMGR','TKIM',
+    'TLKM','TOWR','TPIA','UNTR','UNVR',
+}
+
 YF_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept": "application/json",
@@ -276,6 +298,11 @@ def sector_page():
     if not is_authed(): return redirect("/")
     return render_template("sector.html")
 
+@app.route("/kompas100")
+def kompas100_page():
+    if not is_authed(): return redirect("/")
+    return render_template("kompas100.html")
+
 
 # ── API: IHSG price & gain ──────────────────────────────────────────────
 _ihsg_cache = {"data": None, "ts": 0}
@@ -483,6 +510,15 @@ def flow():
             if t not in data:
                 data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0, "_nodata": True}
 
+    # Optional Kompas100 filter: always return ALL 100 constituents (even if no signal data)
+    kompas_flag = request.args.get("kompas100", "").strip()
+    kompas_members = None
+    if kompas_flag in ("1", "true", "yes"):
+        kompas_members = set(KOMPAS100)
+        for t in kompas_members:
+            if t not in data:
+                data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0, "_nodata": True}
+
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
@@ -499,6 +535,9 @@ def flow():
     for t, d in data.items():
         # If sector filter, skip tickers not in sector
         if sector_members and t not in sector_members:
+            continue
+        # If kompas100 filter, skip tickers not in Kompas100
+        if kompas_members and t not in kompas_members:
             continue
         nodata = d.get("_nodata", False)
         sm  = round(d["sm_val"], 2) if not nodata else None
@@ -587,6 +626,7 @@ def flow():
             "atr_pct":     atr_pct,
             "vwap_sm":     round(vwap_sm, 2) if vwap_sm else None,
             "vwap_bm":     round(vwap_bm, 2) if vwap_bm else None,
+            "esg":         (t in KOMPAS100_ESG) if kompas_members else None,
         })
 
     # Sort default: clean_money desc (nulls last)
