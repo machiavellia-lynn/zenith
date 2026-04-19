@@ -475,6 +475,7 @@ async function doLoad(){
   const input=document.getElementById('tickerInput').value.trim().toUpperCase();
   if(!input)return;currentTicker=input;
   showLoading('Mengambil data...');
+  if(window.ZenithAnim) ZenithAnim.topbarStart();
   // Always recreate chart for clean state
   if(chart){chart.remove();chart=null;candleSeries=null;volumeSeries=null;ovlSeriesCM=null;ovlSeriesSM=null;ovlSeriesBM=null}
   initChart();
@@ -488,10 +489,11 @@ async function doLoad(){
     volumeSeries.setData(candles.map(c=>({time:c.time,value:c.volume,color:c.close>=c.open?'#00e8a240':'#ff4d6a40'})));
     requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(candles.length>INIT_CANDLES)chart.timeScale().setVisibleLogicalRange({from:candles.length-INIT_CANDLES,to:candles.length-1});else chart.timeScale().fitContent()})});
     applyAutoScale(isAutoScale);hideLoading();
+    if(window.ZenithAnim) ZenithAnim.topbarDone();
     if(data.name)document.getElementById('tName').textContent=data.name;
     if(data.price){document.getElementById('tPrice').textContent=data.price.toLocaleString('id-ID')}
     loadOverlayData(candles);loadTransactions();loadMetrics();loadChartFitness();
-  }catch(err){showError(err.message)}
+  }catch(err){if(window.ZenithAnim) ZenithAnim.topbarDone();showError(err.message)}
 }
 
 async function loadMetrics(){
@@ -499,6 +501,7 @@ async function loadMetrics(){
     const res=await fetch(`/api/flow?date_from=${getDateStr()}&date_to=${getDateStr()}`);
     const d=await res.json();if(!d.tickers)return;
     const r=d.tickers.find(t=>t.ticker===currentTicker);if(!r)return;
+    if(window.ZenithAnim){const mp=document.getElementById('metricsPanel');if(mp) ZenithAnim.metricsPanel(mp);}
     const fmt=(v)=>v!=null?v.toLocaleString('id-ID'):'—';
     const fmtD=(v)=>v!=null?v.toFixed(2):'—';
     // Phase + Action
@@ -542,6 +545,7 @@ async function loadChartFitness(){
     const d=await res.json();
     if(!d||d.total_trades===0||d.error){card.style.display='none';return}
     card.style.display='block';
+    if(window.ZenithAnim) ZenithAnim.fitnessCardIn(card);
     document.getElementById('fitPeriod').textContent=d.period?`${d.period} (${d.days}d)`:'—';
     const bc=d.best_combo;
     if(bc){
@@ -559,7 +563,8 @@ async function loadChartFitness(){
     const bestW=bc?Math.round(bc.trades*(bc.win_rate/100)):d.wins;
     const bestL=bc?(bc.trades-bestW):d.losses;
     document.getElementById('fitWRLabel').textContent='Win Rate '+bestWR+'%';
-    document.getElementById('fitWRFill').style.width=bestWR+'%';
+    if(window.ZenithAnim) ZenithAnim.animateWinRate(document.getElementById('fitWRFill'),bestWR);
+    else document.getElementById('fitWRFill').style.width=bestWR+'%';
     document.getElementById('fitWins').textContent=bestW+'W';
     document.getElementById('fitLosses').textContent=bestL+'L';
     const tbody=document.getElementById('fitTradesBody');
@@ -729,6 +734,7 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
   </div>
 </div>
 
+<script src="/static/animations.js" defer></script>
 <script src="/static/shortcuts.js" defer></script>
 </body>
 </html>

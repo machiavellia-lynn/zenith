@@ -1596,11 +1596,13 @@ async function loadSectors(){
   if(!df||!dt)return;
   document.getElementById('sectorContainer').innerHTML='<div class="loading-wrap"><div class="spinner"></div> Memuat data sektor...</div>';
   document.getElementById('rowCount').textContent='';
+  if(window.ZenithAnim) ZenithAnim.topbarStart();
   try{const res=await fetch(`/api/sector?date_from=${displayToApi(df)}&date_to=${displayToApi(dt)}&skip_gains=1`);const data=await res.json();if(data.error)throw new Error(data.error);
     _sectorData=data.sectors||[];renderSectors(_sectorData);
+    if(window.ZenithAnim) ZenithAnim.topbarDone();
     // Async: fetch gains per sector and update cards
     loadSectorGainsAsync(displayToApi(df),displayToApi(dt),data.sectors||[]);
-  }catch(e){document.getElementById('sectorContainer').innerHTML=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
+  }catch(e){if(window.ZenithAnim) ZenithAnim.topbarDone();document.getElementById('sectorContainer').innerHTML=`<div class="loading-wrap" style="color:var(--danger)">⚠ ${e.message}</div>`}
 }
 async function loadSectorGainsAsync(dateFrom,dateTo,sectors){
   // Fetch gains for each sector's members in parallel
@@ -1818,6 +1820,7 @@ function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdr
   </div>
 </div>
 
+<script src="/static/animations.js" defer></script>
 <script src="/static/shortcuts.js" defer></script>
 </body>
 </html>
