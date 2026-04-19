@@ -1897,6 +1897,15 @@ def api_backtest():
 _bt_thread = None
 _bt_status = {"status": "idle"}
 
+# ── Strategy Fitness: fixed anchor date ───────────────────────────────
+# Backtest always starts from this calendar date (not a rolling window).
+# Grows by 1 day every day so the fitness window is anchored, not rolling.
+FITNESS_START_DATE = datetime(2026, 3, 16)
+
+def _fitness_days() -> int:
+    """Calendar days from FITNESS_START_DATE to today (≥ 1)."""
+    return max(1, (datetime.now() - FITNESS_START_DATE).days)
+
 
 @app.route("/api/ticker-fitness")
 def api_ticker_fitness():
@@ -1908,9 +1917,11 @@ def api_ticker_fitness():
 
     try:
         conn = get_db()
-        # Prefer 90-day cache, fallback to any
+        # Prefer cache matching the fixed start-date window, fallback to any
+        fd = _fitness_days()
         row = conn.execute(
-            "SELECT results FROM backtest_cache WHERE days=90 ORDER BY computed_at DESC LIMIT 1"
+            "SELECT results FROM backtest_cache WHERE days=? ORDER BY computed_at DESC LIMIT 1",
+            [fd],
         ).fetchone()
         if not row:
             row = conn.execute(

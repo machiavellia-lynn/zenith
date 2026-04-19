@@ -1048,11 +1048,14 @@ async def scraper_main():
                     log.error(f"❌ Second pass error: {e}")
                     second_pass_done = True
 
-            # Run backtest after second pass
+            # Run backtest after second pass — anchored to fixed start date
+            # (16 Mar 2026) so the fitness window grows each day, not rolling.
             if (not backtest_done_today
                     and second_pass_done):
                 try:
-                    run_backtest(conn, days=30)
+                    _fitness_anchor = datetime(2026, 3, 16)
+                    _bt_days = max(1, (datetime.now() - _fitness_anchor).days)
+                    run_backtest(conn, days=_bt_days)
                     backtest_done_today = True
                 except Exception as e:
                     log.error(f"❌ Nightly backtest error: {e}")
