@@ -303,3 +303,111 @@ textarea:focus-visible,
   text-align: center;
   line-height: 1.5;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ANIMATION SYSTEM
+   Used by static/animations.js — classes applied/removed via JS.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Page fade-in ──────────────────────────────────────────────────── */
+@keyframes z-page-in{
+  from{ opacity:0; transform:translateY(4px); }
+  to  { opacity:1; transform:translateY(0);   }
+}
+body{ animation: z-page-in .3s ease-out both; }
+
+/* ── Top progress bar ──────────────────────────────────────────────── */
+.z-topbar{
+  position: fixed; top: 0; left: 0; z-index: 9999;
+  height: 2px; width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent));
+  background-size: 200% 100%;
+  animation: z-topbar-shimmer 1.5s linear infinite;
+  box-shadow: 0 0 6px rgba(0,232,162,.6);
+  pointer-events: none;
+}
+@keyframes z-topbar-shimmer{
+  0%  { background-position: 200% 0; }
+  100%{ background-position:-200% 0; }
+}
+
+/* ── Staggered skeleton row entry ──────────────────────────────────── */
+@keyframes z-skel-in{
+  from{ opacity:0; transform:translateX(-10px); }
+  to  { opacity:1; transform:translateX(0);     }
+}
+.skeleton-row{ animation: z-skel-in .32s ease-out both; }
+.skeleton-row:nth-child(1) { animation-delay:  0ms; }
+.skeleton-row:nth-child(2) { animation-delay: 28ms; }
+.skeleton-row:nth-child(3) { animation-delay: 56ms; }
+.skeleton-row:nth-child(4) { animation-delay: 84ms; }
+.skeleton-row:nth-child(5) { animation-delay:112ms; }
+.skeleton-row:nth-child(6) { animation-delay:140ms; }
+.skeleton-row:nth-child(7) { animation-delay:168ms; }
+.skeleton-row:nth-child(8) { animation-delay:196ms; }
+.skeleton-row:nth-child(9) { animation-delay:224ms; }
+.skeleton-row:nth-child(10){ animation-delay:252ms; }
+
+/* ── Data row reveal ───────────────────────────────────────────────── */
+@keyframes z-row-in{
+  from{ opacity:0; transform:translateY(5px); }
+  to  { opacity:1; transform:translateY(0);   }
+}
+.z-row-in{ animation: z-row-in .22s ease-out both; }
+
+/* ── Stats value flash on update ───────────────────────────────────── */
+@keyframes z-val-flash{
+  0%  { opacity:.3; transform:scale(.93); }
+  55% { opacity:1;  transform:scale(1.05); }
+  100%{ opacity:1;  transform:scale(1);   }
+}
+.z-val-flash{ animation: z-val-flash .38s cubic-bezier(.2,0,.2,1); }
+
+/* ── Metric panel item pop ─────────────────────────────────────────── */
+@keyframes z-metric-pop{
+  from{ opacity:0; transform:scale(.88) translateY(8px); }
+  to  { opacity:1; transform:scale(1)   translateY(0);   }
+}
+.z-metric-pop{ animation: z-metric-pop .32s cubic-bezier(.2,0,.2,1.3) both; }
+
+/* ── Summary card pop (backtest) ───────────────────────────────────── */
+@keyframes z-sumval-in{
+  from{ opacity:0; transform:translateY(10px) scale(.92); }
+  to  { opacity:1; transform:translateY(0)    scale(1);   }
+}
+.z-sumval-in{ animation: z-sumval-in .45s cubic-bezier(.2,0,.2,1.2) both; }
+
+/* ── Fitness card entrance ─────────────────────────────────────────── */
+@keyframes z-card-in{
+  from{ opacity:0; transform:translateY(6px); }
+  to  { opacity:1; transform:translateY(0);   }
+}
+.z-card-in{ animation: z-card-in .3s ease-out both; }
+
+/* ── Win-rate bar smooth transition ────────────────────────────────── */
+/* Override any inline transition set by the page */
+.fit-wr-fill{ transition: width .9s cubic-bezier(.2,0,.2,1) !important; }
+
+/* ── Button press feedback ─────────────────────────────────────────── */
+button:active:not(:disabled),
+a.nav-btn:active,
+.load-btn:active,
+.empty-state-cta:active{
+  transform: scale(.96);
+  transition: transform .08s ease !important;
+}
+
+/* ── Table row hover — left accent glow ────────────────────────────── */
+tbody tr{ transition: background .12s, box-shadow .12s; }
+tbody tr:hover{ box-shadow: inset 2px 0 0 rgba(0,232,162,.5); }
+
+/* ── Reduced motion overrides ──────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce){
+  body, .skeleton-row, .z-row-in, .z-val-flash,
+  .z-metric-pop, .z-sumval-in, .z-card-in{
+    animation: none !important;
+  }
+  .z-topbar{ display: none !important; }
+  .fit-wr-fill{ transition: none !important; }
+  button:active{ transform: none !important; }
+}

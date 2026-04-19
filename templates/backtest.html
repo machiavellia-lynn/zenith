@@ -247,20 +247,24 @@ function pollBacktest() {
 async function loadResults() {
   const days = document.getElementById('daysInput').value || 30;
   setStatus('Loading...', true);
+  if (window.ZenithAnim) ZenithAnim.topbarStart();
   try {
     const r = await fetch(`/api/backtest?days=${days}`);
     const d = await r.json();
     if (d.leaderboard) {
       lbData = d.leaderboard;
-      document.getElementById('summaryWrap').style.display = 'flex';
+      const sw = document.getElementById('summaryWrap');
+      sw.style.display = 'flex';
       document.getElementById('sumTrades').textContent = (d.total_trades || 0).toLocaleString();
       document.getElementById('sumTickers').textContent = d.tickers_tested || '—';
       document.getElementById('sumPeriod').textContent = d.date_range || '—';
       document.getElementById('sumComputed').textContent = d.computed_at || '—';
+      if (window.ZenithAnim) ZenithAnim.sumValPop(sw);
       renderLeaderboard();
+      if (window.ZenithAnim) ZenithAnim.topbarDone();
       setStatus(`${d.total_trades} trades, ${d.leaderboard.length} combos`);
-    } else { setStatus(d.error || 'No data'); }
-  } catch(e) { setStatus('Load error'); }
+    } else { if (window.ZenithAnim) ZenithAnim.topbarDone(); setStatus(d.error || 'No data'); }
+  } catch(e) { if (window.ZenithAnim) ZenithAnim.topbarDone(); setStatus('Load error'); }
 }
 
 function sortLB(col) {
@@ -288,6 +292,7 @@ function renderLeaderboard() {
 
   tbody.innerHTML = rows.map((r, i) => {
     const medal = i < 3 ? `<span class="medal">${medals[i]}</span>` : `${i+1}`;
+    /* (row built below) */
     const eCls = r.entry ? r.entry.toLowerCase() : '';
     const xCls = r.exit ? r.exit.toLowerCase() : '';
     function vc(v) {
@@ -315,6 +320,7 @@ function renderLeaderboard() {
       ${pfCell(r.profit_factor)}
     </tr>`;
   }).join('');
+  if (window.ZenithAnim) ZenithAnim.staggerRows(tbody);
 
   document.querySelectorAll('thead th').forEach(th => {
     const col = th.onclick?.toString().match(/'(\w+)'/)?.[1];
@@ -376,6 +382,7 @@ function closeModal() {
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 document.addEventListener('DOMContentLoaded', loadResults);
 </script>
+<script src="/static/animations.js" defer></script>
 <script src="/static/shortcuts.js" defer></script>
 </main>
 </body>
