@@ -639,60 +639,30 @@ def flow():
             for ar in a_rows:
                 analytics_map[ar["ticker"]] = dict(ar)
 
-        # ── Gain% from stored price_close (no Yahoo per-request) ──
-        gains_map = {}  # ticker → {gain, price}
+        # ── Gain% from daily_price table (no Yahoo per-request) ──────────
+        # Extend date window backward so prev-trading-day close is available
+        price_window_from = (parse_date(date_from) - timedelta(days=12)).strftime("%d-%m-%Y")
 
-        is_single_day = (date_from == date_to)
+        # Tickers we care about = everything in data + sector/kompas members (added later)
+        # We'll do a broad fetch: all tickers for this date window from daily_price
+        price_rows = conn.execute(
+            f"SELECT ticker, date, close_price FROM daily_price "
+            f"WHERE date >= ? AND date <= ? AND close_price IS NOT NULL",
+            [price_window_from, date_to],
+        ).fetchall()
 
-        if not is_single_day:
-            # Multi-day range: compare latest vs day before range (from DB)
-            price_latest = {}
-            if latest_date:
-                for r in conn.execute(
-                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                    [latest_date]
-                ).fetchall():
-                    price_latest[r["ticker"]] = r["price_close"]
+        price_map = {}   # {ticker: {date: close_price}}
+        for pr in price_rows:
+            price_map.setdefault(pr[0], {})[pr[1]] = pr[2]
 
-            earliest_date_row = conn.execute(f"""
-                SELECT date FROM eod_summary WHERE date IN ({placeholders})
-                ORDER BY {_DATE_SORT} ASC LIMIT 1
-            """, dates).fetchone()
-            e_date = earliest_date_row["date"] if earliest_date_row else date_from
-            e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
-            prev_row = conn.execute(f"""
-                SELECT DISTINCT date FROM eod_summary
-                WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
-            """, [e_sortkey]).fetchone()
-
-            price_ref = {}
-            if prev_row:
-                for r in conn.execute(
-                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                    [prev_row["date"]]
-                ).fetchall():
-                    price_ref[r["ticker"]] = r["price_close"]
-
-            for t in set(list(price_latest.keys()) + list(price_ref.keys())):
-                p_now = price_latest.get(t)
-                p_ref = price_ref.get(t)
-                price = int(round(p_now)) if p_now else None
-                gain = None
-                if p_now and p_ref and p_ref > 0:
-                    gain = round((p_now - p_ref) / p_ref * 100, 2)
+        gains_map = {}
+        for t in list(data.keys()):
+            gain, price = _gain_from_prices(t, date_from, date_to, price_map)
+            if price is not None:
                 gains_map[t] = {"gain": gain, "price": price}
-        else:
-            # Single day: get price from DB but compute gain via Yahoo
-            # (DB prev_row can be weeks ago → wrong gain%)
-            if latest_date:
-                for r in conn.execute(
-                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
-                    [latest_date]
-                ).fetchall():
-                    gains_map[r["ticker"]] = {"gain": None, "price": int(round(r["price_close"]))}
 
     except Exception as e:
-        return jsonify({"error": f"DB error: {e}"}), 500
+        return _server_error(e)
 
     # Build data dict
     data = {}
@@ -738,12 +708,15 @@ def flow():
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Yahoo fallback for tickers without stored price
-    missing = [t for t in data if t not in gains_map or gains_map.get(t, {}).get("gain") is None]
-    if missing:
-        yahoo_gains = get_gains_batch(missing, date_from, date_to)
-        for t, g in yahoo_gains.items():
-            gains_map[t] = g
+    # Tickers with no price in daily_price → queue an on-demand fetch so
+    # next request (or refresh) will have the data.  Return gain=None now
+    # (frontend shows "—") rather than blocking the response with a Yahoo call.
+    missing_price = [t for t in data if t not in gains_map]
+    if missing_price:
+        try:
+            _price_queue.put_nowait(("on_demand", missing_price, date_from, date_to))
+        except _queue.Full:
+            pass  # queue full — will be fetched on next request
 
     gains = gains_map
 
@@ -1433,6 +1406,337 @@ def ensure_indexes():
         pass  # DB mungkin belum ada saat deploy pertama
 
 ensure_indexes()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# DAILY PRICE CACHE
+# Stores official closing prices from Yahoo Finance so /api/flow never needs
+# to call Yahoo per-request.
+#
+# Table: daily_price(ticker, date DD-MM-YYYY, close_price REAL)
+#
+# Sources / triggers:
+#   1. Deploy backfill  — 30 days back, runs once at startup (background)
+#   2. 16:30 WIB daily  — fetches today's closes for all active tickers
+#   3. On-demand        — when user requests dates missing from DB, queued fetch
+# ═══════════════════════════════════════════════════════════════════════════
+
+import queue as _queue
+
+_price_queue      = _queue.Queue()      # items: ("backfill30"|"eod"|"on_demand", ...)
+_price_fetch_lock = threading.Lock()    # serialize DB writes
+
+
+def _ensure_price_table():
+    try:
+        conn = get_db()
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS daily_price (
+                ticker      TEXT NOT NULL,
+                date        TEXT NOT NULL,   -- DD-MM-YYYY
+                close_price REAL,
+                PRIMARY KEY (ticker, date)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dp_date   ON daily_price(date)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_dp_ticker ON daily_price(ticker, date)"
+        )
+        conn.commit()
+    except Exception:
+        pass  # DB not ready yet — worker retries later
+
+
+def _yf_closes_for_ticker(ticker: str, date_from_s: str, date_to_s: str) -> dict:
+    """
+    Fetch daily close prices for one ticker over a calendar range.
+    Returns {DD-MM-YYYY: close_price} — includes days outside trading calendar
+    (caller filters).  date_from / date_to: DD-MM-YYYY.
+    """
+    symbol = f"{ticker}.JK"
+    try:
+        d0 = parse_date(date_from_s)
+        d1 = parse_date(date_to_s)
+        # Pad 10 days before so we always capture the prev-trading-day close
+        p1 = int(datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc).timestamp()) - 10 * 86400
+        p2 = int(datetime(d1.year, d1.month, d1.day, tzinfo=timezone.utc).timestamp()) + 2  * 86400
+        resp = requests.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+            headers=YF_HEADERS,
+            params={"interval": "1d", "period1": p1, "period2": p2,
+                    "includeAdjustedClose": "false"},
+            timeout=12,
+        )
+        data      = resp.json()
+        result    = data.get("chart", {}).get("result", [{}])[0]
+        tss       = result.get("timestamp", [])
+        closes    = result.get("indicators", {}).get("quote", [{}])[0].get("close", [])
+        out = {}
+        for ts, cl in zip(tss, closes):
+            if cl is None:
+                continue
+            # Use WIB (UTC+7) like the rest of the app
+            dt_wib = datetime.fromtimestamp(ts, tz=WIB)
+            out[dt_wib.strftime("%d-%m-%Y")] = round(cl, 2)
+        return out
+    except Exception:
+        return {}
+
+
+def _store_closes_bulk(batch: dict):
+    """Upsert {ticker: {date: close}} into daily_price."""
+    rows = [(t, d, c) for t, dates in batch.items() for d, c in dates.items() if c]
+    if not rows:
+        return
+    try:
+        with _price_fetch_lock:
+            conn = get_db()
+            conn.executemany(
+                "INSERT OR REPLACE INTO daily_price(ticker, date, close_price) VALUES (?,?,?)",
+                rows,
+            )
+            conn.commit()
+    except Exception as exc:
+        _err_log.warning(f"[price store] {exc}")
+
+
+def _prices_from_db(tickers: list, dates: list) -> dict:
+    """Return {ticker: {date: close_price}} from daily_price for the given tickers/dates."""
+    if not tickers or not dates:
+        return {}
+    try:
+        conn  = get_db()
+        ph_t  = ",".join("?" for _ in tickers)
+        ph_d  = ",".join("?" for _ in dates)
+        rows  = conn.execute(
+            f"SELECT ticker, date, close_price FROM daily_price "
+            f"WHERE ticker IN ({ph_t}) AND date IN ({ph_d}) AND close_price IS NOT NULL",
+            tickers + dates,
+        ).fetchall()
+        out = {}
+        for r in rows:
+            out.setdefault(r[0], {})[r[1]] = r[2]
+        return out
+    except Exception:
+        return {}
+
+
+def _missing_price_dates(tickers: list, dates: list) -> set:
+    """Return set of (ticker, date) pairs not yet in daily_price."""
+    if not tickers or not dates:
+        return set()
+    existing = _prices_from_db(tickers, dates)
+    missing  = set()
+    for t in tickers:
+        for d in dates:
+            if d not in existing.get(t, {}):
+                missing.add((t, d))
+    return missing
+
+
+def _gain_from_prices(ticker: str, date_from: str, date_to: str,
+                       price_map: dict) -> tuple:
+    """
+    Compute (gain_pct, close_price) for a ticker using the in-memory price_map
+    {ticker: {date: close}}.
+    gain_pct = (close_date_to - close_prev_of_date_from) / close_prev_of_date_from * 100
+    """
+    closes = price_map.get(ticker, {})
+    if not closes:
+        return None, None
+
+    # close at end of range
+    close_end = closes.get(date_to)
+    if close_end is None:
+        return None, None
+
+    # find previous trading day before date_from (look up to 10 calendar days back)
+    d0 = parse_date(date_from)
+    close_prev = None
+    for delta in range(1, 11):
+        prev_key = (d0 - timedelta(days=delta)).strftime("%d-%m-%Y")
+        if prev_key in closes:
+            close_prev = closes[prev_key]
+            break
+
+    if close_prev is None or close_prev == 0:
+        return None, int(round(close_end))
+
+    gain = round((close_end - close_prev) / close_prev * 100, 2)
+    return gain, int(round(close_end))
+
+
+# ── Background price-fetch worker ───────────────────────────────────────
+
+def _price_worker():
+    """
+    Single daemon thread — consumes jobs from _price_queue.
+    Job types:
+      ("backfill30",)                       → fill last 30 trading days
+      ("eod", date_str)                     → fetch today's closes after 16:30
+      ("on_demand", [tickers], df, dt)      → fill specific tickers/range
+    Also self-schedules the 16:30 EOD fetch by checking time each idle loop.
+    """
+    _ensure_price_table()
+    time.sleep(15)                          # let other startup threads settle
+
+    _price_queue.put(("backfill30",))       # always backfill on every deploy
+
+    last_eod_date = ""
+
+    while True:
+        # ── 16:30 WIB daily trigger ──────────────────────────────────────
+        now_wib = datetime.now(WIB)
+        today_s = now_wib.strftime("%d-%m-%Y")
+        if now_wib.hour == 16 and now_wib.minute >= 30 and last_eod_date != today_s:
+            last_eod_date = today_s
+            _price_queue.put(("eod", today_s))
+
+        # ── Consume one job (wait up to 60 s) ───────────────────────────
+        try:
+            job = _price_queue.get(timeout=60)
+        except _queue.Empty:
+            continue
+
+        try:
+            kind = job[0]
+            if kind == "backfill30":
+                _job_backfill30()
+            elif kind == "eod":
+                _job_eod(job[1])
+            elif kind == "on_demand":
+                _job_on_demand(job[1], job[2], job[3])
+        except Exception as exc:
+            _err_log.warning(f"[price worker] job={job[0]}: {exc}")
+        finally:
+            try:
+                _price_queue.task_done()
+            except Exception:
+                pass
+
+
+def _price_worker_tickers() -> list:
+    """All distinct tickers that ever appeared in eod_summary (active tickers)."""
+    try:
+        rows = get_db().execute("SELECT DISTINCT ticker FROM eod_summary").fetchall()
+        return [r[0] for r in rows]
+    except Exception:
+        # DB not ready — fall back to Kompas100 list so backfill isn't empty
+        return list(KOMPAS100)
+
+
+def _fetch_batch_parallel(tickers: list, date_from: str, date_to: str,
+                           max_workers: int = 5) -> dict:
+    """Fetch closes for multiple tickers in parallel. Returns {ticker: {date: close}}."""
+    result = {}
+    with ThreadPoolExecutor(max_workers=max_workers) as ex:
+        futs = {ex.submit(_yf_closes_for_ticker, t, date_from, date_to): t
+                for t in tickers}
+        for fut in as_completed(futs, timeout=120):
+            t = futs[fut]
+            try:
+                closes = fut.result()
+                if closes:
+                    result[t] = closes
+            except Exception:
+                pass
+            # Flush every 30 tickers to avoid holding too much in memory
+            if len(result) >= 30:
+                _store_closes_bulk(result)
+                result = {}
+    if result:
+        _store_closes_bulk(result)
+    return {}  # already persisted above
+
+
+def _job_backfill30():
+    today    = datetime.now(WIB)
+    date_to  = today.strftime("%d-%m-%Y")
+    date_from = (today - timedelta(days=37)).strftime("%d-%m-%Y")  # 37 covers 30 trading days
+
+    tickers = _price_worker_tickers()
+    if not tickers:
+        return
+
+    # Skip tickers already fully covered in daily_price for this window
+    # (to avoid re-fetching on hot restarts)
+    try:
+        conn = get_db()
+        covered = set(
+            r[0] for r in conn.execute(
+                "SELECT DISTINCT ticker FROM daily_price WHERE date = ?", [date_to]
+            ).fetchall()
+        )
+        to_fetch = [t for t in tickers if t not in covered]
+    except Exception:
+        to_fetch = tickers
+
+    if not to_fetch:
+        _err_log.info("[price backfill] already up-to-date, skipping")
+        return
+
+    _err_log.info(f"[price backfill] {len(to_fetch)} tickers × 30d starting…")
+    _fetch_batch_parallel(to_fetch, date_from, date_to, max_workers=5)
+    _err_log.info("[price backfill] done")
+
+
+def _job_eod(date_str: str):
+    tickers = _price_worker_tickers()
+    if not tickers:
+        return
+    date_from = (parse_date(date_str) - timedelta(days=5)).strftime("%d-%m-%Y")
+    _err_log.info(f"[price eod] fetching closes for {len(tickers)} tickers on {date_str}")
+    _fetch_batch_parallel(tickers, date_from, date_str, max_workers=5)
+    _err_log.info(f"[price eod] done for {date_str}")
+
+
+def _job_on_demand(tickers: list, date_from: str, date_to: str):
+    if not tickers:
+        return
+    # Extend window backward so prev-day close is always available
+    d0_ext = (parse_date(date_from) - timedelta(days=12)).strftime("%d-%m-%Y")
+    _err_log.info(f"[price on-demand] {len(tickers)} tickers {date_from}→{date_to}")
+    _fetch_batch_parallel(tickers, d0_ext, date_to, max_workers=5)
+    _err_log.info(f"[price on-demand] done")
+
+
+# Start the price worker once at module load (gunicorn multi-worker: only
+# the worker that owns the scraper lock should run it too; but since
+# price writes are idempotent INSERT OR REPLACE, running it in multiple
+# workers is harmless — just slightly redundant).
+_price_thread = threading.Thread(target=_price_worker, name="price-worker", daemon=True)
+_price_thread.start()
+
+
+# ── Admin: price cache status ────────────────────────────────────────────
+@app.route("/admin/price-status")
+def price_status():
+    if not _check_admin_secret():
+        return _deny()
+    try:
+        conn   = get_db()
+        total  = conn.execute("SELECT COUNT(*) FROM daily_price").fetchone()[0]
+        tcount = conn.execute("SELECT COUNT(DISTINCT ticker) FROM daily_price").fetchone()[0]
+        latest = conn.execute(
+            f"SELECT date FROM daily_price ORDER BY {_DATE_SORT} DESC LIMIT 1"
+        ).fetchone()
+        oldest = conn.execute(
+            f"SELECT date FROM daily_price ORDER BY {_DATE_SORT} ASC  LIMIT 1"
+        ).fetchone()
+        qsize  = _price_queue.qsize()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    return jsonify({
+        "rows":          total,
+        "tickers":       tcount,
+        "latest_date":   latest[0] if latest else None,
+        "oldest_date":   oldest[0] if oldest else None,
+        "queue_pending": qsize,
+        "worker_alive":  _price_thread.is_alive(),
+    })
+
 
 # ── Start scraper thread (realtime listener + daily backfill) ────────────
 SCRAPER_ENABLED = os.environ.get("SCRAPER_ENABLED", "1") == "1"
