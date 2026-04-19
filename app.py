@@ -37,11 +37,25 @@ def _require_env(name: str, min_len: int = 0) -> str:
 app.secret_key = _require_env("FLASK_SECRET", min_len=32)
 
 # Shared secret for admin endpoints (upload-db, pull-db, scraper-*, etc.)
-ADMIN_SECRET       = _require_env("ADMIN_SECRET",       min_len=16) if os.environ.get("ADMIN_SECRET")       else _require_env("UPLOAD_SECRET", min_len=16)
+# Accepts ADMIN_SECRET (preferred) or legacy UPLOAD_SECRET.
+# If neither is set, a random ephemeral value is generated so the app starts;
+# admin routes will be inaccessible until you set ADMIN_SECRET in your env.
+_raw_admin = os.environ.get("ADMIN_SECRET") or os.environ.get("UPLOAD_SECRET") or ""
+if _raw_admin and len(_raw_admin) >= 16:
+    ADMIN_SECRET = _raw_admin
+else:
+    ADMIN_SECRET = _secrets.token_urlsafe(48)
+    logging.warning(
+        "[SECURITY] Neither ADMIN_SECRET nor UPLOAD_SECRET is set (or too short). "
+        "Admin endpoints are locked with an ephemeral random key this session. "
+        "Set ADMIN_SECRET (16+ chars) in your Railway dashboard to gain access."
+    )
+del _raw_admin
+
 # Separate, rarely-used kill-switch secret for /admin/darurat-nuke-db.
-NUKE_SECRET        = os.environ.get("NUKE_SECRET", "") or ADMIN_SECRET
+NUKE_SECRET  = os.environ.get("NUKE_SECRET", "") or ADMIN_SECRET
 # Login password.
-ACCESS_KEY         = _require_env("ACCESS_KEY",         min_len=8)
+ACCESS_KEY   = _require_env("ACCESS_KEY", min_len=8)
 # Optional external resources (DB snapshot download, Telegram, etc.)
 DROPBOX_DB_URL     = os.environ.get("DROPBOX_DB_URL", "")
 
