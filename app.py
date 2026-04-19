@@ -37,24 +37,27 @@ SECTORS = {
 
 # ── Kompas100 Index Constituents (IDX) ──────────────────────────────────
 KOMPAS100 = [
-    'ACES','ADMR','ADRO','AKRA','AMMN','AMRT','ANTM','ARTO','ASII','AUTO',
-    'AVIA','BBCA','BBNI','BBRI','BBTN','BBYB','BDKR','BFIN','BIPI','BMRI',
-    'BMTR','BRIS','BRPT','BSDE','BUKA','BUMI','CPIN','CTRA','CUAN','DEWA',
-    'DOID','DSNG','ELSA','ENRG','ERAA','ESSA','EXCL','GGRM','GOTO','HEAL',
-    'HMSP','HRUM','ICBP','INCO','INDF','INDY','INKP','INTP','ISAT','ITMG',
-    'JPFA','JSMR','KLBF','LPPF','MAPA','MAPI','MBMA','MDKA','MEDC','MIKA',
-    'MNCN','MTEL','MYOR','NCKL','NISP','PANI','PGAS','PGEO','PNLF','PTBA',
-    'PTRO','PTPP','PWON','RAJA','SCMA','SIDO','SMGR','SMRA','SRTG','SSIA',
-    'TAPG','TBIG','TKIM','TLKM','TOBA','TOWR','TPIA','ULTJ','UNTR','UNVR',
-    'WIFI','WIKA','WSKT','AADI','BREN','CDIA','DSSA','EMTK','JSPT','KPIG',
+    'AADI','ACES','ADMR','ADRO','AKRA','AMMN','AMRT','ANTM','ARCI','ARTO',
+    'ASSI','BBCA','BBNI','BBRI','BBTN','BBYB','BKSL','BMRI','BREN','BRMS',
+    'BRPT','BSDE','BTPS','BUKA','BULL','BUMI','BUVA','CBDK','CMRY','CPIN',
+    'CTRA','CUAN','DEWA','DSNG','DSSA','ELSA','EMTK','ENRG','ERAA','ESSA',
+    'EXCL','FILM','GOTO','HEAL','HMSP','HRTA','HRUM','ICBP','IMPC','INCO',
+    'INDF','INDY','INET','INKP','INTP','ISAT','ITMG','JPFA','JSMR','KIJA',
+    'KLBF','KPIG','MAPA','MAPI','MBMA','MDKA','MEDC','MIKA','MTEL','MYOR',
+    'NCKL','PANI','PGAS','PGEO','PNLF','PSAB','PTBA','PTRO','PWON','RAJA',
+    'RATU','SCMA','SGER','SMIL','SMRA','SSIA','TAPG','TCPI','TINS','TLKM',
+    'TOBA','TOWR','TPIA','UNTR','UNVR','WIFI','WIRG',
 ]
 
-# ── Kompas100 ESG subset (Indonesian issuers disclosing ESG programs) ──
+# ── Kompas100 ESG subset ────────────────────────────────────────────────
 KOMPAS100_ESG = {
-    'ADRO','AKRA','ANTM','ASII','BBCA','BBNI','BBRI','BBTN','BMRI','BRIS',
-    'BRPT','BSDE','CPIN','EXCL','ICBP','INDF','INKP','INTP','ISAT','JPFA',
-    'JSMR','KLBF','MDKA','MEDC','MYOR','PGAS','PTBA','SIDO','SMGR','TKIM',
-    'TLKM','TOWR','TPIA','UNTR','UNVR',
+    'ACES','ADMR','ADRO','AKRA','AMMN','AMRT','ANTM','ARTO','BBCA','BBNI',
+    'BBRI','BBTN','BMRI','BRMS','BRPT','BSDE','BTPS','BUKA','CMRY','CPIN',
+    'CTRA','ELSA','EMTK','ENRG','ERAA','ESSA','EXCL','GOTO','HEAL','HMSP',
+    'HRUM','ICBP','INCO','INDF','INDY','INKP','INTP','ISAT','ITMG','JPFA',
+    'JSMR','KLBF','MAPA','MAPI','MBMA','MDKA','MEDC','MIKA','MTEL','MYOR',
+    'NCKL','PANI','PGAS','PGEO','PNLF','PTBA','PWON','SCMA','SMRA','SSIA',
+    'TAPG','TLKM','TOWR','TPIA','UNTR','UNVR','WIFI',
 }
 
 YF_HEADERS = {
