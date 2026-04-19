@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh pr *)",
+      "Bash(command -v gh.exe)",
+      "Read(//c/Program Files/GitHub CLI/**)",
+      "Read(//c/Users/rabim/AppData/Local/Programs/GitHub CLI/**)",
+      "Bash(\"gh.exe\" --version)"
+    ]
+  }
+}

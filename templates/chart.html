@@ -21,8 +21,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 header{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
 header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,232,162,.3),transparent)}
 .logo{display:flex;align-items:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;white-space:nowrap;text-decoration:none}
-.logo-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);margin-right:7px;flex-shrink:0}
-.logo-sub{color:var(--muted)}
+.logo-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:8px;flex-shrink:0;animation:dotPulse 2.4s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{box-shadow:0 0 6px var(--accent),0 0 0 0 rgba(0,232,162,.5)}50%{box-shadow:0 0 14px var(--accent),0 0 0 5px rgba(0,232,162,0)}}
+@keyframes btnPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,232,162,.45),0 0 8px rgba(0,232,162,.25)}50%{box-shadow:0 0 0 7px rgba(0,232,162,0),0 0 16px rgba(0,232,162,.5)}}
+.info-btn.pulse{border-color:rgba(0,232,162,.5);color:var(--accent);animation:btnPulse 2.4s ease-in-out infinite}
+.info-btn.pulse:hover{animation:none;box-shadow:0 0 16px rgba(0,232,162,.5)}
 .nav-group{display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px}
 .nav-btn{background:none;border:1px solid transparent;color:var(--muted);border-radius:4px;padding:4px 12px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.06em;text-decoration:none;transition:all .15s}
 .nav-btn:hover{color:var(--accent)}
@@ -97,10 +100,12 @@ input[type="text"]:focus{border-color:var(--accent)}
 .trx-section-title{font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;font-weight:700;color:var(--muted);text-transform:uppercase;display:flex;align-items:center;gap:12px;white-space:nowrap}
 .trx-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
 .trx-date-range{display:flex;align-items:center;gap:6px}
-.trx-date-input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:5px 8px;font-family:'Space Mono',monospace;font-size:10px;outline:none;width:96px;letter-spacing:.04em;transition:border-color .2s}
+.trx-date-input{background:var(--bg);border:1px solid var(--border2);color:var(--text);border-radius:6px;padding:8px 12px;font-family:'Space Mono',monospace;font-size:11px;outline:none;width:108px;letter-spacing:.04em;transition:border-color .15s,opacity .2s}
 .trx-date-input:focus{border-color:var(--accent)}
 .trx-date-input::placeholder{color:var(--muted)}
-.trx-date-arrow{color:var(--muted);font-size:11px;padding:0 2px}
+.trx-date-input:disabled,.trx-date-input.disabled{opacity:.35;cursor:not-allowed;color:var(--muted);background:var(--surface)}
+.trx-date-arrow{width:28px;height:28px;color:var(--muted);font-size:11px;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;transition:color .15s}
+.trx-date-arrow:hover{color:var(--accent)}
 .trx-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .trx-box{background:var(--bg);border:1px solid var(--border);border-radius:6px;height:260px;display:flex;flex-direction:column;overflow:hidden}
 .trx-box-header{padding:6px 12px;font-family:'Space Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;flex-shrink:0;background:var(--bg);z-index:1}
@@ -199,7 +204,7 @@ input[type="text"]:focus{border-color:var(--accent)}
   .trx-toolbar{flex-direction:column;align-items:flex-start;gap:6px}
   .trx-grid{grid-template-columns:1fr}
   .trx-box{height:200px}
-  .trx-date-input{width:88px;font-size:9px}
+  .trx-date-input{width:96px;font-size:10px;padding:6px 10px}
 }
 @media(max-width:420px){
   header{gap:4px;padding:6px 10px}
@@ -216,7 +221,7 @@ input[type="text"]:focus{border-color:var(--accent)}
 </head>
 <body>
 <header>
-  <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / chart</span></a>
+  <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH</a>
   <div class="nav-group">
     <a href="/chart" class="nav-btn active">⬡ Chart</a>
     <a href="/flow" class="nav-btn">⊞ Flow</a>
@@ -226,7 +231,6 @@ input[type="text"]:focus{border-color:var(--accent)}
     <input type="text" id="tickerInput" placeholder="Ticker..." value="BBRI" maxlength="8"/>
   </div>
   <button class="search-btn" onclick="doLoad()">Load</button>
-  <a href="/backtest" class="info-btn" title="Backtest Leaderboard" aria-label="Backtest Leaderboard"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></a>
   <div class="ticker-info">
     <div class="t-name" id="tName">—</div>
     <div class="t-price" id="tPrice">—</div>
@@ -237,8 +241,9 @@ input[type="text"]:focus{border-color:var(--accent)}
       <span class="ihsg-price" id="ihsgPrice">—</span>
       <span class="ihsg-gain" id="ihsgGain">—</span>
     </div>
+    <a href="/backtest" class="info-btn" title="Backtest Leaderboard" aria-label="Backtest Leaderboard"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></a>
     <a href="/hub" class="info-btn" title="Kembali ke Hub" aria-label="Kembali ke Hub"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z"/></svg></a>
-    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
+    <button class="info-btn pulse" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
   </div>
 </header>
 
@@ -257,10 +262,10 @@ input[type="text"]:focus{border-color:var(--accent)}
       <button class="ovl-btn bm" id="ovlBtnBM" onclick="toggleOverlay('bm')" title="Bad Money"><span class="ovl-dot" style="background:#ff8c42"></span>BM</button>
     </div>
     <div style="flex:1"></div>
-    <div class="trx-date-range" style="display:flex;align-items:center;gap:4px">
-      <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10" style="width:90px;font-size:10px;padding:4px 6px"/>
-      <span id="trxDateToggle" onclick="toggleChartDateMode()" style="cursor:pointer;user-select:none;font-size:11px;color:var(--muted);transition:all .15s">·</span>
-      <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10" style="width:90px;font-size:10px;padding:4px 6px" disabled/>
+    <div class="trx-date-range">
+      <input type="text" class="trx-date-input" id="trxDateFrom" placeholder="DD/MM/YYYY" maxlength="10"/>
+      <span id="trxDateToggle" class="trx-date-arrow" onclick="toggleChartDateMode()" title="Toggle single/range date">→</span>
+      <input type="text" class="trx-date-input" id="trxDateTo" placeholder="DD/MM/YYYY" maxlength="10" disabled/>
     </div>
     <button class="tf-btn" id="btnLog" onclick="setScale('log')" title="Log scale">L</button>
     <button class="tf-btn active" id="btnAuto" onclick="setScale('auto')" title="Auto scale">A</button>
