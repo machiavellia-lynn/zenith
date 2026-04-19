@@ -309,12 +309,12 @@ textarea:focus-visible,
    Used by static/animations.js — classes applied/removed via JS.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── Page fade-in ──────────────────────────────────────────────────── */
+/* ── Page fade-in (opt-in via .page-anim class on <main>) ─────────── */
 @keyframes z-page-in{
   from{ opacity:0; transform:translateY(4px); }
   to  { opacity:1; transform:translateY(0);   }
 }
-body{ animation: z-page-in .3s ease-out both; }
+/* Not applied to body globally — avoids flash on hub & static pages. */
 
 /* ── Top progress bar ──────────────────────────────────────────────── */
 .z-topbar{
