@@ -33,8 +33,21 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .ihsg-price{font-size:13px;font-weight:700;color:var(--text)}
 .ihsg-gain{font-size:9px;font-weight:700}
 
-.info-btn{background:none;border:1px solid var(--border);color:var(--muted);border-radius:50%;width:24px;height:24px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.info-btn:hover{border-color:var(--accent);color:var(--accent)}
+.info-btn{background:var(--surface);border:1px solid var(--border);color:var(--muted);border-radius:50%;width:28px;height:28px;cursor:pointer;font-family:'Space Mono',monospace;font-size:11px;font-weight:700;transition:all .15s;display:flex;align-items:center;justify-content:center;flex-shrink:0;text-decoration:none;position:relative}
+.info-btn:hover{border-color:var(--accent);color:var(--accent);box-shadow:0 0 8px rgba(0,232,162,.25)}
+.info-btn svg{width:13px;height:13px}
+.info-btn.pulse{border-color:rgba(0,232,162,.5);color:var(--accent);animation:btnPulse 2.4s ease-in-out infinite}
+.info-btn.pulse:hover{animation:none;box-shadow:0 0 16px rgba(0,232,162,.5)}
+@keyframes btnPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(0,232,162,.45),0 0 8px rgba(0,232,162,.25)}
+  50%{box-shadow:0 0 0 7px rgba(0,232,162,0),0 0 16px rgba(0,232,162,.5)}
+}
+.floating-help{position:fixed;top:20px;right:24px;z-index:300}
+@media(max-width:560px){.floating-help{top:14px;right:14px}}
+@keyframes dotPulse{
+  0%,100%{box-shadow:0 0 6px var(--accent),0 0 0 0 rgba(0,232,162,.5)}
+  50%{box-shadow:0 0 14px var(--accent),0 0 0 5px rgba(0,232,162,0)}
+}
 
 /* ── HERO ── */
 .hero{text-align:center;padding:44px 24px 8px;position:relative}
@@ -153,17 +166,7 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 </style>
 </head>
 <body>
-<header>
-  <a href="/" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / hub</span></a>
-  <div class="nav-right">
-    <div class="ihsg-wrap">
-      <span class="ihsg-label">IHSG</span>
-      <span class="ihsg-price" id="ihsgPrice">—</span>
-      <span class="ihsg-gain" id="ihsgGain">—</span>
-    </div>
-    <button class="info-btn" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
-  </div>
-</header>
+<button class="info-btn pulse floating-help" onclick="openInfoModal()" title="Panduan membaca data" aria-label="Panduan membaca data">?</button>
 
 <div class="hero">
   <div class="hero-eyebrow">Smart Money Analysis</div>
@@ -222,17 +225,13 @@ async function init(){
     const r=await fetch('/api/ihsg');const d=await r.json();
     if(d.price){
       const p=d.price.toLocaleString('id-ID',{minimumFractionDigits:2,maximumFractionDigits:2});
-      document.getElementById('ihsgPrice').textContent=p;
       const g=d.gain_pct;
-      if(g!==null&&g!==undefined){
-        const el=document.getElementById('ihsgGain');
-        el.textContent=(g>0?'+':'')+g.toFixed(2)+'%';
-        el.style.color=g>=0?'var(--up)':'var(--down)';
-      }
-      const gStr=g!==null?(g>0?'+':'')+g.toFixed(2)+'%':'';
+      const gStr=g!==null&&g!==undefined?(g>0?'+':'')+g.toFixed(2)+'%':'';
       const sEl=document.getElementById('sIHSG');
-      sEl.textContent=p+(gStr?' ('+gStr+')':'');
-      if(g!==null)sEl.style.color=g>=0?'var(--up)':'var(--down)';
+      if(sEl){
+        sEl.textContent=p+(gStr?' ('+gStr+')':'');
+        if(g!==null&&g!==undefined)sEl.style.color=g>=0?'var(--up)':'var(--down)';
+      }
     }
   }catch(_){}
   try{

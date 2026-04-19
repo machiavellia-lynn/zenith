@@ -19,7 +19,11 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;fon
 header{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
 header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,232,162,.3),transparent)}
 .logo{display:flex;align-items:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;text-decoration:none}
-.logo-dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent);margin-right:7px;flex-shrink:0}
+.logo-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:8px;flex-shrink:0;animation:dotPulse 2.4s ease-in-out infinite}
+@keyframes dotPulse{0%,100%{box-shadow:0 0 6px var(--accent),0 0 0 0 rgba(0,232,162,.5)}50%{box-shadow:0 0 14px var(--accent),0 0 0 5px rgba(0,232,162,0)}}
+@keyframes btnPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,232,162,.45),0 0 8px rgba(0,232,162,.25)}50%{box-shadow:0 0 0 7px rgba(0,232,162,0),0 0 16px rgba(0,232,162,.5)}}
+.info-btn.pulse{border-color:rgba(0,232,162,.5);color:var(--accent);animation:btnPulse 2.4s ease-in-out infinite}
+.info-btn.pulse:hover{animation:none;box-shadow:0 0 16px rgba(0,232,162,.5)}
 .logo-sub{color:var(--muted)}
 .nav-group{display:flex;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:3px;gap:2px}
 .nav-btn{background:none;border:1px solid transparent;color:var(--muted);border-radius:4px;padding:4px 12px;font-family:'Space Mono',monospace;font-size:11px;text-decoration:none;transition:all .15s;cursor:pointer;letter-spacing:.06em}
@@ -109,14 +113,14 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 </head>
 <body>
 <header>
-  <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH<span class="logo-sub"> / backtest</span></a>
+  <a href="/hub" class="logo"><span class="logo-dot"></span>ZENITH</a>
   <div class="nav-group">
     <a href="/chart" class="nav-btn">⬡ Chart</a>
     <a href="/flow" class="nav-btn">⊞ Flow</a>
     <a href="/sector" class="nav-btn">◈ Sector</a>
   </div>
-  <span class="info-btn active" title="Backtest Leaderboard" aria-label="Halaman Backtest" style="margin-left:8px;cursor:default"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></span>
   <div style="flex:1"></div>
+  <span class="info-btn active" title="Halaman Backtest" aria-label="Halaman Backtest" style="cursor:default"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M2 10V7M6 10V3M10 10V5"/></svg></span>
   <a href="/hub" class="info-btn" title="Kembali ke Hub" aria-label="Kembali ke Hub"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1.5 5.5L6 1.5L10.5 5.5V10.5H7.5V7.5H4.5V10.5H1.5V5.5Z"/></svg></a>
 </header>
 <div class="content">
