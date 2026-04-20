@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, render_template, request, session, redirect, make_response
+from flask import Flask, jsonify, render_template, request, session, redirect
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
@@ -6,219 +6,13 @@ import sqlite3
 import os
 import time
 import threading
-import hmac
-import secrets as _secrets
-import logging
 
 
 app = Flask(__name__)
-
-# ═══════════════════════════════════════════════════════════════════════
-# SECURITY CONFIG
-# ═══════════════════════════════════════════════════════════════════════
-
-def _require_env(name: str, min_len: int = 0) -> str:
-    """Fail loudly if a critical env var is missing or too short."""
-    val = os.environ.get(name, "")
-    if not val or (min_len and len(val) < min_len):
-        hint = f"(min length {min_len})" if min_len else ""
-        # Fallback for local dev only — generate a random key so dev still works,
-        # but log a warning so user knows production must set this.
-        if os.environ.get("FLASK_ENV") == "development" or os.environ.get("ZENITH_DEV") == "1":
-            logging.warning(f"[SECURITY] {name} not set {hint}; using ephemeral dev value.")
-            return _secrets.token_urlsafe(48)
-        raise RuntimeError(
-            f"[SECURITY] Environment variable {name} is required {hint}. "
-            f"Set it in Railway / your host dashboard before starting the app."
-        )
-    return val
-
-# Flask session signing key — must be set in production, min 32 chars.
-app.secret_key = _require_env("FLASK_SECRET", min_len=32)
-
-# Shared secret for admin endpoints (upload-db, pull-db, scraper-*, etc.)
-# Accepts ADMIN_SECRET (preferred) or legacy UPLOAD_SECRET.
-# If neither is set, a random ephemeral value is generated so the app starts;
-# admin routes will be inaccessible until you set ADMIN_SECRET in your env.
-_raw_admin = os.environ.get("ADMIN_SECRET") or os.environ.get("UPLOAD_SECRET") or ""
-if _raw_admin and len(_raw_admin) >= 16:
-    ADMIN_SECRET = _raw_admin
-else:
-    ADMIN_SECRET = _secrets.token_urlsafe(48)
-    logging.warning(
-        "[SECURITY] Neither ADMIN_SECRET nor UPLOAD_SECRET is set (or too short). "
-        "Admin endpoints are locked with an ephemeral random key this session. "
-        "Set ADMIN_SECRET (16+ chars) in your Railway dashboard to gain access."
-    )
-del _raw_admin
-
-# Separate, rarely-used kill-switch secret for /admin/darurat-nuke-db.
-NUKE_SECRET  = os.environ.get("NUKE_SECRET", "") or ADMIN_SECRET
-# Login password.
-ACCESS_KEY   = _require_env("ACCESS_KEY", min_len=8)
-# Optional external resources (DB snapshot download, Telegram, etc.)
-DROPBOX_DB_URL     = os.environ.get("DROPBOX_DB_URL", "")
-
-# Session cookies: HTTPS only, no JS access, CSRF-resistant.
-app.config.update(
-    SESSION_COOKIE_SECURE   = os.environ.get("COOKIE_INSECURE", "0") != "1",  # set COOKIE_INSECURE=1 for local http dev
-    SESSION_COOKIE_HTTPONLY = True,
-    SESSION_COOKIE_SAMESITE = "Lax",   # Strict would break /logout redirect from emails etc.
-    PERMANENT_SESSION_LIFETIME = timedelta(hours=12),
-    MAX_CONTENT_LENGTH      = 300 * 1024 * 1024,  # 300 MB cap for admin uploads
-)
-
-
-def _safe_eq(a: str, b: str) -> bool:
-    """Constant-time string compare — resists timing sidechannel."""
-    try:
-        return hmac.compare_digest(str(a or ""), str(b or ""))
-    except Exception:
-        return False
-
-
-def _check_admin_secret() -> bool:
-    """True if the request carries the correct admin secret (query or header)."""
-    candidate = request.args.get("secret", "") or request.headers.get("X-Admin-Secret", "")
-    return _safe_eq(candidate, ADMIN_SECRET)
-
-
-def _deny():
-    return "❌ Access denied", 403
-
+app.secret_key = os.environ.get("FLASK_SECRET", "zenith-secret-key")
 
 def is_authed():
     return session.get("authed") is True
-
-
-# ── Security headers ────────────────────────────────────────────────────
-@app.after_request
-def _set_security_headers(resp):
-    # Content Security Policy — inline styles/scripts allowed (templates use them
-    # heavily). External resources: Google Fonts + lightweight-charts CDN + Pikaday.
-    resp.headers.setdefault(
-        "Content-Security-Policy",
-        "default-src 'self'; "
-        "script-src 'self' 'unsafe-inline' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; "
-        "font-src 'self' https://fonts.gstatic.com data:; "
-        "img-src 'self' data:; "
-        "connect-src 'self' https://query1.finance.yahoo.com https://query2.finance.yahoo.com; "
-        "frame-ancestors 'none'; "
-        "base-uri 'self'; "
-        "form-action 'self'"
-    )
-    resp.headers.setdefault("X-Frame-Options",        "DENY")
-    resp.headers.setdefault("X-Content-Type-Options", "nosniff")
-    resp.headers.setdefault("Referrer-Policy",        "strict-origin-when-cross-origin")
-    resp.headers.setdefault("Permissions-Policy",     "camera=(), microphone=(), geolocation=()")
-    # HSTS only over TLS.
-    if request.is_secure:
-        resp.headers.setdefault(
-            "Strict-Transport-Security",
-            "max-age=31536000; includeSubDomains"
-        )
-    return resp
-
-
-# ── Login rate limiter (in-memory, per-IP) ──────────────────────────────
-_login_attempts_lock = threading.Lock()
-_login_attempts      = {}   # ip → [(ts, ok?), ...]
-LOGIN_WINDOW_SEC     = 300  # 5-minute window
-LOGIN_MAX_FAIL       = 8    # lock after 8 fails in window
-
-
-def _login_allowed(ip: str) -> bool:
-    now = time.time()
-    with _login_attempts_lock:
-        bucket = [(t, ok) for (t, ok) in _login_attempts.get(ip, []) if now - t < LOGIN_WINDOW_SEC]
-        fails = sum(1 for (_t, ok) in bucket if not ok)
-        _login_attempts[ip] = bucket
-        return fails < LOGIN_MAX_FAIL
-
-
-def _login_record(ip: str, ok: bool):
-    now = time.time()
-    with _login_attempts_lock:
-        _login_attempts.setdefault(ip, []).append((now, ok))
-        # Purge stale entries + prune dict from going unbounded.
-        if len(_login_attempts) > 2048:
-            cutoff = now - LOGIN_WINDOW_SEC
-            for k in list(_login_attempts.keys()):
-                pruned = [t for t in _login_attempts[k] if t[0] > cutoff]
-                if pruned:
-                    _login_attempts[k] = pruned
-                else:
-                    _login_attempts.pop(k, None)
-
-
-def _client_ip() -> str:
-    # Respect Railway / reverse proxy forwarded-for.
-    xff = request.headers.get("X-Forwarded-For", "")
-    if xff:
-        return xff.split(",")[0].strip()
-    return request.remote_addr or "0.0.0.0"
-
-
-# ── Generic error response (don't leak internals) ────────────────────────
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-_err_log = logging.getLogger("zenith.err")
-
-
-def _server_error(exc: Exception, where: str = "", status: int = 500):
-    """Log full exception server-side, return sanitized JSON to client."""
-    try:
-        _err_log.exception(f"[{where or request.path}] {exc}")
-    except Exception:
-        pass
-    return jsonify({"error": "Internal error. Please try again."}), status
-
-
-@app.errorhandler(404)
-def _404(_e):
-    # Don't leak registered routes.
-    if request.path.startswith("/api/"):
-        return jsonify({"error": "Not found"}), 404
-    return "404 — not found", 404
-
-
-@app.errorhandler(500)
-def _500(e):
-    try:
-        _err_log.exception(f"[500] {request.path}: {e}")
-    except Exception:
-        pass
-    if request.path.startswith("/api/"):
-        return jsonify({"error": "Internal error."}), 500
-    return "500 — internal error", 500
-
-
-@app.errorhandler(413)
-def _413(_e):
-    return jsonify({"error": "Payload too large."}), 413
-
-
-# ── API query-range guardrails ──────────────────────────────────────────
-MAX_QUERY_RANGE_DAYS = int(os.environ.get("MAX_QUERY_RANGE_DAYS", "180"))
-
-
-def _clamp_date_range(date_from: str, date_to: str):
-    """
-    Return (df_str, dt_str, err) where err is None if the range is valid.
-    Caps range to MAX_QUERY_RANGE_DAYS to prevent full-table scans.
-    Expects DD-MM-YYYY inputs (matching the rest of the app).
-    """
-    try:
-        df = datetime.strptime(date_from, "%d-%m-%Y").date()
-        dt = datetime.strptime(date_to,   "%d-%m-%Y").date()
-    except Exception:
-        return None, None, "Invalid date format (expected DD-MM-YYYY)."
-    if dt < df:
-        df, dt = dt, df  # tolerate swapped inputs
-    span = (dt - df).days + 1
-    if span > MAX_QUERY_RANGE_DAYS:
-        return None, None, f"Date range too large (max {MAX_QUERY_RANGE_DAYS} days)."
-    return df.strftime("%d-%m-%Y"), dt.strftime("%d-%m-%Y"), None
 
 # ── Config ──────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("DB_PATH", r"C:\Users\rabim\Downloads\zenith_project\zenith.db")
@@ -239,31 +33,6 @@ SECTORS = {
     "Technology": ['ATIC', 'DMMX', 'ELIT', 'EMTK', 'GLVA', 'IRSX', 'KREN', 'PGJO', 'CHIP', 'LMAS', 'CASH', 'TRON', 'MLPT', 'TECH', 'JATI', 'MTDL', 'EDGE', 'CYBR', 'PTSN', 'ZYRX', 'IOTF', 'SKYB', 'UVCR', 'MSTI', 'KIOS', 'BUKA', 'TOSK', 'MCAS', 'RUNS', 'MPIX', 'NFCX', 'WGSH', 'AREA', 'DIVA', 'WIRG', 'ASIA', 'MENN', 'LUCK', 'GOTO', 'AWAN', 'ENVY', 'AXIO', 'WIFI', 'HDIT', 'BELI', 'DCII', 'TFAS', 'NINE'],
     "Infrastructure": ['ACST', 'TBIG', 'JAST', 'ADHI', 'TLKM', 'KEEN', 'BALI', 'TOTL', 'PTPW', 'BTEL', 'TOWR', 'TAMA', 'BUKK', 'WIKA', 'RONY', 'CASS', 'WSKT', 'PTDU', 'CENT', 'IDPR', 'FIMP', 'CMNP', 'MTRA', 'MTEL', 'DGIK', 'OASA', 'SMKM', 'EXCL', 'POWR', 'ARKO', 'GOLD', 'PBSA', 'KRYA', 'HADE', 'PORT', 'PGEO', 'IBST', 'TGRA', 'BDKR', 'ISAT', 'TOPS', 'INET', 'JKON', 'MPOW', 'BREN', 'JSMR', 'GMFI', 'KOKA', 'KARW', 'PPRE', 'ASLI', 'KBLV', 'WEGE', 'LINK', 'MORA', 'HGII', 'META', 'IPCM', 'CDIA', 'NRCA', 'LCKM', 'MANG', 'PTPP', 'GHON', 'KETR', 'SSIA', 'IPCC', 'SUPR', 'MTPS'],
     "Transport": ['AKSI', 'SMDR', 'PPGL', 'ASSA', 'TAXI', 'TRJA', 'BIRD', 'TMAS', 'HAIS', 'BLTA', 'WEHA', 'HATM', 'CMPP', 'HELI', 'RCCC', 'GIAA', 'TRUK', 'ELPI', 'IMJS', 'TNCA', 'LAJU', 'LRNA', 'BPTR', 'GTRA', 'MIRA', 'SAPX', 'MPXL', 'MITI', 'DEAL', 'KLAS', 'NELY', 'JAYA', 'LOPI', 'SAFE', 'KJEN', 'BLOG', 'SDMU', 'PURA', 'PJHB'],
-}
-
-# ── Kompas100 Index Constituents (IDX) ──────────────────────────────────
-KOMPAS100 = [
-    'AADI','ACES','ADMR','ADRO','AKRA','AMMN','AMRT','ANTM','ARCI','ARTO',
-    'ASSI','BBCA','BBNI','BBRI','BBTN','BBYB','BKSL','BMRI','BREN','BRMS',
-    'BRPT','BSDE','BTPS','BUKA','BULL','BUMI','BUVA','CBDK','CMRY','CPIN',
-    'CTRA','CUAN','DEWA','DSNG','DSSA','ELSA','EMTK','ENRG','ERAA','ESSA',
-    'EXCL','FILM','GOTO','HEAL','HMSP','HRTA','HRUM','ICBP','IMPC','INCO',
-    'INDF','INDY','INET','INKP','INTP','ISAT','ITMG','JPFA','JSMR','KIJA',
-    'KLBF','KPIG','MAPA','MAPI','MBMA','MDKA','MEDC','MIKA','MTEL','MYOR',
-    'NCKL','PANI','PGAS','PGEO','PNLF','PSAB','PTBA','PTRO','PWON','RAJA',
-    'RATU','SCMA','SGER','SMIL','SMRA','SSIA','TAPG','TCPI','TINS','TLKM',
-    'TOBA','TOWR','TPIA','UNTR','UNVR','WIFI','WIRG',
-]
-
-# ── Kompas100 ESG subset ────────────────────────────────────────────────
-KOMPAS100_ESG = {
-    'ACES','ADMR','ADRO','AKRA','AMMN','AMRT','ANTM','ARTO','BBCA','BBNI',
-    'BBRI','BBTN','BMRI','BRMS','BRPT','BSDE','BTPS','BUKA','CMRY','CPIN',
-    'CTRA','ELSA','EMTK','ENRG','ERAA','ESSA','EXCL','GOTO','HEAL','HMSP',
-    'HRUM','ICBP','INCO','INDF','INDY','INKP','INTP','ISAT','ITMG','JPFA',
-    'JSMR','KLBF','MAPA','MAPI','MBMA','MDKA','MEDC','MIKA','MTEL','MYOR',
-    'NCKL','PANI','PGAS','PGEO','PNLF','PTBA','PWON','SCMA','SMRA','SSIA',
-    'TAPG','TLKM','TOWR','TPIA','UNTR','UNVR','WIFI',
 }
 
 YF_HEADERS = {
@@ -475,23 +244,14 @@ def login():
     if is_authed():
         return redirect("/hub")
     if request.method == "POST":
-        ip = _client_ip()
-        if not _login_allowed(ip):
-            # Generic message — don't reveal lockout state to attacker details.
-            return jsonify({"ok": False, "error": "Too many attempts. Try again later."}), 429
         key = request.form.get("key", "").strip()
-        ok = _safe_eq(key, ACCESS_KEY)
-        _login_record(ip, ok)
-        if ok:
-            # Rotate session on login → defeats fixation.
-            session.clear()
+        if key == os.environ.get("ACCESS_KEY", "zenith2026"):
             session["authed"] = True
-            session.permanent = True
             return jsonify({"ok": True})
         return jsonify({"ok": False})
     return render_template("login.html")
 
-@app.route("/logout", methods=["GET", "POST"])
+@app.route("/logout")
 def logout():
     session.clear()
     return redirect("/")
@@ -515,11 +275,6 @@ def flow_page():
 def sector_page():
     if not is_authed(): return redirect("/")
     return render_template("sector.html")
-
-@app.route("/kompas100")
-def kompas100_page():
-    if not is_authed(): return redirect("/")
-    return render_template("kompas100.html")
 
 
 # ── API: IHSG price & gain ──────────────────────────────────────────────
@@ -584,9 +339,11 @@ def flow():
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
 
-    date_from, date_to, err = _clamp_date_range(date_from, date_to)
-    if err:
-        return jsonify({"error": err}), 400
+    try:
+        parse_date(date_from)
+        parse_date(date_to)
+    except ValueError:
+        return jsonify({"error": "Format tanggal salah, gunakan DD-MM-YYYY"}), 400
 
     # Buat list tanggal valid dalam rentang (DD-MM-YYYY)
     try:
@@ -639,45 +396,78 @@ def flow():
             for ar in a_rows:
                 analytics_map[ar["ticker"]] = dict(ar)
 
-        # ── Build data dict from eod_summary rows ────────────────────────
-        data = {}
-        for row in rows:
-            t = row["ticker"]
-            data[t] = {
-                "sm_val":  row["sm_val"]  or 0,
-                "bm_val":  row["bm_val"]  or 0,
-                "tx":      row["tx"]      or 0,
-                "tx_sm":   row["tx_sm"]   or 0,
-                "tx_bm":   row["tx_bm"]   or 0,
-                "mf_plus": row["mf_plus"],
-                "mf_minus":row["mf_minus"],
-                "net_mf":  None,
-            }
-            d = data[t]
-            if d["mf_plus"] is not None or d["mf_minus"] is not None:
-                d["net_mf"] = round((d["mf_plus"] or 0) - (d["mf_minus"] or 0), 2)
+        # ── Gain% from stored price_close (no Yahoo per-request) ──
+        gains_map = {}  # ticker → {gain, price}
 
-        # ── Gain% from daily_price table (no Yahoo per-request) ──────────
-        price_window_from = (parse_date(date_from) - timedelta(days=12)).strftime("%d-%m-%Y")
+        is_single_day = (date_from == date_to)
 
-        price_rows = conn.execute(
-            "SELECT ticker, date, close_price FROM daily_price "
-            "WHERE date >= ? AND date <= ? AND close_price IS NOT NULL",
-            [price_window_from, date_to],
-        ).fetchall()
+        if not is_single_day:
+            # Multi-day range: compare latest vs day before range (from DB)
+            price_latest = {}
+            if latest_date:
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [latest_date]
+                ).fetchall():
+                    price_latest[r["ticker"]] = r["price_close"]
 
-        price_map = {}   # {ticker: {date: close_price}}
-        for pr in price_rows:
-            price_map.setdefault(pr[0], {})[pr[1]] = pr[2]
+            earliest_date_row = conn.execute(f"""
+                SELECT date FROM eod_summary WHERE date IN ({placeholders})
+                ORDER BY {_DATE_SORT} ASC LIMIT 1
+            """, dates).fetchone()
+            e_date = earliest_date_row["date"] if earliest_date_row else date_from
+            e_sortkey = e_date[6:10] + e_date[3:5] + e_date[0:2]
+            prev_row = conn.execute(f"""
+                SELECT DISTINCT date FROM eod_summary
+                WHERE {_DATE_SORT} < ? ORDER BY {_DATE_SORT} DESC LIMIT 1
+            """, [e_sortkey]).fetchone()
 
-        gains_map = {}
-        for t in data:
-            gain, price = _gain_from_prices(t, date_from, date_to, price_map)
-            if price is not None:
+            price_ref = {}
+            if prev_row:
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [prev_row["date"]]
+                ).fetchall():
+                    price_ref[r["ticker"]] = r["price_close"]
+
+            for t in set(list(price_latest.keys()) + list(price_ref.keys())):
+                p_now = price_latest.get(t)
+                p_ref = price_ref.get(t)
+                price = int(round(p_now)) if p_now else None
+                gain = None
+                if p_now and p_ref and p_ref > 0:
+                    gain = round((p_now - p_ref) / p_ref * 100, 2)
                 gains_map[t] = {"gain": gain, "price": price}
+        else:
+            # Single day: get price from DB but compute gain via Yahoo
+            # (DB prev_row can be weeks ago → wrong gain%)
+            if latest_date:
+                for r in conn.execute(
+                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    [latest_date]
+                ).fetchall():
+                    gains_map[r["ticker"]] = {"gain": None, "price": int(round(r["price_close"]))}
 
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": f"DB error: {e}"}), 500
+
+    # Build data dict
+    data = {}
+    for row in rows:
+        t = row["ticker"]
+        data[t] = {
+            "sm_val": row["sm_val"] or 0,
+            "bm_val": row["bm_val"] or 0,
+            "tx": row["tx"] or 0,
+            "tx_sm": row["tx_sm"] or 0,
+            "tx_bm": row["tx_bm"] or 0,
+            "mf_plus": row["mf_plus"],
+            "mf_minus": row["mf_minus"],
+            "net_mf": None,
+        }
+        d = data[t]
+        if d["mf_plus"] is not None or d["mf_minus"] is not None:
+            d["net_mf"] = round((d["mf_plus"] or 0) - (d["mf_minus"] or 0), 2)
 
     if not data:
         # If sector param given, still need to return sector tickers with gains
@@ -693,27 +483,15 @@ def flow():
             if t not in data:
                 data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0, "_nodata": True}
 
-    # Optional Kompas100 filter: always return ALL 100 constituents (even if no signal data)
-    kompas_flag = request.args.get("kompas100", "").strip()
-    kompas_members = None
-    if kompas_flag in ("1", "true", "yes"):
-        kompas_members = set(KOMPAS100)
-        for t in kompas_members:
-            if t not in data:
-                data[t] = {"sm_val": 0, "bm_val": 0, "mf_plus": None, "mf_minus": None, "net_mf": None, "tx": 0, "_nodata": True}
-
     if not data:
         return jsonify({"tickers": [], "totals": {}})
 
-    # Tickers with no price in daily_price → queue an on-demand fetch so
-    # next request (or refresh) will have the data.  Return gain=None now
-    # (frontend shows "—") rather than blocking the response with a Yahoo call.
-    missing_price = [t for t in data if t not in gains_map]
-    if missing_price:
-        try:
-            _price_queue.put_nowait(("on_demand", missing_price, date_from, date_to))
-        except _queue.Full:
-            pass  # queue full — will be fetched on next request
+    # Yahoo fallback for tickers without stored price
+    missing = [t for t in data if t not in gains_map or gains_map.get(t, {}).get("gain") is None]
+    if missing:
+        yahoo_gains = get_gains_batch(missing, date_from, date_to)
+        for t, g in yahoo_gains.items():
+            gains_map[t] = g
 
     gains = gains_map
 
@@ -721,9 +499,6 @@ def flow():
     for t, d in data.items():
         # If sector filter, skip tickers not in sector
         if sector_members and t not in sector_members:
-            continue
-        # If kompas100 filter, skip tickers not in Kompas100
-        if kompas_members and t not in kompas_members:
             continue
         nodata = d.get("_nodata", False)
         sm  = round(d["sm_val"], 2) if not nodata else None
@@ -812,7 +587,6 @@ def flow():
             "atr_pct":     atr_pct,
             "vwap_sm":     round(vwap_sm, 2) if vwap_sm else None,
             "vwap_bm":     round(vwap_bm, 2) if vwap_bm else None,
-            "esg":         (t in KOMPAS100_ESG) if kompas_members else None,
         })
 
     # Sort default: clean_money desc (nulls last)
@@ -846,14 +620,14 @@ def transactions():
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
 
-    # Ticker whitelist — alphanumeric 1-6 chars only. Prevents abuse even
-    # though queries are already parameterized.
-    if not ticker or not ticker.isalnum() or len(ticker) > 6:
-        return jsonify({"error": "invalid ticker"}), 400
+    if not ticker:
+        return jsonify({"error": "ticker required"}), 400
 
-    date_from, date_to, err = _clamp_date_range(date_from, date_to)
-    if err:
-        return jsonify({"error": err}), 400
+    try:
+        parse_date(date_from)
+        parse_date(date_to)
+    except ValueError:
+        return jsonify({"error": "Format tanggal salah"}), 400
 
     d0 = parse_date(date_from)
     d1 = parse_date(date_to)
@@ -879,7 +653,7 @@ def transactions():
                 time
         """, params).fetchall()
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
     sm_rows, bm_rows = [], []
     for r in rows:
@@ -929,7 +703,7 @@ def overlay():
                 time
         """, [ticker]).fetchall()
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
     if not rows:
         return jsonify({"ticker": ticker, "tf": tf, "points": []})
@@ -1086,18 +860,20 @@ def ohlcv():
         })
 
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin")
 def admin_page():
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Access denied", 403
     return render_template("admin.html")
 
 
 @app.route("/admin/upload-db", methods=["GET", "POST"])
 def upload_db():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.method == "GET":
         return """
         <!DOCTYPE html><html><head>
@@ -1152,7 +928,7 @@ def upload_db():
         """
     # POST — secret dari query param, body = raw bytes file
     secret = request.args.get("secret", "")
-    if not _safe_eq(secret, ADMIN_SECRET):
+    if secret != SECRET:
         return "❌ Secret salah", 403
     os.makedirs("/data", exist_ok=True)
     tmp_path = "/data/zenith.db.tmp"
@@ -1195,7 +971,7 @@ def upload_db():
             "price": int(round(float(price_raw))) if price_raw else None,
         })
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
 
 
@@ -1207,9 +983,11 @@ def sector_api():
     date_from = request.args.get("date_from", today_wib)
     date_to   = request.args.get("date_to",   today_wib)
 
-    date_from, date_to, err = _clamp_date_range(date_from, date_to)
-    if err:
-        return jsonify({"error": err}), 400
+    try:
+        parse_date(date_from)
+        parse_date(date_to)
+    except ValueError:
+        return jsonify({"error": "Format tanggal salah"}), 400
 
     d0 = parse_date(date_from)
     d1 = parse_date(date_to)
@@ -1245,7 +1023,7 @@ def sector_api():
             GROUP BY ticker, channel
         """, all_tickers + dates).fetchall()
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
     # Per-ticker data
     tdata = {}
@@ -1302,15 +1080,14 @@ def sector_api():
 
 @app.route("/admin/pull-db")
 def pull_db():
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
 
     with _flow_cache_lock:
         _flow_cache.clear()
 
-    DROPBOX_URL = DROPBOX_DB_URL
-    if not DROPBOX_URL:
-        return "❌ DROPBOX_DB_URL not configured on server", 500
+    DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
 
     try:
         os.makedirs("/data", exist_ok=True)
@@ -1336,6 +1113,7 @@ def pull_db():
 
 @app.route("/admin/upload-session", methods=["GET", "POST"])
 def upload_session():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.method == "GET":
         return """
         <!DOCTYPE html><html><head>
@@ -1374,7 +1152,7 @@ def upload_session():
         </body></html>
         """
     secret = request.args.get("secret", "")
-    if not _safe_eq(secret, ADMIN_SECRET):
+    if secret != SECRET:
         return "❌ Secret salah", 403
     os.makedirs("/data", exist_ok=True)
     dst_path = os.environ.get("TG_SESSION_PATH", "/data/session_joker") + ".session"
@@ -1404,351 +1182,12 @@ def ensure_indexes():
 
 ensure_indexes()
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# DAILY PRICE CACHE
-# Stores official closing prices from Yahoo Finance so /api/flow never needs
-# to call Yahoo per-request.
-#
-# Table: daily_price(ticker, date DD-MM-YYYY, close_price REAL)
-#
-# Sources / triggers:
-#   1. Deploy backfill  — 30 days back, runs once at startup (background)
-#   2. 16:30 WIB daily  — fetches today's closes for all active tickers
-#   3. On-demand        — when user requests dates missing from DB, queued fetch
-# ═══════════════════════════════════════════════════════════════════════════
-
-import queue as _queue
-
-_price_queue      = _queue.Queue()      # items: ("backfill30"|"eod"|"on_demand", ...)
-_price_fetch_lock = threading.Lock()    # serialize DB writes
-
-
-def _ensure_price_table():
-    try:
-        conn = get_db()
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS daily_price (
-                ticker      TEXT NOT NULL,
-                date        TEXT NOT NULL,   -- DD-MM-YYYY
-                close_price REAL,
-                PRIMARY KEY (ticker, date)
-            )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_dp_date   ON daily_price(date)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_dp_ticker ON daily_price(ticker, date)"
-        )
-        conn.commit()
-    except Exception:
-        pass  # DB not ready yet — worker retries later
-
-
-def _yf_closes_for_ticker(ticker: str, date_from_s: str, date_to_s: str) -> dict:
-    """
-    Fetch daily close prices for one ticker over a calendar range.
-    Returns {DD-MM-YYYY: close_price} — includes days outside trading calendar
-    (caller filters).  date_from / date_to: DD-MM-YYYY.
-    """
-    symbol = f"{ticker}.JK"
-    try:
-        d0 = parse_date(date_from_s)
-        d1 = parse_date(date_to_s)
-        # Pad 10 days before so we always capture the prev-trading-day close
-        p1 = int(datetime(d0.year, d0.month, d0.day, tzinfo=timezone.utc).timestamp()) - 10 * 86400
-        p2 = int(datetime(d1.year, d1.month, d1.day, tzinfo=timezone.utc).timestamp()) + 2  * 86400
-        resp = requests.get(
-            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
-            headers=YF_HEADERS,
-            params={"interval": "1d", "period1": p1, "period2": p2,
-                    "includeAdjustedClose": "false"},
-            timeout=12,
-        )
-        data      = resp.json()
-        result    = data.get("chart", {}).get("result", [{}])[0]
-        tss       = result.get("timestamp", [])
-        closes    = result.get("indicators", {}).get("quote", [{}])[0].get("close", [])
-        out = {}
-        for ts, cl in zip(tss, closes):
-            if cl is None:
-                continue
-            # Use WIB (UTC+7) like the rest of the app
-            dt_wib = datetime.fromtimestamp(ts, tz=WIB)
-            out[dt_wib.strftime("%d-%m-%Y")] = round(cl, 2)
-        return out
-    except Exception:
-        return {}
-
-
-def _store_closes_bulk(batch: dict):
-    """Upsert {ticker: {date: close}} into daily_price."""
-    rows = [(t, d, c) for t, dates in batch.items() for d, c in dates.items() if c]
-    if not rows:
-        return
-    try:
-        with _price_fetch_lock:
-            conn = get_db()
-            conn.executemany(
-                "INSERT OR REPLACE INTO daily_price(ticker, date, close_price) VALUES (?,?,?)",
-                rows,
-            )
-            conn.commit()
-    except Exception as exc:
-        _err_log.warning(f"[price store] {exc}")
-
-
-def _prices_from_db(tickers: list, dates: list) -> dict:
-    """Return {ticker: {date: close_price}} from daily_price for the given tickers/dates."""
-    if not tickers or not dates:
-        return {}
-    try:
-        conn  = get_db()
-        ph_t  = ",".join("?" for _ in tickers)
-        ph_d  = ",".join("?" for _ in dates)
-        rows  = conn.execute(
-            f"SELECT ticker, date, close_price FROM daily_price "
-            f"WHERE ticker IN ({ph_t}) AND date IN ({ph_d}) AND close_price IS NOT NULL",
-            tickers + dates,
-        ).fetchall()
-        out = {}
-        for r in rows:
-            out.setdefault(r[0], {})[r[1]] = r[2]
-        return out
-    except Exception:
-        return {}
-
-
-def _missing_price_dates(tickers: list, dates: list) -> set:
-    """Return set of (ticker, date) pairs not yet in daily_price."""
-    if not tickers or not dates:
-        return set()
-    existing = _prices_from_db(tickers, dates)
-    missing  = set()
-    for t in tickers:
-        for d in dates:
-            if d not in existing.get(t, {}):
-                missing.add((t, d))
-    return missing
-
-
-def _gain_from_prices(ticker: str, date_from: str, date_to: str,
-                       price_map: dict) -> tuple:
-    """
-    Compute (gain_pct, close_price) for a ticker using the in-memory price_map
-    {ticker: {date: close}}.
-    gain_pct = (close_date_to - close_prev_of_date_from) / close_prev_of_date_from * 100
-    """
-    closes = price_map.get(ticker, {})
-    if not closes:
-        return None, None
-
-    # close at end of range
-    close_end = closes.get(date_to)
-    if close_end is None:
-        return None, None
-
-    # find previous trading day before date_from (look up to 10 calendar days back)
-    d0 = parse_date(date_from)
-    close_prev = None
-    for delta in range(1, 11):
-        prev_key = (d0 - timedelta(days=delta)).strftime("%d-%m-%Y")
-        if prev_key in closes:
-            close_prev = closes[prev_key]
-            break
-
-    if close_prev is None or close_prev == 0:
-        return None, int(round(close_end))
-
-    gain = round((close_end - close_prev) / close_prev * 100, 2)
-    return gain, int(round(close_end))
-
-
-# ── Background price-fetch worker ───────────────────────────────────────
-
-def _price_worker():
-    """
-    Single daemon thread — consumes jobs from _price_queue.
-    Job types:
-      ("backfill30",)                       → fill last 30 trading days
-      ("eod", date_str)                     → fetch today's closes after 16:30
-      ("on_demand", [tickers], df, dt)      → fill specific tickers/range
-    Also self-schedules the 16:30 EOD fetch by checking time each idle loop.
-    """
-    _ensure_price_table()
-    time.sleep(15)                          # let other startup threads settle
-
-    _price_queue.put(("backfill30",))       # always backfill on every deploy
-
-    last_eod_date = ""
-
-    while True:
-        # ── 16:30 WIB daily trigger ──────────────────────────────────────
-        now_wib = datetime.now(WIB)
-        today_s = now_wib.strftime("%d-%m-%Y")
-        if now_wib.hour == 16 and now_wib.minute >= 30 and last_eod_date != today_s:
-            last_eod_date = today_s
-            _price_queue.put(("eod", today_s))
-
-        # ── Consume one job (wait up to 60 s) ───────────────────────────
-        try:
-            job = _price_queue.get(timeout=60)
-        except _queue.Empty:
-            continue
-
-        try:
-            kind = job[0]
-            if kind == "backfill30":
-                _job_backfill30()
-            elif kind == "eod":
-                _job_eod(job[1])
-            elif kind == "on_demand":
-                _job_on_demand(job[1], job[2], job[3])
-        except Exception as exc:
-            _err_log.warning(f"[price worker] job={job[0]}: {exc}")
-        finally:
-            try:
-                _price_queue.task_done()
-            except Exception:
-                pass
-
-
-def _price_worker_tickers() -> list:
-    """All distinct tickers that ever appeared in eod_summary (active tickers)."""
-    try:
-        rows = get_db().execute("SELECT DISTINCT ticker FROM eod_summary").fetchall()
-        return [r[0] for r in rows]
-    except Exception:
-        # DB not ready — fall back to Kompas100 list so backfill isn't empty
-        return list(KOMPAS100)
-
-
-def _fetch_batch_parallel(tickers: list, date_from: str, date_to: str,
-                           max_workers: int = 5) -> dict:
-    """Fetch closes for multiple tickers in parallel. Returns {ticker: {date: close}}."""
-    result = {}
-    with ThreadPoolExecutor(max_workers=max_workers) as ex:
-        futs = {ex.submit(_yf_closes_for_ticker, t, date_from, date_to): t
-                for t in tickers}
-        for fut in as_completed(futs, timeout=120):
-            t = futs[fut]
-            try:
-                closes = fut.result()
-                if closes:
-                    result[t] = closes
-            except Exception:
-                pass
-            # Flush every 30 tickers to avoid holding too much in memory
-            if len(result) >= 30:
-                _store_closes_bulk(result)
-                result = {}
-    if result:
-        _store_closes_bulk(result)
-    return {}  # already persisted above
-
-
-def _job_backfill30():
-    today    = datetime.now(WIB)
-    date_to  = today.strftime("%d-%m-%Y")
-    date_from = (today - timedelta(days=37)).strftime("%d-%m-%Y")  # 37 covers 30 trading days
-
-    tickers = _price_worker_tickers()
-    if not tickers:
-        return
-
-    # Skip tickers already fully covered in daily_price for this window
-    # (to avoid re-fetching on hot restarts)
-    try:
-        conn = get_db()
-        covered = set(
-            r[0] for r in conn.execute(
-                "SELECT DISTINCT ticker FROM daily_price WHERE date = ?", [date_to]
-            ).fetchall()
-        )
-        to_fetch = [t for t in tickers if t not in covered]
-    except Exception:
-        to_fetch = tickers
-
-    if not to_fetch:
-        _err_log.info("[price backfill] already up-to-date, skipping")
-        return
-
-    _err_log.info(f"[price backfill] {len(to_fetch)} tickers × 30d starting…")
-    _fetch_batch_parallel(to_fetch, date_from, date_to, max_workers=5)
-    _err_log.info("[price backfill] done")
-
-
-def _job_eod(date_str: str):
-    tickers = _price_worker_tickers()
-    if not tickers:
-        return
-    date_from = (parse_date(date_str) - timedelta(days=5)).strftime("%d-%m-%Y")
-    _err_log.info(f"[price eod] fetching closes for {len(tickers)} tickers on {date_str}")
-    _fetch_batch_parallel(tickers, date_from, date_str, max_workers=5)
-    _err_log.info(f"[price eod] done for {date_str}")
-
-
-def _job_on_demand(tickers: list, date_from: str, date_to: str):
-    if not tickers:
-        return
-    # Extend window backward so prev-day close is always available
-    d0_ext = (parse_date(date_from) - timedelta(days=12)).strftime("%d-%m-%Y")
-    _err_log.info(f"[price on-demand] {len(tickers)} tickers {date_from}→{date_to}")
-    _fetch_batch_parallel(tickers, d0_ext, date_to, max_workers=5)
-    _err_log.info(f"[price on-demand] done")
-
-
-# Start the price worker once at module load (gunicorn multi-worker: only
-# the worker that owns the scraper lock should run it too; but since
-# price writes are idempotent INSERT OR REPLACE, running it in multiple
-# workers is harmless — just slightly redundant).
-_price_thread = threading.Thread(target=_price_worker, name="price-worker", daemon=True)
-_price_thread.start()
-
-
-# ── Admin: price cache status ────────────────────────────────────────────
-@app.route("/admin/price-status")
-def price_status():
-    if not _check_admin_secret():
-        return _deny()
-    try:
-        conn   = get_db()
-        total  = conn.execute("SELECT COUNT(*) FROM daily_price").fetchone()[0]
-        tcount = conn.execute("SELECT COUNT(DISTINCT ticker) FROM daily_price").fetchone()[0]
-        latest = conn.execute(
-            f"SELECT date FROM daily_price ORDER BY {_DATE_SORT} DESC LIMIT 1"
-        ).fetchone()
-        oldest = conn.execute(
-            f"SELECT date FROM daily_price ORDER BY {_DATE_SORT} ASC  LIMIT 1"
-        ).fetchone()
-        qsize  = _price_queue.qsize()
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    return jsonify({
-        "rows":          total,
-        "tickers":       tcount,
-        "latest_date":   latest[0] if latest else None,
-        "oldest_date":   oldest[0] if oldest else None,
-        "queue_pending": qsize,
-        "worker_alive":  _price_thread.is_alive(),
-    })
-
-
 # ── Start scraper thread (realtime listener + daily backfill) ────────────
 SCRAPER_ENABLED = os.environ.get("SCRAPER_ENABLED", "1") == "1"
 _scraper_thread = None
 if SCRAPER_ENABLED:
-    # Ensure only ONE gunicorn worker starts the scraper.
-    # Use /tmp by default — ephemeral per container, so always clean after restart.
-    # /data is a persistent volume and causes stale-lock issues across deploys.
-    _lock_dir  = os.environ.get("SCRAPER_LOCK_DIR", "/tmp")
-    try:
-        os.makedirs(_lock_dir, exist_ok=True)
-    except Exception:
-        _lock_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".run")
-        os.makedirs(_lock_dir, exist_ok=True)
-    _lock_path = os.path.join(_lock_dir, "zenith_scraper.lock")
+    # Ensure only ONE gunicorn worker starts the scraper
+    _lock_path = "/tmp/zenith_scraper.lock"
     try:
         # Clean stale lock from previous deploy
         if os.path.exists(_lock_path):
@@ -1760,8 +1199,7 @@ if SCRAPER_ENABLED:
             except (ValueError, ProcessLookupError, PermissionError):
                 os.remove(_lock_path)  # stale — remove
 
-        # O_EXCL prevents races; mode 0600 keeps PID private to this user.
-        _lock_fd = os.open(_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        _lock_fd = os.open(_lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
         os.write(_lock_fd, str(os.getpid()).encode())
         os.close(_lock_fd)
         from scraper_daily import start_scraper_thread
@@ -1769,12 +1207,13 @@ if SCRAPER_ENABLED:
     except FileExistsError:
         pass  # Another worker already owns the scraper
     except Exception as e:
-        _err_log.warning(f"Scraper failed to start: {e}")
+        print(f"⚠️ Scraper failed to start: {e}")
 
 
 @app.route("/admin/scraper-status")
 def scraper_status():
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     alive = _scraper_thread is not None and _scraper_thread.is_alive()
     try:
@@ -1813,7 +1252,8 @@ def scraper_status():
 @app.route("/admin/scraper-weekly")
 def trigger_weekly():
     """Queue a weekly backfill request — runs in scraper thread, not HTTP thread."""
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "7"))
     try:
@@ -1830,7 +1270,8 @@ def trigger_weekly():
 @app.route("/admin/rebuild-summary")
 def rebuild_summary():
     """Queue summary rebuild — runs in scraper thread."""
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     try:
         from scraper_daily import request_rebuild
@@ -1892,20 +1333,11 @@ def api_backtest():
             return jsonify(result)
         return jsonify({"error": f"No backtest for {days} days. Click RUN BACKTEST.", "total_trades": 0})
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
 
 _bt_thread = None
 _bt_status = {"status": "idle"}
-
-# ── Strategy Fitness: fixed anchor date ───────────────────────────────
-# Backtest always starts from this calendar date (not a rolling window).
-# Grows by 1 day every day so the fitness window is anchored, not rolling.
-FITNESS_START_DATE = datetime(2026, 3, 16)
-
-def _fitness_days() -> int:
-    """Calendar days from FITNESS_START_DATE to today (≥ 1)."""
-    return max(1, (datetime.now() - FITNESS_START_DATE).days)
 
 
 @app.route("/api/ticker-fitness")
@@ -1918,11 +1350,9 @@ def api_ticker_fitness():
 
     try:
         conn = get_db()
-        # Prefer cache matching the fixed start-date window, fallback to any
-        fd = _fitness_days()
+        # Prefer 90-day cache, fallback to any
         row = conn.execute(
-            "SELECT results FROM backtest_cache WHERE days=? ORDER BY computed_at DESC LIMIT 1",
-            [fd],
+            "SELECT results FROM backtest_cache WHERE days=90 ORDER BY computed_at DESC LIMIT 1"
         ).fetchone()
         if not row:
             row = conn.execute(
@@ -1993,12 +1423,13 @@ def api_ticker_fitness():
             "trades": trades_sorted,
         })
     except Exception as e:
-        return _server_error(e)
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/admin/trigger-backtest")
 def trigger_backtest():
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "30"))
     try:
@@ -2012,7 +1443,8 @@ def trigger_backtest():
 @app.route("/admin/backfill-prices")
 def admin_backfill_prices():
     """Bulk-fetch Yahoo close prices for last N days into eod_summary."""
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     days = int(request.args.get("days", "30"))
     try:
@@ -2069,7 +1501,8 @@ def admin_fix_date():
 @app.route("/admin/download-db")
 def download_db():
     """Download zenith.db for local backup."""
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     from flask import send_file
     if not os.path.exists(DB_PATH):
@@ -2115,7 +1548,8 @@ def track_analytics():
 
 @app.route("/admin/analytics")
 def analytics():
-    if not _check_admin_secret():
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
     with _analytics_lock:
         active_count = len(_analytics["active_sessions"])
@@ -2133,7 +1567,7 @@ def analytics():
 @app.route('/admin/darurat-nuke-db')
 def darurat_nuke_db():
     secret = request.args.get('secret')
-    if not _safe_eq(secret, NUKE_SECRET):  # separate env-only kill switch
+    if secret != 'machiavellia198161':  # Sesuaikan dengan secret-mu
         return "Akses ditolak", 403
         
     logs = []
@@ -2155,7 +1589,7 @@ def darurat_nuke_db():
 @app.route('/admin/fix-schema')
 def fix_schema():
     secret = request.args.get('secret')
-    if not _safe_eq(secret, ADMIN_SECRET):
+    if secret != 'zenith2026':
         return "Akses ditolak", 403
     
     import sqlite3
@@ -2257,7 +1691,7 @@ def fix_schema():
 @app.route('/admin/reinit-channels')
 def reinit_channels():
     secret = request.args.get('secret')
-    if not _safe_eq(secret, ADMIN_SECRET):
+    if secret != 'zenith2026':
         return "Unauthorized", 403
     
     # Kita panggil fungsi internal scraper untuk refresh dialogs
@@ -2276,10 +1710,8 @@ def reinit_channels():
 def check_logs_raw():
     # Endpoint pembantu untuk melihat apakah ada pesan yang masuk tapi "dibuang"
     # karena tidak cocok dengan kategori manapun
-    if not _check_admin_secret():
-        return _deny()
     import sqlite3
-    conn = sqlite3.connect(os.environ.get("DB_PATH", "/data/zenith.db"))
+    conn = sqlite3.connect('/data/zenith.db')
     c = conn.cursor()
     res = c.execute("SELECT channel, COUNT(*) FROM raw_messages GROUP BY channel").fetchall()
     res_mf = c.execute("SELECT channel, COUNT(*) FROM raw_mf_messages GROUP BY channel").fetchall()
@@ -2290,7 +1722,7 @@ def check_logs_raw():
 def direct_backfill():
     secret = request.args.get('secret')
     days = request.args.get('days', type=int, default=3)
-    if not _safe_eq(secret, ADMIN_SECRET):
+    if secret != 'zenith2026':
         return "Unauthorized", 403
         
     try:
@@ -2309,4 +1741,4 @@ def direct_backfill():
         return f"❌ Gagal memicu direct backfill: {e}"
 
 if __name__ == "__main__":
-    app.run(debug=os.environ.get("FLASK_DEBUG","0")=="1", port=int(os.environ.get("PORT","5000")))
+    app.run(debug=True, port=5000)
