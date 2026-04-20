@@ -1740,8 +1740,9 @@ SCRAPER_ENABLED = os.environ.get("SCRAPER_ENABLED", "1") == "1"
 _scraper_thread = None
 if SCRAPER_ENABLED:
     # Ensure only ONE gunicorn worker starts the scraper.
-    # Prefer a private data dir over shared /tmp; fall back if unwritable.
-    _lock_dir  = os.environ.get("SCRAPER_LOCK_DIR", "/data")
+    # Use /tmp by default — ephemeral per container, so always clean after restart.
+    # /data is a persistent volume and causes stale-lock issues across deploys.
+    _lock_dir  = os.environ.get("SCRAPER_LOCK_DIR", "/tmp")
     try:
         os.makedirs(_lock_dir, exist_ok=True)
     except Exception:
