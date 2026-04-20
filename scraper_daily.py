@@ -991,6 +991,16 @@ async def scraper_main():
         await client.get_dialogs()
         log.info("✅ Dialog cache loaded")
 
+        # Resolve the target group entity explicitly — required if the account
+        # hasn't opened the group before or after a fresh session.
+        try:
+            _group_entity = await client.get_entity(GROUP_ID)
+            log.info(f"✅ Group entity resolved: {getattr(_group_entity, 'title', GROUP_ID)}")
+        except Exception as _ge:
+            log.error(f"❌ Cannot resolve group {GROUP_ID}: {_ge}")
+            log.error("   Make sure the Telegram account has joined / opened the BST group.")
+            return
+
         # ── Realtime listener ─────────────────────────────────────────────
         @client.on(events.NewMessage(chats=GROUP_ID))
         async def on_new_message(event):
