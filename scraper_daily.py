@@ -16,6 +16,7 @@ import sqlite3
 import os
 import logging
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor
 import requests
@@ -419,6 +420,25 @@ TOPIC_CHANNELS = {
 }
 
 
+# ── Analytics recompute throttle (realtime listener only) ────────────────────
+# Prevents compute_analytics_for_date from running on EVERY incoming message.
+# Recomputes at most once every 60 seconds per date.
+_analytics_throttle: dict = {}          # date_str → last_run epoch
+_analytics_throttle_lock = threading.Lock()
+ANALYTICS_THROTTLE_SECS = 60
+
+
+def _should_recompute_analytics(date_str: str) -> bool:
+    """Return True if analytics for date_str should be recomputed now."""
+    now = time.time()
+    with _analytics_throttle_lock:
+        last = _analytics_throttle.get(date_str, 0)
+        if now - last > ANALYTICS_THROTTLE_SECS:
+            _analytics_throttle[date_str] = now
+            return True
+    return False
+
+
 def get_message_topic_id(message) -> int | None:
     """Extract topic ID from a forum message."""
     if message.reply_to:
@@ -446,6 +466,8 @@ def process_message(conn, message) -> int:
             if saved > 0 and rows[0].get("date"):
                 try:
                     rebuild_summary_for_date(conn, rows[0]["date"])
+                    if _should_recompute_analytics(rows[0]["date"]):
+                        compute_analytics_for_date(conn, rows[0]["date"])
                 except Exception:
                     pass
             return saved
@@ -456,6 +478,8 @@ def process_message(conn, message) -> int:
             if saved > 0 and rows[0].get("date"):
                 try:
                     rebuild_summary_for_date(conn, rows[0]["date"])
+                    if _should_recompute_analytics(rows[0]["date"]):
+                        compute_analytics_for_date(conn, rows[0]["date"])
                 except Exception:
                     pass
             return saved
@@ -512,8 +536,16 @@ def ensure_summary_table(conn):
     conn.commit()
 
 
-def rebuild_summary_for_date(conn, date_str: str):
-    """Aggregate raw data for a date into eod_summary (flow fields only)."""
+def rebuild_summary_for_date(conn, date_str: str, full_reset: bool = False):
+    """Aggregate raw data for a date into eod_summary (flow fields only).
+
+    full_reset=False (default): upsert — only overwrites flow columns,
+        preserves analytics (price_close, sri, phase, action, etc.).
+        Used by the realtime listener so analytics aren't wiped on every message.
+
+    full_reset=True: DELETE first, then INSERT fresh rows.
+        Used by rebuild_all_summaries (admin full rebuild).
+    """
     rows_sm_bm = conn.execute("""
         SELECT ticker, channel, SUM(mf_delta_numeric) AS mf, COUNT(*) AS tx
         FROM raw_messages WHERE date = ? GROUP BY ticker, channel
@@ -564,17 +596,41 @@ def rebuild_summary_for_date(conn, date_str: str):
         elif r["channel"] == "mf_minus":
             tickers[t]["mfm"] = (tickers[t]["mfm"] or 0) + abs(r["mf"] or 0)
 
-    conn.execute("DELETE FROM eod_summary WHERE date = ?", [date_str])
-    for t, d in tickers.items():
-        conn.execute("""
-            INSERT INTO eod_summary (date,ticker,sm_val,bm_val,tx_count,tx_sm,tx_bm,mf_plus,mf_minus,vwap_sm,vwap_bm)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)
-        """, (date_str, t, round(d["sm"], 2), round(d["bm"], 2), d["tx"],
-              d["tx_sm"], d["tx_bm"],
-              round(d["mfp"], 2) if d["mfp"] is not None else None,
-              round(d["mfm"], 2) if d["mfm"] is not None else None,
-              round(vwap_sm_map.get(t, 0), 2) if vwap_sm_map.get(t) else None,
-              round(vwap_bm_map.get(t, 0), 2) if vwap_bm_map.get(t) else None))
+    if full_reset:
+        conn.execute("DELETE FROM eod_summary WHERE date = ?", [date_str])
+        for t, d in tickers.items():
+            conn.execute("""
+                INSERT INTO eod_summary (date,ticker,sm_val,bm_val,tx_count,tx_sm,tx_bm,mf_plus,mf_minus,vwap_sm,vwap_bm)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+            """, (date_str, t, round(d["sm"], 2), round(d["bm"], 2), d["tx"],
+                  d["tx_sm"], d["tx_bm"],
+                  round(d["mfp"], 2) if d["mfp"] is not None else None,
+                  round(d["mfm"], 2) if d["mfm"] is not None else None,
+                  round(vwap_sm_map.get(t, 0), 2) if vwap_sm_map.get(t) else None,
+                  round(vwap_bm_map.get(t, 0), 2) if vwap_bm_map.get(t) else None))
+    else:
+        # Upsert: update only flow columns, leave analytics columns (price_close,
+        # price_change_pct, sri, mes, volx_gap, rpr, atr_pct, phase, action) intact.
+        for t, d in tickers.items():
+            conn.execute("""
+                INSERT INTO eod_summary (date,ticker,sm_val,bm_val,tx_count,tx_sm,tx_bm,mf_plus,mf_minus,vwap_sm,vwap_bm)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?)
+                ON CONFLICT(date, ticker) DO UPDATE SET
+                    sm_val   = excluded.sm_val,
+                    bm_val   = excluded.bm_val,
+                    tx_count = excluded.tx_count,
+                    tx_sm    = excluded.tx_sm,
+                    tx_bm    = excluded.tx_bm,
+                    mf_plus  = excluded.mf_plus,
+                    mf_minus = excluded.mf_minus,
+                    vwap_sm  = excluded.vwap_sm,
+                    vwap_bm  = excluded.vwap_bm
+            """, (date_str, t, round(d["sm"], 2), round(d["bm"], 2), d["tx"],
+                  d["tx_sm"], d["tx_bm"],
+                  round(d["mfp"], 2) if d["mfp"] is not None else None,
+                  round(d["mfm"], 2) if d["mfm"] is not None else None,
+                  round(vwap_sm_map.get(t, 0), 2) if vwap_sm_map.get(t) else None,
+                  round(vwap_bm_map.get(t, 0), 2) if vwap_bm_map.get(t) else None))
     conn.commit()
     return len(tickers)
 
@@ -595,9 +651,9 @@ def _fetch_close(ticker):
 
 
 def enrich_daily_prices(conn, date_str: str):
-    """Fetch Yahoo close prices for tickers missing price_close on this date."""
+    """Fetch Yahoo close prices for all tickers on this date (always refreshes)."""
     rows = conn.execute(
-        "SELECT DISTINCT ticker FROM eod_summary WHERE date = ? AND price_close IS NULL", [date_str]
+        "SELECT DISTINCT ticker FROM eod_summary WHERE date = ?", [date_str]
     ).fetchall()
     tickers = [r["ticker"] for r in rows]
     if not tickers:
@@ -836,7 +892,7 @@ def rebuild_all_summaries(conn):
     log.info(f"📊 Rebuilding summary for {len(all_dates)} dates...")
     total = 0
     for i, d in enumerate(all_dates):
-        total += rebuild_summary_for_date(conn, d)
+        total += rebuild_summary_for_date(conn, d, full_reset=True)
         if (i + 1) % 50 == 0:
             log.info(f"  ... {i+1}/{len(all_dates)} dates done")
     log.info(f"✅ Summary: {len(all_dates)} dates, {total} rows")
