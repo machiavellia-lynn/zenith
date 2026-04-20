@@ -2024,6 +2024,48 @@ def admin_backfill_prices():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/admin/fix-date")
+def admin_fix_date():
+    """Force-refresh price_close + recompute analytics for a specific date.
+    Usage: /admin/fix-date?date=DD-MM-YYYY&secret=...
+    Omit date to default to yesterday WIB.
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    yesterday = (datetime.now(WIB) - timedelta(days=1)).strftime("%d-%m-%Y")
+    date_str = request.args.get("date", yesterday).strip()
+
+    try:
+        datetime.strptime(date_str, "%d-%m-%Y")
+    except ValueError:
+        return jsonify({"ok": False, "error": "Format tanggal salah, gunakan DD-MM-YYYY"}), 400
+
+    try:
+        conn = get_db()
+        from scraper_daily import enrich_daily_prices, compute_analytics_for_date
+
+        count = conn.execute(
+            "SELECT COUNT(*) AS n FROM eod_summary WHERE date = ?", [date_str]
+        ).fetchone()["n"]
+        if count == 0:
+            return jsonify({"ok": False, "error": f"Tidak ada data untuk {date_str}"}), 404
+
+        prices_updated = enrich_daily_prices(conn, date_str)
+        tickers_computed = compute_analytics_for_date(conn, date_str)
+
+        return jsonify({
+            "ok": True,
+            "date": date_str,
+            "tickers_in_db": count,
+            "prices_refreshed": prices_updated,
+            "analytics_computed": tickers_computed,
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/admin/download-db")
 def download_db():
     """Download zenith.db for local backup."""
