@@ -390,7 +390,8 @@ def flow():
         if latest_date_row:
             latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
-                SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm, atr_pct
+                SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm,
+                       atr_pct, sm_sma10, bm_sma10, watch, suggested_sl
                 FROM eod_summary WHERE date = ?
             """, [latest_date]).fetchall()
             for ar in a_rows:
@@ -511,82 +512,69 @@ def flow():
 
         g = gains.get(t, {})
         a = analytics_map.get(t, {})
-        gain = g.get("gain")
-        sri = a.get("sri") or 0
+        gain     = g.get("gain")
+        sri      = a.get("sri") or 0
         volx_gap = a.get("volx_gap")
-        atr_pct = a.get("atr_pct")
-        vwap_sm = a.get("vwap_sm")
-        vwap_bm = a.get("vwap_bm")
+        atr_pct  = a.get("atr_pct")
+        vwap_sm  = a.get("vwap_sm")
+        vwap_bm  = a.get("vwap_bm")
+        sm_sma10 = a.get("sm_sma10")
+        bm_sma10 = a.get("bm_sma10") or 0
 
-        # ── Compute RPR from RANGE data (not single day) ──
-        range_tx_sm = d.get("tx_sm") or 0
-        range_tx_bm = d.get("tx_bm") or 0
+        # ── Compute RPR from RANGE data ──
+        range_tx_sm    = d.get("tx_sm") or 0
+        range_tx_bm    = d.get("tx_bm") or 0
         range_tx_total = range_tx_sm + range_tx_bm
         rpr_val = round(range_tx_bm / range_tx_total, 2) if range_tx_total > 0 else 0
 
         # ── MES: |gain%| ÷ SRI ──
         pchg = gain
-        mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
+        mes  = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
-        # ── ATR dynamic thresholds ──
-        atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
-        th_up = max(atr * 0.8, 1.0)
-        th_down = max(atr * 0.4, 0.5)
-        th_flat = atr * 0.5
-        th_sos_h = max(atr * 2.0, 5.0)
-
-        # ── Phase: RSM-based + ATR-adjusted ──
-        phase = "NEUTRAL"
-        action = "HOLD"
+        # ── Phase / Action / Watch / SL via centralised logic ──
+        phase        = "NEUTRAL"
+        action       = "HOLD"
+        watch        = None
+        suggested_sl = None
 
         if rsm is not None and cm is not None:
-            if gain is not None and gain > th_up and rsm > 65 and sri > 3.0:
-                phase = "SOS"
-                action = "BUY" if gain < th_sos_h else "HOLD"
-            elif gain is not None and gain < -th_down and rsm > 60 and sri > 1.5:
-                phase = "SPRING"
-                action = "BUY"
-            elif gain is not None and gain > th_up and rsm < 40 and rpr_val > 0.6:
-                phase = "UPTHRUST"
-                action = "SELL"
-            elif rsm < 40 and gain is not None and gain < -(th_down * 0.5) and sri > 1.0:
-                phase = "DISTRI"
-                action = "SELL"
-            elif sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < th_flat:
-                phase = "ABSORB"
-                action = "BUY"
-            elif rsm > 60 and sri > 1.0:
-                phase = "ACCUM"
-                action = "BUY"
-            elif rsm < 35 and sri > 0.8:
-                phase = "DISTRI"
-                action = "SELL"
-            else:
-                phase = "NEUTRAL"
-                action = "HOLD"
+            from logic import classify_zenith_v2_1, get_action, get_watch_flag, get_suggested_sl
+            bm_raw = d.get("bm_val") or 0
+            phase        = classify_zenith_v2_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
+            action       = get_action(phase, gain, atr_pct)
+            watch        = get_watch_flag(phase, gain, atr_pct)
+            suggested_sl = get_suggested_sl(g.get("price") or a.get("price_close"), atr_pct)
+            # Fall back to DB stored watch/sl if live gain not available
+            if watch is None and a.get("watch"):
+                watch = a.get("watch")
+            if suggested_sl is None and a.get("suggested_sl"):
+                suggested_sl = a.get("suggested_sl")
 
         tickers.append({
-            "ticker":      t,
-            "clean_money": cm,
-            "sm_val":      sm,
-            "bm_val":      bm,
-            "rsm":         rsm,
-            "mf_plus":     mfp,
-            "mf_minus":    mfm,
-            "net_mf":      net,
-            "gain_pct":    gain,
-            "price":       g.get("price") or a.get("price_close"),
-            "tx":          int(d.get("tx") or 0),
-            "phase":       phase,
-            "action":      action,
-            "sri":         sri if sri else None,
-            "mes":         mes,
-            "volx_gap":    volx_gap,
-            "rpr":         rpr_val if rpr_val else None,
+            "ticker":       t,
+            "clean_money":  cm,
+            "sm_val":       sm,
+            "bm_val":       bm,
+            "rsm":          rsm,
+            "mf_plus":      mfp,
+            "mf_minus":     mfm,
+            "net_mf":       net,
+            "gain_pct":     gain,
+            "price":        g.get("price") or a.get("price_close"),
+            "tx":           int(d.get("tx") or 0),
+            "phase":        phase,
+            "action":       action,
+            "watch":        watch,
+            "suggested_sl": suggested_sl,
+            "sri":          sri if sri else None,
+            "mes":          mes,
+            "volx_gap":     volx_gap,
+            "rpr":          rpr_val if rpr_val else None,
             "price_change": pchg,
-            "atr_pct":     atr_pct,
-            "vwap_sm":     round(vwap_sm, 2) if vwap_sm else None,
-            "vwap_bm":     round(vwap_bm, 2) if vwap_bm else None,
+            "atr_pct":      atr_pct,
+            "sm_sma10":     round(sm_sma10, 2) if sm_sma10 else None,
+            "vwap_sm":      round(vwap_sm, 2) if vwap_sm else None,
+            "vwap_bm":      round(vwap_bm, 2) if vwap_bm else None,
         })
 
     # Sort default: clean_money desc (nulls last)

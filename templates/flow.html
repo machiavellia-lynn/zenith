@@ -71,6 +71,21 @@ header::before {
 @keyframes dotPulse{0%,100%{box-shadow:0 0 6px var(--accent),0 0 0 0 rgba(0,232,162,.5)}50%{box-shadow:0 0 14px var(--accent),0 0 0 5px rgba(0,232,162,0)}}
 @keyframes btnPulse{0%,100%{box-shadow:0 0 0 0 rgba(0,232,162,.45),0 0 8px rgba(0,232,162,.25)}50%{box-shadow:0 0 0 7px rgba(0,232,162,0),0 0 16px rgba(0,232,162,.5)}}
 .logo-sub { color: var(--muted); }
+/* ── Watch dot (ARB_SPRING warning) ──────── */
+.watch-dot {
+  color: #f5c518;
+  margin-right: 3px;
+  cursor: help;
+  font-size: 10px;
+  vertical-align: middle;
+}
+/* ── Stop Loss column ────────────────────── */
+.sl-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  color: var(--danger);
+}
+.sl-val.muted { color: var(--muted); }
 .nav-divider { width: 1px; height: 20px; background: var(--border); }
 .nav-group {
   display: flex; align-items: center;
@@ -1055,6 +1070,7 @@ td:first-child { text-align: left; }
         <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="% perubahan harga">GAIN% <span class="sort-icon"></span></th>
         <th onclick="sortBy('phase',event)"        data-col="phase" title="Wyckoff Phase">PHASE <span class="sort-icon"></span></th>
         <th onclick="sortBy('action',event)"       data-col="action" title="Trading Signal">ACTION <span class="sort-icon"></span></th>
+        <th onclick="sortBy('suggested_sl',event)" data-col="suggested_sl" title="Suggested Stop Loss (ATR × 2)">EXIT/SL <span class="sort-icon"></span></th>
       </tr>
     </thead>
     <tbody id="flowBody">
@@ -1167,6 +1183,11 @@ td:first-child { text-align: left; }
           <div class="mm-label">Vx Gap</div>
           <div class="mm-value" id="mmVXG">—</div>
           <div class="mm-sub">close vs vwap</div>
+        </div>
+        <div class="mm-item">
+          <div class="mm-label">Suggested SL</div>
+          <div class="mm-value neg" id="mmSuggestedSL">—</div>
+          <div class="mm-sub">ATR × 2.0</div>
         </div>
       </div>
 
@@ -1679,7 +1700,7 @@ function renderTable() {
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="13">
+    tbody.innerHTML = `<tr class="state-row"><td colspan="14">
       <div class="empty-state">
         <span class="empty-state-ascii">┌─────────────────────────┐
 │   ·  ·  ·   NO DATA   ·  ·  ·   │
@@ -1711,6 +1732,15 @@ function renderTable() {
     const vwapBm = r.vwap_bm ? r.vwap_bm.toLocaleString('id-ID') : '—';
     const atrStr = r.atr_pct ? r.atr_pct.toFixed(1) + '%' : '—';
 
+    // Watch dot: yellow ● for ARB_SPRING
+    const watchDot = r.watch === 'ARB_SPRING'
+      ? `<span class="watch-dot" title="Peringatan: Penurunan > 1.5× ATR — Risiko ARB, butuh konfirmasi hari berikutnya">●</span>`
+      : '';
+
+    // Suggested SL
+    const slStr = r.suggested_sl ? r.suggested_sl.toLocaleString('id-ID') : '—';
+    const slCls = r.suggested_sl ? 'sl-val' : 'sl-val muted';
+
     const actCls = r.action === 'BUY' ? 'action-buy' : r.action === 'SELL' ? 'action-sell' : r.action === 'HOLD' ? 'action-hold' : '';
     return `<tr class="${actCls}" onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
@@ -1727,8 +1757,9 @@ function renderTable() {
       <td><span class="td-num mfm">${r.mf_minus !== null ? fmtM(r.mf_minus) : '—'}</span></td>
       <td><span class="td-num ${r.net_mf === null ? '' : r.net_mf >= 0 ? 'net-pos' : 'net-neg'}">${r.net_mf !== null ? nmfArrow + fmtM(Math.abs(r.net_mf)) : '—'}</span></td>
       <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
-      <td><span class="phase-badge ${r.phase ? r.phase.toLowerCase() : ''}">${r.phase || '—'}</span></td>
+      <td><span class="phase-badge ${r.phase ? r.phase.toLowerCase() : ''}">${watchDot}${r.phase || '—'}</span></td>
       <td><span class="action-badge ${r.action ? r.action.toLowerCase() : ''}" title="SRI:${r.sri!=null?r.sri:'-'} MES:${r.mes!=null?r.mes:'-'} RPR:${r.rpr!=null?r.rpr:'-'} VxGap:${r.volx_gap!=null?r.volx_gap+'%':'-'}">${r.action==='BUY'?'🚀 BUY':r.action==='SELL'?'⚠️ SELL':r.action==='HOLD'?'⌛ HOLD':'—'}</span></td>
+      <td><span class="${slCls}">${slStr}</span></td>
     </tr>`;
   }).join('');
   // cmBars only — rows already have CSS rowIn animation with per-row delay
@@ -1746,12 +1777,12 @@ function rsmToColor(rsm) {
 function showLoading() {
   // Skeleton rows — mimic final layout so layout doesn't jump when data arrives
   const skelCell = `<td><span class="skeleton" style="width:60%;min-width:40px;"></span></td>`;
-  const skelRow  = `<tr class="skeleton-row">${skelCell.repeat(13)}</tr>`;
+  const skelRow  = `<tr class="skeleton-row">${skelCell.repeat(14)}</tr>`;
   document.getElementById('flowBody').innerHTML = skelRow.repeat(10);
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="13">
+    `<tr class="state-row"><td colspan="14">
       <div class="empty-state">
         <span class="empty-state-ascii">┌─────────────────────────┐
 │  ⚠   CONNECTION  LOST   ⚠  │
@@ -1892,7 +1923,10 @@ function populateMetricsPanel(r) {
   const phBadge = document.getElementById('mPhaseBadge');
   const acBadge = document.getElementById('mActionBadge');
   if (r && r.phase) {
-    phBadge.textContent = r.phase;
+    const watchDotModal = r.watch === 'ARB_SPRING'
+      ? `<span class="watch-dot" title="Peringatan: Penurunan > 1.5× ATR — Risiko ARB, butuh konfirmasi hari berikutnya">●</span>`
+      : '';
+    phBadge.innerHTML = watchDotModal + r.phase;
     phBadge.className = 'phase-badge ' + r.phase.toLowerCase();
     phBadge.style.display = 'inline-block';
   } else {
@@ -1905,6 +1939,18 @@ function populateMetricsPanel(r) {
     acBadge.style.display = 'inline-block';
   } else {
     acBadge.style.display = 'none';
+  }
+
+  // Suggested SL
+  const elSL = document.getElementById('mmSuggestedSL');
+  if (elSL) {
+    if (r && r.suggested_sl) {
+      elSL.textContent = r.suggested_sl.toLocaleString('id-ID');
+      elSL.className = 'mm-value neg';
+    } else {
+      elSL.textContent = '—';
+      elSL.className = 'mm-value';
+    }
   }
 }
 

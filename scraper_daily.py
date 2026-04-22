@@ -501,11 +501,14 @@ _DATE_SORT = "substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
 
 
 def ensure_summary_table(conn):
-    """Create eod_summary v3. Drops old schema if columns don't match."""
+    """Create eod_summary v4. Drops and recreates if base schema missing,
+    otherwise adds new columns via ALTER TABLE (safe for existing data)."""
+    # Check base schema exists (vwap_bm was added in v3)
     try:
         conn.execute("SELECT vwap_bm FROM eod_summary LIMIT 1")
     except Exception:
         conn.execute("DROP TABLE IF EXISTS eod_summary")
+
     conn.execute("""
         CREATE TABLE IF NOT EXISTS eod_summary (
             date             TEXT NOT NULL,
@@ -528,9 +531,26 @@ def ensure_summary_table(conn):
             atr_pct          REAL,
             phase            TEXT,
             action           TEXT,
+            sm_sma10         REAL,
+            bm_sma10         REAL,
+            watch            TEXT,
+            suggested_sl     REAL,
             UNIQUE(date, ticker)
         )
     """)
+
+    # Safely add v4 columns if upgrading from older schema
+    for col, typedef in [
+        ("sm_sma10",     "REAL"),
+        ("bm_sma10",     "REAL"),
+        ("watch",        "TEXT"),
+        ("suggested_sl", "REAL"),
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE eod_summary ADD COLUMN {col} {typedef}")
+        except Exception:
+            pass  # column already exists
+
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_date ON eod_summary(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_ticker ON eod_summary(ticker, date)")
     conn.commit()
@@ -732,59 +752,12 @@ def backfill_prices(conn, days=30):
 
 # ── Wyckoff analytics computation ────────────────────────────────────────
 
-def _classify_phase(sri, rsm, rpr, pchg, price, low5, volx_gap, atr_pct=None):
-    """Classify Wyckoff phase. ATR-adjusted thresholds when available."""
-    # Dynamic thresholds based on ATR (volatility-adjusted)
-    # ATR% is average |daily change %|. Default 2.5% if unavailable.
-    atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
-    th_up    = max(atr * 0.8, 1.0)    # "significant up" = 0.8× ATR (min 1%)
-    th_down  = max(atr * 0.4, 0.5)    # "significant down" = 0.4× ATR (min 0.5%)
-    th_flat  = atr * 0.5              # "flat" = less than 0.5× ATR
-    th_sos_h = max(atr * 2.0, 5.0)   # "too high for SOS BUY" = 2× ATR (min 5%)
-
-    # SOS: strong price up + SM very active + SM dominates
-    if pchg is not None and pchg > th_up and rsm > 65 and sri > 3.0:
-        return "SOS"
-    # SPRING: price down + SM dominates + SM active
-    if pchg is not None and pchg < -th_down and rsm > 60 and sri > 1.5:
-        return "SPRING"
-    # Also SPRING via price vs low5
-    if price and low5 and price <= low5 and rsm > 60 and volx_gap < -1:
-        return "SPRING"
-    # UPTHRUST: price up + BM dominates + heavy selling
-    if pchg is not None and pchg > th_up and rsm < 40 and rpr > 0.6:
-        return "UPTHRUST"
-    # DISTRI: BM dominates + price falling + active
-    if rsm < 40 and pchg is not None and pchg < -(th_down * 0.5) and sri > 1.0:
-        return "DISTRI"
-    # ABSORB: SM very active + dominates + price flat
-    if sri > 2.0 and rsm > 65 and pchg is not None and abs(pchg) < th_flat:
-        return "ABSORB"
-    # ACCUM: SM dominates with real activity
-    if rsm > 60 and sri > 1.0:
-        return "ACCUM"
-    # DISTRI fallback: BM clearly dominates
-    if rsm < 35 and sri > 0.8:
-        return "DISTRI"
-    return "NEUTRAL"
-
-
-def _get_action(phase, pchg, atr_pct=None):
-    """Derive trading action. ATR-adjusted SOS threshold."""
-    atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
-    sos_hold_th = max(atr * 2.0, 5.0)  # Too high = HOLD
-
-    if phase == "SOS":
-        return "BUY" if (pchg is not None and pchg < sos_hold_th) else "HOLD"
-    if phase in ("SPRING", "ABSORB", "ACCUM"):
-        return "BUY"
-    if phase in ("UPTHRUST", "DISTRI"):
-        return "SELL"
-    return "HOLD"
+# Import centralised logic — single source of truth
+from logic import classify_zenith_v2_1, get_action, get_watch_flag, get_suggested_sl
 
 
 def compute_analytics_for_date(conn, date_str: str):
-    """Compute SRI/MES/VolxGap/RPR/Phase/Action for all tickers on date_str."""
+    """Compute SRI/MES/VolxGap/RPR/Phase/Action/Watch/SL for all tickers on date_str."""
     rows = conn.execute(
         "SELECT ticker,sm_val,bm_val,tx_sm,tx_bm,vwap_sm,price_close FROM eod_summary WHERE date=?",
         [date_str]
@@ -803,37 +776,50 @@ def compute_analytics_for_date(conn, date_str: str):
     """, [date_str]).fetchall()
     raw_price_map = {r["ticker"]: {"price": r["last_price"], "gain": r["avg_gain"]} for r in raw_prices}
 
+    # Dry spell cutoff: ~20 trading days = 28 calendar days
+    cutoff_date = (datetime.now(WIB) - timedelta(days=28)).strftime("%d-%m-%Y")
+
     computed = 0
     for row in rows:
-        tk = row["ticker"]
-        sm = row["sm_val"] or 0
-        bm = row["bm_val"] or 0
-        cm = sm - bm
+        tk    = row["ticker"]
+        sm    = row["sm_val"] or 0
+        bm    = row["bm_val"] or 0
         tx_sm = row["tx_sm"] or 0
         tx_bm = row["tx_bm"] or 0
-        pc = row["price_close"]
-        vwap = row["vwap_sm"]
+        pc    = row["price_close"]
+        vwap  = row["vwap_sm"]
 
         # Fallback price from raw data
         rp = raw_price_map.get(tk, {})
         if not pc and rp.get("price"):
             pc = rp["price"]
 
+        # History query with dry-spell cutoff (~20 trading days)
         hist = conn.execute(f"""
             SELECT sm_val, bm_val, price_close FROM eod_summary
-            WHERE ticker=? ORDER BY {_DATE_SORT} DESC LIMIT 14
-        """, [tk]).fetchall()
+            WHERE ticker = ?
+              AND {_DATE_SORT} >= substr(?,7,4)||substr(?,4,2)||substr(?,1,2)
+            ORDER BY {_DATE_SORT} DESC LIMIT 14
+        """, [tk, cutoff_date, cutoff_date, cutoff_date]).fetchall()
 
-        # SRI
+        # ── SM_SMA10: Trimmed Mean (drop highest outlier) ──
         sm_h = [h["sm_val"] or 0 for h in hist if (h["sm_val"] or 0) > 0]
-        sma10 = sum(sm_h[:10]) / len(sm_h[:10]) if sm_h[:10] else 0
-        sri = round(sm / sma10, 2) if sma10 > 0 else 0
+        if len(sm_h) >= 3:
+            trimmed = sorted(sm_h[:10])[:-1]  # drop 1 highest
+        else:
+            trimmed = sm_h[:10]
+        sm_sma10 = round(sum(trimmed) / len(trimmed), 2) if trimmed else 0
+        sri = round(sm / sm_sma10, 2) if sm_sma10 > 0 else 0
 
-        # RPR
+        # ── BM_SMA10: Simple Mean ──
+        bm_h = [h["bm_val"] or 0 for h in hist[:10]]
+        bm_sma10 = round(sum(bm_h) / len(bm_h), 2) if bm_h else 0
+
+        # ── RPR ──
         ttx = tx_sm + tx_bm
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
-        # Price change: try DB price_close history, fallback to raw gain_pct
+        # ── Price change % ──
         prices = [h["price_close"] for h in hist if h["price_close"]]
         pchg = None
         if pc and len(prices) >= 2 and prices[1] and prices[1] > 0:
@@ -841,38 +827,43 @@ def compute_analytics_for_date(conn, date_str: str):
         if pchg is None and rp.get("gain") is not None:
             pchg = round(rp["gain"], 2)
 
-        # ATR% = average |daily change %| over last 14 days
+        # ── ATR% ──
         atr_pct = None
         if len(prices) >= 3:
-            daily_changes = []
-            for j in range(len(prices) - 1):
-                if prices[j] and prices[j+1] and prices[j+1] > 0:
-                    daily_changes.append(abs((prices[j] - prices[j+1]) / prices[j+1] * 100))
+            daily_changes = [
+                abs((prices[j] - prices[j+1]) / prices[j+1] * 100)
+                for j in range(len(prices) - 1)
+                if prices[j] and prices[j+1] and prices[j+1] > 0
+            ]
             if daily_changes:
                 atr_pct = round(sum(daily_changes) / len(daily_changes), 2)
 
-        # MES
+        # ── MES ──
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
-        # Volx Gap
+        # ── Volx Gap ──
         vg = round((pc - vwap) / pc * 100, 2) if pc and vwap and pc > 0 else 0
 
-        # CM 3d + Low 5d
-        cm3 = sum((h["sm_val"] or 0) - (h["bm_val"] or 0) for h in hist[:3])
-        p5 = [h["price_close"] for h in hist[:5] if h["price_close"]]
-        low5 = min(p5) if p5 else None
-
-        # RSM
+        # ── RSM ──
         total_val = sm + bm
         rsm_val = round(sm / total_val * 100, 1) if total_val > 0 else 50
 
-        phase = _classify_phase(sri, rsm_val, rpr, pchg, pc, low5, vg, atr_pct)
-        action = _get_action(phase, pchg, atr_pct)
+        # ── Phase / Action / Watch / SL ──
+        phase        = classify_zenith_v2_1(sri, rsm_val, rpr, pchg, bm, bm_sma10, atr_pct)
+        action       = get_action(phase, pchg, atr_pct)
+        watch        = get_watch_flag(phase, pchg, atr_pct)
+        suggested_sl = get_suggested_sl(pc, atr_pct)
 
         conn.execute("""
-            UPDATE eod_summary SET price_change_pct=?,sri=?,mes=?,volx_gap=?,rpr=?,atr_pct=?,phase=?,action=?
+            UPDATE eod_summary
+            SET price_change_pct=?, sri=?, mes=?, volx_gap=?, rpr=?,
+                atr_pct=?, sm_sma10=?, bm_sma10=?, phase=?, action=?,
+                watch=?, suggested_sl=?
             WHERE date=? AND ticker=?
-        """, [pchg, sri, mes, vg, rpr, atr_pct, phase, action, date_str, tk])
+        """, [pchg, sri, mes, vg, rpr,
+              atr_pct, sm_sma10, bm_sma10, phase, action,
+              watch, suggested_sl,
+              date_str, tk])
         computed += 1
 
     conn.commit()
@@ -1279,34 +1270,15 @@ def _fetch_price_history(ticker, days=90):
         return ticker, {}
 
 
-def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, atr_pct=None):
-    """Compute phase+action. ATR-adjusted thresholds."""
+def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, bm_sma10=0, atr_pct=None):
+    """Compute phase+action for backtest engine. Uses centralised logic.py."""
     total_val = sm + bm
     rsm = (sm / total_val * 100) if total_val > 0 else 50
     ttx = tx_sm + tx_bm
     rpr = tx_bm / ttx if ttx > 0 else 0.5
-
-    atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
-    th_up = max(atr * 0.8, 1.0)
-    th_down = max(atr * 0.4, 0.5)
-    th_flat = atr * 0.5
-    th_sos_h = max(atr * 2.0, 5.0)
-
-    if gain is not None and gain > th_up and rsm > 65 and sri > 3.0:
-        return "SOS", ("BUY" if gain < th_sos_h else "HOLD")
-    if gain is not None and gain < -th_down and rsm > 60 and sri > 1.5:
-        return "SPRING", "BUY"
-    if gain is not None and gain > th_up and rsm < 40 and rpr > 0.6:
-        return "UPTHRUST", "SELL"
-    if rsm < 40 and gain is not None and gain < -(th_down * 0.5) and sri > 1.0:
-        return "DISTRI", "SELL"
-    if sri > 2.0 and rsm > 65 and gain is not None and abs(gain) < th_flat:
-        return "ABSORB", "BUY"
-    if rsm > 60 and sri > 1.0:
-        return "ACCUM", "BUY"
-    if rsm < 35 and sri > 0.8:
-        return "DISTRI", "SELL"
-    return "NEUTRAL", "HOLD"
+    phase  = classify_zenith_v2_1(sri, rsm, rpr, gain, bm, bm_sma10, atr_pct)
+    action = get_action(phase, gain, atr_pct)
+    return phase, action
 
 
 def run_backtest(conn, days=30):
@@ -1362,35 +1334,59 @@ def run_backtest(conn, days=30):
             price_map[tk] = prices
     log.info(f"  OHLCV fetched for {len(price_map)} tickers")
 
-    # 4. Build signal timeline per ticker: {ticker: [(date, phase, action, gain), ...]}
+    # 4. Preload ALL flow data for signal dates
+    #    SRI/ATR must be computed on-the-fly: DB columns are only populated for
+    #    recent dates (~15 days). Older dates have sri=NULL → all BUY phases fail.
+    log.info("  Preloading flow data for on-the-fly SRI/ATR computation...")
+    ph = ",".join("?" for _ in use_dates)
+    all_flow_rows = conn.execute(f"""
+        SELECT date, ticker, sm_val, bm_val, tx_sm, tx_bm
+        FROM eod_summary WHERE date IN ({ph})
+    """, use_dates).fetchall()
+
+    # Build per-ticker chronological history for SRI window
+    # {ticker: [{"date": .., "sm": .., "bm": .., "tx_sm": .., "tx_bm": ..}, ...]}
+    ticker_flow_hist = {}
+    for r in all_flow_rows:
+        tk = r["ticker"]
+        if tk not in ticker_flow_hist:
+            ticker_flow_hist[tk] = []
+        ticker_flow_hist[tk].append({
+            "date":  r["date"],
+            "sk":    r["date"][6:10] + r["date"][3:5] + r["date"][0:2],  # sort key
+            "sm":    r["sm_val"] or 0,
+            "bm":    r["bm_val"] or 0,
+            "tx_sm": r["tx_sm"] or 0,
+            "tx_bm": r["tx_bm"] or 0,
+        })
+    for tk in ticker_flow_hist:
+        ticker_flow_hist[tk].sort(key=lambda x: x["sk"])
+
+    # Build signal timeline per ticker
     log.info("  Building signal timeline...")
     signal_timeline = {}  # ticker → list of (date_idx, date, phase, action)
 
     for date_str in use_dates:
-        rows = conn.execute(
-            "SELECT ticker, sm_val, bm_val, tx_sm, tx_bm, sri, atr_pct FROM eod_summary WHERE date = ?",
-            [date_str]
-        ).fetchall()
-
         d_idx = date_idx.get(date_str)
         if d_idx is None:
             continue
+        cur_sk = date_str[6:10] + date_str[3:5] + date_str[0:2]
 
-        for row in rows:
-            tk = row["ticker"]
-            sm = row["sm_val"] or 0
-            bm = row["bm_val"] or 0
-            sri = row["sri"] or 0
+        # Get tickers active on this date
+        date_tickers = {r["ticker"]: r for r in all_flow_rows if r["date"] == date_str}
+
+        for tk, row in date_tickers.items():
+            sm    = row["sm_val"] or 0
+            bm    = row["bm_val"] or 0
             tx_sm = row["tx_sm"] or 0
             tx_bm = row["tx_bm"] or 0
-            atr = row["atr_pct"]
 
-            tp = price_map.get(tk, {})
+            tp       = price_map.get(tk, {})
             day_data = tp.get(date_str)
             if not day_data:
                 continue
 
-            # Gain% for phase computation
+            # ── Gain% from price_map ──
             gain = None
             if d_idx > 0:
                 prev_date = all_dates[d_idx - 1]
@@ -1398,7 +1394,45 @@ def run_backtest(conn, days=30):
                 if prev_data and prev_data["c"] > 0:
                     gain = round((day_data["c"] - prev_data["c"]) / prev_data["c"] * 100, 2)
 
-            phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, atr)
+            # ── SRI: trimmed mean from flow history before current date ──
+            tk_hist = ticker_flow_hist.get(tk, [])
+            prev_sm_vals = [
+                h["sm"] for h in tk_hist
+                if h["sk"] < cur_sk and h["sm"] > 0
+            ][-10:]
+            if len(prev_sm_vals) >= 3:
+                trimmed  = sorted(prev_sm_vals)[:-1]
+                sm_sma10 = sum(trimmed) / len(trimmed)
+            elif prev_sm_vals:
+                sm_sma10 = sum(prev_sm_vals) / len(prev_sm_vals)
+            else:
+                sm_sma10 = 0
+            sri = round(sm / sm_sma10, 2) if sm_sma10 > 0 else 0
+
+            # ── BM_SMA10: simple mean from flow history before current date ──
+            prev_bm_vals = [h["bm"] for h in tk_hist if h["sk"] < cur_sk][-10:]
+            bm_sma10 = sum(prev_bm_vals) / len(prev_bm_vals) if prev_bm_vals else 0
+
+            # ── ATR% from price_map ──
+            price_hist = []
+            for i in range(1, 15):
+                if d_idx - i < 0:
+                    break
+                pd      = all_dates[d_idx - i]
+                pd_data = tp.get(pd)
+                if pd_data and pd_data["c"] > 0:
+                    price_hist.append(pd_data["c"])
+            atr = None
+            if len(price_hist) >= 3:
+                daily_changes = [
+                    abs((price_hist[j] - price_hist[j+1]) / price_hist[j+1] * 100)
+                    for j in range(len(price_hist) - 1)
+                    if price_hist[j+1] > 0
+                ]
+                if daily_changes:
+                    atr = round(sum(daily_changes) / len(daily_changes), 2)
+
+            phase, action = _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, bm_sma10, atr)
 
             if tk not in signal_timeline:
                 signal_timeline[tk] = []
