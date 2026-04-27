@@ -391,7 +391,7 @@ def flow():
             latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
                 SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm,
-                       atr_pct, sm_sma10, bm_sma10, watch, suggested_sl
+                       atr_pct, sm_sma10, bm_sma10, watch
                 FROM eod_summary WHERE date = ?
             """, [latest_date]).fetchall()
             for ar in a_rows:
@@ -535,20 +535,15 @@ def flow():
         phase        = "NEUTRAL"
         action       = "HOLD"
         watch        = None
-        suggested_sl = None
 
         if rsm is not None and cm is not None:
-            from logic import classify_zenith_v2_1, get_action, get_watch_flag, get_suggested_sl
+            from logic import classify_zenith_v2_1, get_action, get_watch_flag
             bm_raw = d.get("bm_val") or 0
-            phase        = classify_zenith_v2_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
-            action       = get_action(phase, gain, atr_pct)
-            watch        = get_watch_flag(phase, gain, atr_pct)
-            suggested_sl = get_suggested_sl(g.get("price") or a.get("price_close"), atr_pct)
-            # Fall back to DB stored watch/sl if live gain not available
+            phase  = classify_zenith_v2_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
+            action = get_action(phase, gain, atr_pct)
+            watch  = get_watch_flag(phase, gain, atr_pct)
             if watch is None and a.get("watch"):
                 watch = a.get("watch")
-            if suggested_sl is None and a.get("suggested_sl"):
-                suggested_sl = a.get("suggested_sl")
 
         tickers.append({
             "ticker":       t,
@@ -565,7 +560,6 @@ def flow():
             "phase":        phase,
             "action":       action,
             "watch":        watch,
-            "suggested_sl": suggested_sl,
             "sri":          sri if sri else None,
             "mes":          mes,
             "volx_gap":     volx_gap,
@@ -1712,21 +1706,303 @@ def direct_backfill():
     days = request.args.get('days', type=int, default=3)
     if secret != 'zenith2026':
         return "Unauthorized", 403
-        
     try:
-        # Kita import langsung fungsinya dari scraper_daily
         from scraper_daily import run_backfill
-        import threading
-        
-        # Jalankan di thread baru agar Flask tidak timeout (504)
-        # Tapi kita bypass sistem '_backfill_request["status"] == "pending"'
         thread = threading.Thread(target=run_backfill, args=(days,))
         thread.daemon = True
         thread.start()
-        
         return f"⚡ DIRECT BACKFILL dipicu untuk {days} hari. Cek log Railway sekarang!"
     except Exception as e:
         return f"❌ Gagal memicu direct backfill: {e}"
+
+
+# ── Kompas100 ─────────────────────────────────────────────────────────────
+@app.route("/kompas100")
+def kompas100_page():
+    if not is_authed(): return redirect("/")
+    return render_template("kompas100.html")
+
+
+# ── Trade Journal ─────────────────────────────────────────────────────────
+@app.route("/journal")
+def journal_page():
+    if not is_authed(): return redirect("/")
+    return render_template("journal.html")
+
+
+@app.route("/api/journal")
+def api_journal():
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
+    try:
+        conn = get_db()
+        ticker    = request.args.get("ticker", "").strip().upper()
+        reason    = request.args.get("reason", "").strip()
+        from_date = request.args.get("from", "").strip()    # DD-MM-YYYY
+        to_date   = request.args.get("to", "").strip()      # DD-MM-YYYY
+        limit     = min(int(request.args.get("limit", "100")), 500)
+        offset    = int(request.args.get("offset", "0"))
+
+        # Default: today WIB
+        if not from_date and not to_date:
+            from_date = datetime.now(WIB).strftime("%d-%m-%Y")
+            to_date   = from_date
+
+        conditions = []
+        params     = []
+
+        if ticker:
+            conditions.append("ticker = ?")
+            params.append(ticker)
+        if reason:
+            conditions.append("exit_reason = ?")
+            params.append(reason)
+        if from_date:
+            conditions.append(
+                "substr(entry_date,7,4)||substr(entry_date,4,2)||substr(entry_date,1,2) >= ?"
+            )
+            params.append(from_date[6:10] + from_date[3:5] + from_date[0:2])
+        if to_date:
+            conditions.append(
+                "substr(entry_date,7,4)||substr(entry_date,4,2)||substr(entry_date,1,2) <= ?"
+            )
+            params.append(to_date[6:10] + to_date[3:5] + to_date[0:2])
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        try:
+            rows = conn.execute(f"""
+                SELECT ticker, entry_phase, entry_date, buy_price,
+                       exit_date, sell_price, gain_pct, hold_days, exit_reason, status
+                FROM trade_journal
+                {where}
+                ORDER BY substr(entry_date,7,4)||substr(entry_date,4,2)||substr(entry_date,1,2) DESC,
+                         ticker
+                LIMIT ? OFFSET ?
+            """, params + [limit, offset]).fetchall()
+
+            total = conn.execute(f"""
+                SELECT COUNT(*) FROM trade_journal {where}
+            """, params).fetchone()[0]
+        except Exception:
+            # Table belum ada
+            rows  = []
+            total = 0
+
+        return jsonify({
+            "trades": [dict(r) for r in rows],
+            "total":  total,
+            "offset": offset,
+            "limit":  limit,
+            "from":   from_date,
+            "to":     to_date,
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/open-position", methods=["POST"])
+def api_open_position():
+    """Manual override: buka posisi baru di trade_journal."""
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
+    try:
+        data        = request.json or {}
+        ticker      = data.get("ticker", "").upper().strip()
+        entry_phase = data.get("entry_phase")
+        entry_date  = data.get("entry_date")   # DD-MM-YYYY
+        buy_price   = data.get("buy_price")
+
+        if not ticker or not entry_date or not buy_price:
+            return jsonify({"error": "ticker, entry_date, buy_price diperlukan"}), 400
+        buy_price = float(buy_price)
+        if buy_price <= 0:
+            return jsonify({"error": "buy_price harus > 0"}), 400
+
+        from scraper_daily import open_position, ensure_trade_journal_table
+        conn = get_db()
+        ensure_trade_journal_table(conn)
+        open_position(conn, ticker, entry_phase, entry_date, buy_price)
+        return jsonify({"ok": True, "message": f"Opened {ticker} at {buy_price}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/close-position", methods=["PATCH"])
+def api_close_position():
+    """Manual override: tutup semua posisi open untuk ticker tertentu."""
+    if not is_authed(): return jsonify({"error": "unauthorized"}), 401
+    try:
+        data        = request.json or {}
+        ticker      = data.get("ticker", "").upper().strip()
+        exit_date   = data.get("exit_date")    # DD-MM-YYYY
+        sell_price  = data.get("sell_price")
+        exit_reason = data.get("exit_reason", "Manual Close")
+
+        if not ticker or not exit_date or not sell_price:
+            return jsonify({"error": "ticker, exit_date, sell_price diperlukan"}), 400
+        sell_price = float(sell_price)
+        if sell_price <= 0:
+            return jsonify({"error": "sell_price harus > 0"}), 400
+
+        from scraper_daily import close_position
+        conn = get_db()
+        close_position(conn, ticker, exit_date, sell_price, exit_reason)
+        return jsonify({"ok": True, "message": f"Closed all {ticker} positions at {sell_price}"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+# ── Admin: Fetch Gains from Yahoo → DB ───────────────────────────────────
+@app.route("/admin/fetch-gains")
+def admin_fetch_gains():
+    """Fetch gain% dari Yahoo untuk tanggal tertentu, simpan ke eod_summary.
+
+    Modes (pilih salah satu):
+      Single date : ?secret=...&date=24-04-2026
+      Last N days : ?secret=...&days=30
+      Date range  : ?secret=...&from=01-04-2026&to=24-04-2026
+
+    Kalau DB sudah punya price_change_pct → di-skip (tidak re-fetch).
+    Tambahkan ?force=1 untuk overwrite semua meskipun sudah ada.
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    date_str  = request.args.get("date", "").strip()    # DD-MM-YYYY
+    days_str  = request.args.get("days", "").strip()    # integer
+    from_str  = request.args.get("from", "").strip()    # DD-MM-YYYY
+    to_str    = request.args.get("to",   "").strip()    # DD-MM-YYYY
+    force     = request.args.get("force", "0") == "1"  # overwrite existing
+
+    if not date_str and not days_str and not (from_str and to_str):
+        return (
+            "❌ Gunakan salah satu:\n"
+            "  ?date=DD-MM-YYYY\n"
+            "  ?days=30\n"
+            "  ?from=DD-MM-YYYY&to=DD-MM-YYYY"
+        ), 400
+
+    try:
+        conn = get_db()
+
+        if from_str and to_str:
+            # Date range: ambil semua tanggal di DB dalam range itu
+            try:
+                from_sk = from_str[6:10] + from_str[3:5] + from_str[0:2]
+                to_sk   = to_str[6:10]   + to_str[3:5]   + to_str[0:2]
+            except Exception:
+                return "❌ Format from/to salah, gunakan DD-MM-YYYY", 400
+            dates = conn.execute(f"""
+                SELECT DISTINCT date FROM eod_summary
+                WHERE substr(date,7,4)||substr(date,4,2)||substr(date,1,2) BETWEEN ? AND ?
+                ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2) ASC
+            """, [from_sk, to_sk]).fetchall()
+            dates = [r["date"] for r in dates]
+            label = f"{from_str} → {to_str}"
+
+        elif days_str:
+            try:
+                n_days = int(days_str)
+            except ValueError:
+                return "❌ days harus angka", 400
+            dates = conn.execute(f"""
+                SELECT DISTINCT date FROM eod_summary
+                ORDER BY substr(date,7,4)||substr(date,4,2)||substr(date,1,2) DESC
+                LIMIT ?
+            """, [n_days]).fetchall()
+            dates = [r["date"] for r in dates]
+            label = f"last {n_days} hari"
+
+        else:
+            dates = [date_str]
+            label = date_str
+
+        if not dates:
+            return f"❌ Tidak ada data di DB untuk range: {label}", 404
+
+        # Kalau tidak force, skip tanggal yang price_change_pct sudah terisi semua
+        if not force:
+            filtered = []
+            for d in dates:
+                null_count = conn.execute("""
+                    SELECT COUNT(*) FROM eod_summary
+                    WHERE date = ? AND price_change_pct IS NULL
+                """, [d]).fetchone()[0]
+                if null_count > 0:
+                    filtered.append(d)
+            skipped = len(dates) - len(filtered)
+            dates   = filtered
+        else:
+            skipped = 0
+
+        if not dates:
+            return f"✅ Semua tanggal sudah terisi ({skipped} hari di-skip). Tambah ?force=1 untuk overwrite."
+
+        def _fetch():
+            import logging
+            try:
+                from scraper_daily import fetch_all_gains_to_db
+                for d in dates:
+                    logging.info(f"[fetch-gains] Fetching {d}...")
+                    fetch_all_gains_to_db(conn, d, delay_ms=333)
+                logging.info(f"[fetch-gains] ✅ Selesai {len(dates)} hari")
+            except Exception as e:
+                logging.error(f"[fetch-gains] Error: {e}")
+
+        threading.Thread(target=_fetch, daemon=True).start()
+
+        skip_info = f", {skipped} hari di-skip (sudah ada)" if skipped else ""
+        return (
+            f"✅ Fetching gains untuk {len(dates)} hari dimulai di background"
+            f" ({label}{skip_info}, delay 333ms/ticker)"
+        )
+
+    except Exception as e:
+        return f"❌ Error: {e}", 500
+
+
+# ── Admin: Backup DB → Dropbox ────────────────────────────────────────────
+@app.route("/admin/backup-db")
+def backup_db():
+    """Push zenith.db ke Dropbox. Railway upload sendiri — tidak timeout di browser."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    DROPBOX_TOKEN = os.environ.get("DROPBOX_ACCESS_TOKEN", "")
+    DROPBOX_DEST  = "/zenith.db"
+
+    if not DROPBOX_TOKEN:
+        return "❌ DROPBOX_ACCESS_TOKEN belum di-set di Railway env vars", 500
+    if not os.path.exists(DB_PATH):
+        return f"❌ DB tidak ditemukan di {DB_PATH}", 500
+
+    size_mb = round(os.path.getsize(DB_PATH) / 1024 / 1024, 1)
+
+    try:
+        import json as _json
+        with open(DB_PATH, "rb") as f:
+            r = requests.post(
+                "https://content.dropboxapi.com/2/files/upload",
+                headers={
+                    "Authorization":   f"Bearer {DROPBOX_TOKEN}",
+                    "Dropbox-API-Arg": _json.dumps({
+                        "path":       DROPBOX_DEST,
+                        "mode":       "overwrite",
+                        "autorename": False,
+                        "mute":       True,
+                    }),
+                    "Content-Type": "application/octet-stream",
+                },
+                data=f,
+                timeout=600,
+            )
+        if r.status_code == 200:
+            meta = r.json()
+            return f"✅ Backup OK — {size_mb} MB → Dropbox:{DROPBOX_DEST} (rev {meta.get('rev','?')})"
+        return f"❌ Dropbox error {r.status_code}: {r.text[:300]}", 500
+    except Exception as e:
+        return f"❌ Upload error: {e}", 500
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
