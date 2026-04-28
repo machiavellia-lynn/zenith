@@ -534,17 +534,15 @@ def ensure_summary_table(conn):
             sm_sma10         REAL,
             bm_sma10         REAL,
             watch            TEXT,
-            suggested_sl     REAL,
             UNIQUE(date, ticker)
         )
     """)
 
     # Safely add v4 columns if upgrading from older schema
     for col, typedef in [
-        ("sm_sma10",     "REAL"),
-        ("bm_sma10",     "REAL"),
-        ("watch",        "TEXT"),
-        ("suggested_sl", "REAL"),
+        ("sm_sma10", "REAL"),
+        ("bm_sma10", "REAL"),
+        ("watch",    "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE eod_summary ADD COLUMN {col} {typedef}")
@@ -554,6 +552,7 @@ def ensure_summary_table(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_date ON eod_summary(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_ticker ON eod_summary(ticker, date)")
     conn.commit()
+    ensure_trade_journal_table(conn)
 
 
 def rebuild_summary_for_date(conn, date_str: str, full_reset: bool = False):
@@ -750,14 +749,168 @@ def backfill_prices(conn, days=30):
     return updated
 
 
-# ── Wyckoff analytics computation ────────────────────────────────────────
+def fetch_all_gains_to_db(conn, date_str: str, delay_ms: int = 333):
+    """Fetch gain% + price dari Yahoo untuk semua ticker di date_str.
+    Simpan ke eod_summary.price_change_pct dan price_close.
+    delay_ms = jeda antar request (333ms ≈ 180 req/jam, aman dari rate limit).
+    """
+    import time as _time
+
+    tickers = conn.execute(
+        "SELECT DISTINCT ticker FROM eod_summary WHERE date = ?", [date_str]
+    ).fetchall()
+    tickers = [r["ticker"] for r in tickers]
+
+    if not tickers:
+        log.info(f"[fetch-gains] Tidak ada ticker untuk {date_str}")
+        return {"success": 0, "failed": 0, "total": 0}
+
+    log.info(f"[fetch-gains] {len(tickers)} ticker untuk {date_str}, delay={delay_ms}ms")
+
+    success = 0
+    failed  = 0
+
+    for i, tk in enumerate(tickers):
+        try:
+            from app import fetch_gain_range  # reuse existing Yahoo fetch logic
+            gain, price = fetch_gain_range(tk, date_str, date_str)
+
+            if gain is not None or price is not None:
+                conn.execute("""
+                    UPDATE eod_summary
+                    SET price_change_pct = COALESCE(?, price_change_pct),
+                        price_close      = COALESCE(?, price_close)
+                    WHERE date = ? AND ticker = ?
+                """, [gain, price, date_str, tk])
+                success += 1
+            else:
+                failed += 1
+
+        except Exception as e:
+            log.warning(f"[fetch-gains] {tk}: {e}")
+            failed += 1
+
+        if i < len(tickers) - 1:
+            _time.sleep(delay_ms / 1000.0)
+
+    conn.commit()
+    log.info(f"[fetch-gains] ✅ {date_str}: {success} ok, {failed} failed")
+    return {"success": success, "failed": failed, "total": len(tickers)}
+
+
+# ── Trade Journal ─────────────────────────────────────────────────────────
+
+def ensure_trade_journal_table(conn):
+    """Create trade_journal table — live position tracker."""
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS trade_journal (
+            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker       TEXT NOT NULL,
+            entry_phase  TEXT,
+            entry_date   TEXT NOT NULL,
+            buy_price    REAL NOT NULL,
+            status       TEXT NOT NULL DEFAULT 'open',
+            exit_date    TEXT,
+            sell_price   REAL,
+            gain_pct     REAL,
+            hold_days    INTEGER,
+            exit_reason  TEXT,
+            created_at   TEXT,
+            updated_at   TEXT
+        )
+    """)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_journal_ticker_status ON trade_journal(ticker, status)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_journal_entry_date ON trade_journal(entry_date)"
+    )
+    conn.commit()
+
+
+def open_position(conn, ticker: str, entry_phase: str, entry_date: str, buy_price: float):
+    """Insert new open position ke trade_journal."""
+    now = datetime.now(WIB).isoformat()
+    conn.execute("""
+        INSERT INTO trade_journal
+            (ticker, entry_phase, entry_date, buy_price, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, 'open', ?, ?)
+    """, [ticker, entry_phase, entry_date, buy_price, now, now])
+    conn.commit()
+
+
+def close_position(conn, ticker: str, exit_date: str, sell_price: float, exit_reason: str):
+    """Tutup SEMUA open position untuk ticker ini."""
+    open_rows = conn.execute("""
+        SELECT id, buy_price, entry_date FROM trade_journal
+        WHERE ticker = ? AND status = 'open'
+    """, [ticker]).fetchall()
+
+    if not open_rows:
+        return 0
+
+    now = datetime.now(WIB).isoformat()
+    closed = 0
+    for row in open_rows:
+        gain_pct = round((sell_price - row["buy_price"]) / row["buy_price"] * 100, 2)
+        try:
+            d_entry   = datetime.strptime(row["entry_date"], "%d-%m-%Y")
+            d_exit    = datetime.strptime(exit_date, "%d-%m-%Y")
+            hold_days = (d_exit - d_entry).days
+        except Exception:
+            hold_days = None
+
+        conn.execute("""
+            UPDATE trade_journal
+            SET status     = 'closed',
+                exit_date  = ?,
+                sell_price = ?,
+                gain_pct   = ?,
+                hold_days  = ?,
+                exit_reason= ?,
+                updated_at = ?
+            WHERE id = ?
+        """, [exit_date, sell_price, gain_pct, hold_days, exit_reason, now, row["id"]])
+        closed += 1
+
+    conn.commit()
+    return closed
+
+
+def check_stop_loss(conn, date_str: str, threshold_pct: float = -10.0):
+    """Cek semua open position — close jika loss >= threshold vs harga close hari ini."""
+    open_rows = conn.execute("""
+        SELECT id, ticker, buy_price FROM trade_journal WHERE status = 'open'
+    """).fetchall()
+
+    if not open_rows:
+        return 0
+
+    closed = 0
+    for row in open_rows:
+        price_row = conn.execute("""
+            SELECT price_close FROM eod_summary
+            WHERE ticker = ? AND date = ? AND price_close IS NOT NULL
+        """, [row["ticker"], date_str]).fetchone()
+
+        if not price_row or not price_row["price_close"]:
+            continue
+
+        current_price = price_row["price_close"]
+        loss_pct = (current_price - row["buy_price"]) / row["buy_price"] * 100
+
+        if loss_pct <= threshold_pct:
+            close_position(conn, row["ticker"], date_str, current_price, "Stop Loss (-10%)")
+            closed += 1
+
+    return closed
 
 # Import centralised logic — single source of truth
-from logic import classify_zenith_v2_1, get_action, get_watch_flag, get_suggested_sl
+from logic import classify_zenith_v2_1, get_action, get_watch_flag
 
 
 def compute_analytics_for_date(conn, date_str: str):
-    """Compute SRI/MES/VolxGap/RPR/Phase/Action/Watch/SL for all tickers on date_str."""
+    """Compute SRI/MES/VolxGap/RPR/Phase/Action/Watch for all tickers on date_str."""
     rows = conn.execute(
         "SELECT ticker,sm_val,bm_val,tx_sm,tx_bm,vwap_sm,price_close FROM eod_summary WHERE date=?",
         [date_str]
@@ -848,23 +1001,35 @@ def compute_analytics_for_date(conn, date_str: str):
         total_val = sm + bm
         rsm_val = round(sm / total_val * 100, 1) if total_val > 0 else 50
 
-        # ── Phase / Action / Watch / SL ──
-        phase        = classify_zenith_v2_1(sri, rsm_val, rpr, pchg, bm, bm_sma10, atr_pct)
-        action       = get_action(phase, pchg, atr_pct)
-        watch        = get_watch_flag(phase, pchg, atr_pct)
-        suggested_sl = get_suggested_sl(pc, atr_pct)
+        # ── Phase / Action / Watch ──
+        phase  = classify_zenith_v2_1(sri, rsm_val, rpr, pchg, bm, bm_sma10, atr_pct)
+        action = get_action(phase, pchg, atr_pct)
+        watch  = get_watch_flag(phase, pchg, atr_pct)
 
         conn.execute("""
             UPDATE eod_summary
             SET price_change_pct=?, sri=?, mes=?, volx_gap=?, rpr=?,
                 atr_pct=?, sm_sma10=?, bm_sma10=?, phase=?, action=?,
-                watch=?, suggested_sl=?
+                watch=?
             WHERE date=? AND ticker=?
         """, [pchg, sri, mes, vg, rpr,
               atr_pct, sm_sma10, bm_sma10, phase, action,
-              watch, suggested_sl,
+              watch,
               date_str, tk])
+
+        # ── Auto-populate trade_journal ──
+        if action == "BUY" and pc:
+            open_position(conn, tk, phase, date_str, pc)
+        elif action == "SELL":
+            if pc:
+                close_position(conn, tk, date_str, pc, "SELL Signal")
+
         computed += 1
+
+    # Check stop loss untuk semua open positions hari ini
+    sl_hits = check_stop_loss(conn, date_str)
+    if sl_hits:
+        log.info(f"  🛑 Stop loss triggered: {sl_hits} positions closed ({date_str})")
 
     conn.commit()
     log.info(f"  📊 Analytics: {computed} tickers for {date_str}")

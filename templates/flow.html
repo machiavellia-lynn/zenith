@@ -1070,13 +1070,12 @@ td:first-child { text-align: left; }
         <th onclick="sortBy('gain_pct',event)"     data-col="gain_pct" title="% perubahan harga">GAIN% <span class="sort-icon"></span></th>
         <th onclick="sortBy('phase',event)"        data-col="phase" title="Wyckoff Phase">PHASE <span class="sort-icon"></span></th>
         <th onclick="sortBy('action',event)"       data-col="action" title="Trading Signal">ACTION <span class="sort-icon"></span></th>
-        <th onclick="sortBy('suggested_sl',event)" data-col="suggested_sl" title="Suggested Stop Loss (ATR × 2)">EXIT/SL <span class="sort-icon"></span></th>
       </tr>
     </thead>
     <tbody id="flowBody">
       {% for _ in range(10) %}
       <tr class="skeleton-row">
-        {% for _ in range(13) %}<td><span class="skeleton" style="width:60%;min-width:40px;"></span></td>{% endfor %}
+        {% for _ in range(12) %}<td><span class="skeleton" style="width:60%;min-width:40px;"></span></td>{% endfor %}
       </tr>
       {% endfor %}
     </tbody>
@@ -1183,11 +1182,6 @@ td:first-child { text-align: left; }
           <div class="mm-label">Vx Gap</div>
           <div class="mm-value" id="mmVXG">—</div>
           <div class="mm-sub">close vs vwap</div>
-        </div>
-        <div class="mm-item">
-          <div class="mm-label">Suggested SL</div>
-          <div class="mm-value neg" id="mmSuggestedSL">—</div>
-          <div class="mm-sub">ATR × 2.0</div>
         </div>
       </div>
 
@@ -1700,7 +1694,7 @@ function renderTable() {
 
   const tbody = document.getElementById('flowBody');
   if (rows.length === 0) {
-    tbody.innerHTML = `<tr class="state-row"><td colspan="14">
+    tbody.innerHTML = `<tr class="state-row"><td colspan="13">
       <div class="empty-state">
         <span class="empty-state-ascii">┌─────────────────────────┐
 │   ·  ·  ·   NO DATA   ·  ·  ·   │
@@ -1737,10 +1731,6 @@ function renderTable() {
       ? `<span class="watch-dot" title="Peringatan: Penurunan > 1.5× ATR — Risiko ARB, butuh konfirmasi hari berikutnya">●</span>`
       : '';
 
-    // Suggested SL
-    const slStr = r.suggested_sl ? r.suggested_sl.toLocaleString('id-ID') : '—';
-    const slCls = r.suggested_sl ? 'sl-val' : 'sl-val muted';
-
     const actCls = r.action === 'BUY' ? 'action-buy' : r.action === 'SELL' ? 'action-sell' : r.action === 'HOLD' ? 'action-hold' : '';
     return `<tr class="${actCls}" onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
       <td><span class="td-ticker">${r.ticker}</span></td>
@@ -1759,7 +1749,6 @@ function renderTable() {
       <td><span class="gain-val ${gainCls}">${gainStr}</span></td>
       <td><span class="phase-badge ${r.phase ? r.phase.toLowerCase() : ''}">${watchDot}${r.phase || '—'}</span></td>
       <td><span class="action-badge ${r.action ? r.action.toLowerCase() : ''}" title="SRI:${r.sri!=null?r.sri:'-'} MES:${r.mes!=null?r.mes:'-'} RPR:${r.rpr!=null?r.rpr:'-'} VxGap:${r.volx_gap!=null?r.volx_gap+'%':'-'}">${r.action==='BUY'?'🚀 BUY':r.action==='SELL'?'⚠️ SELL':r.action==='HOLD'?'⌛ HOLD':'—'}</span></td>
-      <td><span class="${slCls}">${slStr}</span></td>
     </tr>`;
   }).join('');
   // cmBars only — rows already have CSS rowIn animation with per-row delay
@@ -1782,7 +1771,7 @@ function showLoading() {
 }
 function showError(msg) {
   document.getElementById('flowBody').innerHTML =
-    `<tr class="state-row"><td colspan="14">
+    `<tr class="state-row"><td colspan="13">
       <div class="empty-state">
         <span class="empty-state-ascii">┌─────────────────────────┐
 │  ⚠   CONNECTION  LOST   ⚠  │
@@ -1939,18 +1928,6 @@ function populateMetricsPanel(r) {
     acBadge.style.display = 'inline-block';
   } else {
     acBadge.style.display = 'none';
-  }
-
-  // Suggested SL
-  const elSL = document.getElementById('mmSuggestedSL');
-  if (elSL) {
-    if (r && r.suggested_sl) {
-      elSL.textContent = r.suggested_sl.toLocaleString('id-ID');
-      elSL.className = 'mm-value neg';
-    } else {
-      elSL.textContent = '—';
-      elSL.className = 'mm-value';
-    }
   }
 }
 
