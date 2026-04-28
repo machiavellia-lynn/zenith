@@ -749,17 +749,33 @@ def backfill_prices(conn, days=30):
     return updated
 
 
-def fetch_all_gains_to_db(conn, date_str: str, delay_ms: int = 333):
+def fetch_all_gains_to_db(conn_ignored, date_str: str, delay_ms: int = 333):
     """Fetch gain% + price dari Yahoo untuk semua ticker di date_str.
     Simpan ke eod_summary.price_change_pct dan price_close.
     delay_ms = jeda antar request (333ms ≈ 180 req/jam, aman dari rate limit).
+
+    PENTING: Selalu buka connection SENDIRI agar tidak lock scraper thread.
     """
     import time as _time
+    import sqlite3 as _sqlite3
 
-    tickers = conn.execute(
+    DB_PATH = os.environ.get("DB_PATH", "/data/zenith.db")
+
+    def _open_conn():
+        c = _sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+        c.row_factory = _sqlite3.Row
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA busy_timeout=10000")
+        c.execute("PRAGMA synchronous=NORMAL")
+        return c
+
+    # Read tickers — quick read, release immediately
+    _c = _open_conn()
+    tickers = _c.execute(
         "SELECT DISTINCT ticker FROM eod_summary WHERE date = ?", [date_str]
     ).fetchall()
     tickers = [r["ticker"] for r in tickers]
+    _c.close()
 
     if not tickers:
         log.info(f"[fetch-gains] Tidak ada ticker untuk {date_str}")
@@ -770,18 +786,23 @@ def fetch_all_gains_to_db(conn, date_str: str, delay_ms: int = 333):
     success = 0
     failed  = 0
 
+    from app import fetch_gain_range
+
     for i, tk in enumerate(tickers):
         try:
-            from app import fetch_gain_range  # reuse existing Yahoo fetch logic
             gain, price = fetch_gain_range(tk, date_str, date_str)
 
             if gain is not None or price is not None:
-                conn.execute("""
+                # Open fresh connection per write — commit immediately, release lock
+                _wc = _open_conn()
+                _wc.execute("""
                     UPDATE eod_summary
                     SET price_change_pct = COALESCE(?, price_change_pct),
                         price_close      = COALESCE(?, price_close)
                     WHERE date = ? AND ticker = ?
                 """, [gain, price, date_str, tk])
+                _wc.commit()
+                _wc.close()
                 success += 1
             else:
                 failed += 1
@@ -793,7 +814,6 @@ def fetch_all_gains_to_db(conn, date_str: str, delay_ms: int = 333):
         if i < len(tickers) - 1:
             _time.sleep(delay_ms / 1000.0)
 
-    conn.commit()
     log.info(f"[fetch-gains] ✅ {date_str}: {success} ok, {failed} failed")
     return {"success": success, "failed": failed, "total": len(tickers)}
 
