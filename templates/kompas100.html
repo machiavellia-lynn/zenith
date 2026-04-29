@@ -1200,8 +1200,8 @@ td:first-child { text-align: left; }
         </div>
         <div class="fitness-stats">
           <div class="fit-col">
-            <div class="fit-label">Best Combo</div>
-            <div class="fit-value" id="fitBestCombo">—</div>
+            <div class="fit-label">Best Phase</div>
+            <div class="fit-value" id="fitBestPhase">—</div>
           </div>
           <div class="fit-col">
             <div class="fit-label">Profit Factor</div>
@@ -1959,25 +1959,24 @@ async function loadTickerFitness(ticker) {
     // Period
     document.getElementById('fitPeriod').textContent = d.period ? `${d.period} (${d.days}d)` : '—';
 
-    // Best combo
-    const bc = d.best_combo;
-    if (bc) {
-      document.getElementById('fitBestCombo').innerHTML =
-        `<span class="phase-badge ${bc.entry.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bc.entry}</span>` +
-        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bc.exit}</span>` +
-        `<span style="font-size:10px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% win · ${bc.trades} trades</span>`;
+    // Best phase
+    const bp = d.best_phase;
+    if (bp) {
+      document.getElementById('fitBestPhase').innerHTML =
+        `<span class="phase-badge ${bp.phase.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bp.phase}</span>` +
+        `<span style="font-size:10px;color:var(--muted);margin-left:4px">${bp.win_rate||0}% win · ${bp.trades} trades</span>`;
     } else {
-      document.getElementById('fitBestCombo').textContent = '—';
+      document.getElementById('fitBestPhase').textContent = '—';
     }
 
-    // Profit Factor — from best combo
-    const bestPF = bc ? bc.pf : d.profit_factor;
+    // Profit Factor — overall
+    const bestPF = d.profit_factor;
     const pfEl = document.getElementById('fitPF');
     pfEl.textContent = bestPF + '×';
     pfEl.className = 'fit-value ' + (bestPF >= 2.0 ? 'pos' : bestPF >= 1.0 ? 'ok' : 'neg');
 
-    // Avg profit — from best combo
-    const bestAvg = bc ? bc.avg_profit : d.avg_profit;
+    // Avg profit — overall
+    const bestAvg = d.avg_profit;
     const apEl = document.getElementById('fitAvgProfit');
     apEl.textContent = (bestAvg > 0 ? '+' : '') + bestAvg + '%';
     apEl.className = 'fit-value ' + (bestAvg > 0 ? 'pos' : 'neg');

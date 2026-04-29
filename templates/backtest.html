@@ -131,6 +131,10 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
     <span class="ctrl-label">Lookback</span>
     <input type="number" class="num-input" id="daysInput" value="30" min="1" max="365"/>
     <span class="ctrl-label">hari</span>
+    <span class="ctrl-label" style="margin-left:8px">atau</span>
+    <input type="text" class="num-input" id="dateFrom" placeholder="DD-MM-YYYY" style="width:100px;text-align:left" title="Dari tanggal (kosongkan untuk pakai lookback)"/>
+    <span class="ctrl-label">→</span>
+    <input type="text" class="num-input" id="dateTo" placeholder="DD-MM-YYYY" style="width:100px;text-align:left" title="Sampai tanggal"/>
     <button class="btn" id="runBtn" onclick="runBacktest()">Run Backtest</button>
     <button class="btn outline" onclick="loadResults()">Load Cached</button>
     <div style="flex:1"></div>
@@ -145,6 +149,9 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
   </div>
   <div class="summary" id="summaryWrap" style="display:none">
     <div class="sum-item"><div class="sum-label">Completed Trades</div><div class="sum-val accent" id="sumTrades">—</div></div>
+    <div class="sum-item"><div class="sum-label">Win / Loss</div><div class="sum-val" id="sumWL" style="font-size:14px">—</div></div>
+    <div class="sum-item"><div class="sum-label">Win Rate</div><div class="sum-val" id="sumWR">—</div></div>
+    <div class="sum-item"><div class="sum-label">Profit Factor</div><div class="sum-val" id="sumPF">—</div></div>
     <div class="sum-item"><div class="sum-label">Tickers</div><div class="sum-val" id="sumTickers">—</div></div>
     <div class="sum-item"><div class="sum-label">Period</div><div class="sum-val" id="sumPeriod" style="font-size:11px">—</div></div>
     <div class="sum-item"><div class="sum-label">Computed</div><div class="sum-val" id="sumComputed" style="font-size:11px">—</div></div>
@@ -153,9 +160,10 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
     <table>
       <thead><tr>
         <th onclick="sortLB('rank')">#<span class="si"></span></th>
-        <th onclick="sortLB('entry')">ENTRY<span class="si"></span></th>
-        <th onclick="sortLB('exit')">EXIT<span class="si"></span></th>
+        <th onclick="sortLB('entry')">ENTRY PHASE<span class="si"></span></th>
         <th onclick="sortLB('trades')">TRADES<span class="si"></span></th>
+        <th onclick="sortLB('wins')">WIN<span class="si"></span></th>
+        <th onclick="sortLB('losses')">LOSS<span class="si"></span></th>
         <th onclick="sortLB('win_rate')">WIN RATE<span class="si"></span></th>
         <th onclick="sortLB('avg_profit')">AVG PROFIT<span class="si"></span></th>
         <th onclick="sortLB('avg_win')">AVG WIN<span class="si"></span></th>
@@ -164,7 +172,7 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
         <th onclick="sortLB('profit_factor')">PROFIT FACTOR<span class="si"></span></th>
       </tr></thead>
       <tbody id="lbBody">
-        <tr><td colspan="10" class="empty">Belum ada data. Klik RUN BACKTEST.</td></tr>
+        <tr><td colspan="11" class="empty">Belum ada data. Klik RUN BACKTEST.</td></tr>
       </tbody>
     </table>
   </div>
@@ -185,7 +193,8 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
       <table class="detail-table">
         <thead><tr>
           <th>TICKER</th>
-          <th>ENTRY SIGNAL</th>
+          <th>ENTRY DATE</th>
+          <th>EXIT DATE</th>
           <th>EXIT SIGNAL</th>
           <th>ENTRY PRICE</th>
           <th>EXIT PRICE</th>
@@ -209,13 +218,21 @@ function setStatus(t, s) {
   document.getElementById('spinner').classList.toggle('active', !!s);
 }
 
-async function runBacktest() {
+function buildUrl(base, extra = '') {
   const days = document.getElementById('daysInput').value || 30;
+  const df   = (document.getElementById('dateFrom').value || '').trim();
+  const dt   = (document.getElementById('dateTo').value || '').trim();
+  let url = `${base}?days=${days}`;
+  if (df && dt) url += `&date_from=${encodeURIComponent(df)}&date_to=${encodeURIComponent(dt)}`;
+  return url + extra;
+}
+
+async function runBacktest() {
   const btn = document.getElementById('runBtn');
   btn.disabled = true; btn.textContent = 'RUNNING...';
   setStatus('Queuing...', true);
   try {
-    const r = await fetch(`/api/backtest?days=${days}&run=1`);
+    const r = await fetch(buildUrl('/api/backtest', '&run=1'));
     const d = await r.json();
     if (d.triggered) { setStatus('Running...', true); pollBacktest(); }
     else { setStatus('Error: ' + (d.error || '?')); btn.disabled = false; btn.textContent = 'RUN BACKTEST'; }
@@ -245,24 +262,38 @@ function pollBacktest() {
 }
 
 async function loadResults() {
-  const days = document.getElementById('daysInput').value || 30;
   setStatus('Loading...', true);
   if (window.ZenithAnim) ZenithAnim.topbarStart();
   try {
-    const r = await fetch(`/api/backtest?days=${days}`);
+    const r = await fetch(buildUrl('/api/backtest'));
     const d = await r.json();
     if (d.leaderboard) {
       lbData = d.leaderboard;
       const sw = document.getElementById('summaryWrap');
       sw.style.display = 'flex';
       document.getElementById('sumTrades').textContent = (d.total_trades || 0).toLocaleString();
+
+      const wr = d.overall_win_rate ?? '—';
+      const pf = d.overall_profit_factor ?? '—';
+      const wrEl = document.getElementById('sumWR');
+      wrEl.textContent = wr !== '—' ? wr + '%' : '—';
+      wrEl.style.color = wr >= 60 ? 'var(--up)' : wr >= 45 ? '#ff8c42' : 'var(--down)';
+
+      const pfEl = document.getElementById('sumPF');
+      pfEl.textContent = pf !== '—' ? pf + '×' : '—';
+      pfEl.style.color = pf >= 2 ? 'var(--up)' : pf >= 1 ? '#ff8c42' : 'var(--down)';
+
+      const tw = d.total_wins ?? 0, tl = d.total_losses ?? 0;
+      document.getElementById('sumWL').innerHTML =
+        `<span style="color:var(--up)">${tw}W</span> / <span style="color:var(--down)">${tl}L</span>`;
+
       document.getElementById('sumTickers').textContent = d.tickers_tested || '—';
       document.getElementById('sumPeriod').textContent = d.date_range || '—';
       document.getElementById('sumComputed').textContent = d.computed_at || '—';
       if (window.ZenithAnim) ZenithAnim.sumValPop(sw);
       renderLeaderboard();
       if (window.ZenithAnim) ZenithAnim.topbarDone();
-      setStatus(`${d.total_trades} trades, ${d.leaderboard.length} combos`);
+      setStatus(`${d.total_trades} trades · WR ${wr}% · PF ${pf}×`);
     } else { if (window.ZenithAnim) ZenithAnim.topbarDone(); setStatus(d.error || 'No data'); }
   } catch(e) { if (window.ZenithAnim) ZenithAnim.topbarDone(); setStatus('Load error'); }
 }
@@ -292,9 +323,7 @@ function renderLeaderboard() {
 
   tbody.innerHTML = rows.map((r, i) => {
     const medal = i < 3 ? `<span class="medal">${medals[i]}</span>` : `${i+1}`;
-    /* (row built below) */
     const eCls = r.entry ? r.entry.toLowerCase() : '';
-    const xCls = r.exit ? r.exit.toLowerCase() : '';
     function vc(v) {
       if (v == null) return '<td>—</td>';
       const cls = v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
@@ -310,11 +339,14 @@ function renderLeaderboard() {
       const cls = v >= 2.0 ? 'pos' : v >= 1.0 ? 'ok' : 'neg';
       return `<td><span class="val ${cls}">${v.toFixed(2)}×</span></td>`;
     }
+    const wins   = r.wins   ?? '—';
+    const losses = r.losses ?? '—';
     return `<tr onclick="showDetail(${i})">
       <td style="text-align:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700">${medal}</td>
       <td><span class="phase-badge ${eCls}">${r.entry}</span></td>
-      <td><span class="phase-badge ${xCls}">${r.exit}</span></td>
       <td style="font-family:'Space Mono',monospace;font-size:12px">${r.trades}</td>
+      <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--up)">${wins}</td>
+      <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--down)">${losses}</td>
       ${wc(r.win_rate)}${vc(r.avg_profit)}${vc(r.avg_win)}${vc(r.avg_loss)}
       <td style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted)">${r.avg_duration}d</td>
       ${pfCell(r.profit_factor)}
@@ -331,7 +363,6 @@ function renderLeaderboard() {
 }
 
 function showDetail(idx) {
-  // Get the sorted index mapping
   const rows = [...lbData];
   rows.sort((a, b) => {
     let av = a[sortCol], bv = b[sortCol];
@@ -345,18 +376,21 @@ function showDetail(idx) {
 
   document.getElementById('modalTitle').innerHTML =
     `<span class="phase-badge ${r.entry.toLowerCase()}">${r.entry}</span>` +
-    `<span style="color:var(--muted);font-size:12px">→</span>` +
-    `<span class="phase-badge ${r.exit.toLowerCase()}">${r.exit}</span>` +
     `<span style="color:var(--muted);font-size:11px;margin-left:8px">${r.details.length} trades</span>`;
 
   const tbody = document.getElementById('detailBody');
   tbody.innerHTML = r.details.map(d => {
-    const cls = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : 'zero';
+    const cls  = d.profit > 0 ? 'pos' : d.profit < 0 ? 'neg' : 'zero';
     const sign = d.profit > 0 ? '+' : '';
+    const xCls = d.exit_phase ? d.exit_phase.toLowerCase() : '';
+    const exitBadge = d.exit_phase
+      ? `<span class="phase-badge ${xCls}" style="font-size:9px;padding:2px 7px">${d.exit_phase}</span>`
+      : '—';
     return `<tr>
       <td>${d.ticker}</td>
       <td style="color:var(--muted)">${d.entry_date}</td>
       <td style="color:var(--muted)">${d.exit_date}</td>
+      <td>${exitBadge}</td>
       <td>${d.entry_price.toLocaleString('id-ID')}</td>
       <td>${d.exit_price.toLocaleString('id-ID')}</td>
       <td style="color:var(--muted)">${d.duration}d</td>
