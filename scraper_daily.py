@@ -1627,36 +1627,46 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
 
             if tk not in signal_timeline:
                 signal_timeline[tk] = []
-            signal_timeline[tk].append((d_idx, date_str, phase, action))
+            signal_timeline[tk].append((d_idx, date_str, phase, action, atr or 2.5))
 
     # 5. Pair matching: multiple BUY entries, single SELL closes all
-    #    Stop loss: force-close at day's CLOSE if loss >= -10%
-    SL_THRESHOLD = -10.0
+    #    Stop loss: ATR-based per position — max(atr*2.0, 5%) floor, 12% ceiling
+    #    RI guard : skip SL on days with single-day drop >30% (rights issue / split)
     trades = []
 
     for tk, timeline in signal_timeline.items():
         tp = price_map.get(tk, {})
-        open_positions = []  # list of {entry_date, entry_phase, entry_price, entry_didx}
+        open_positions = []  # list of {entry_date, entry_phase, entry_price, entry_didx, sl_threshold}
 
         # Build a lookup so we can process signals while iterating ALL trading days
-        signal_lookup = {date_str: (phase, action) for _, date_str, phase, action in timeline}
+        signal_lookup = {date_str: (phase, action, atr) for _, date_str, phase, action, atr in timeline}
 
         for date_str in use_dates:
             # Skip days with no open positions AND no signal — nothing to do
             if not open_positions and date_str not in signal_lookup:
                 continue
 
-            d_idx     = date_idx.get(date_str)
-            day_data  = tp.get(date_str)
+            d_idx       = date_idx.get(date_str)
+            day_data    = tp.get(date_str)
             close_price = day_data["c"] if day_data and day_data.get("c") else None
 
-            # ── Stop loss check every trading day so we never miss a -10% drop ──
-            if close_price and open_positions:
+            # ── RI guard: detect corporate action days (rights issue / split) ──
+            # If price drops >30% vs previous close in a single day, skip SL —
+            # this is almost certainly a TERP adjustment, not a real loss.
+            ri_day = False
+            if close_price and d_idx is not None and d_idx > 0:
+                prev_data = tp.get(all_dates[d_idx - 1])
+                if prev_data and prev_data.get("c") and prev_data["c"] > 0:
+                    if (close_price - prev_data["c"]) / prev_data["c"] * 100 < -30:
+                        ri_day = True
+
+            # ── Stop loss check every trading day (skipped on RI days) ──
+            if close_price and open_positions and not ri_day:
                 surviving = []
                 for pos in open_positions:
                     entry_p  = pos["entry_price"]
                     loss_pct = (close_price - entry_p) / entry_p * 100
-                    if loss_pct <= SL_THRESHOLD:
+                    if loss_pct <= pos["sl_threshold"]:
                         trades.append({
                             "ticker":       tk,
                             "entry_phase":  pos["entry_phase"],
@@ -1676,9 +1686,11 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
             if date_str not in signal_lookup:
                 continue
 
-            phase, action = signal_lookup[date_str]
+            phase, action, sig_atr = signal_lookup[date_str]
 
             if action == "BUY":
+                # SL threshold: ATR-based, floor 5%, ceiling 12%
+                sl_thresh = -min(max(sig_atr * 2.0, 5.0), 12.0)
                 # Open new position at next day's open
                 next_idx = d_idx + 1 if d_idx is not None else None
                 if next_idx is None or next_idx >= len(all_dates):
@@ -1687,10 +1699,11 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
                 next_data = tp.get(next_date)
                 if next_data and next_data["o"] and next_data["o"] > 0:
                     open_positions.append({
-                        "entry_date":  date_str,
-                        "entry_phase": phase,
-                        "entry_price": next_data["o"],
-                        "entry_didx":  d_idx,
+                        "entry_date":   date_str,
+                        "entry_phase":  phase,
+                        "entry_price":  next_data["o"],
+                        "entry_didx":   d_idx,
+                        "sl_threshold": sl_thresh,
                     })
 
             elif action == "SELL" and open_positions:
