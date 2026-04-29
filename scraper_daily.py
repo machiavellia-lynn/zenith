@@ -1638,51 +1638,65 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
         tp = price_map.get(tk, {})
         open_positions = []  # list of {entry_date, entry_phase, entry_price, entry_didx}
 
-        for d_idx, date_str, phase, action in timeline:
-            day_data = tp.get(date_str)
+        # Build a lookup so we can process signals while iterating ALL trading days
+        signal_lookup = {date_str: (phase, action) for _, date_str, phase, action in timeline}
+
+        for date_str in use_dates:
+            # Skip days with no open positions AND no signal — nothing to do
+            if not open_positions and date_str not in signal_lookup:
+                continue
+
+            d_idx     = date_idx.get(date_str)
+            day_data  = tp.get(date_str)
             close_price = day_data["c"] if day_data and day_data.get("c") else None
 
-            # ── Stop loss check: close positions that hit -10% on today's close ──
+            # ── Stop loss check every trading day so we never miss a -10% drop ──
             if close_price and open_positions:
                 surviving = []
                 for pos in open_positions:
-                    entry_p = pos["entry_price"]
+                    entry_p  = pos["entry_price"]
                     loss_pct = (close_price - entry_p) / entry_p * 100
                     if loss_pct <= SL_THRESHOLD:
                         trades.append({
-                            "ticker": tk,
-                            "entry_phase": pos["entry_phase"],
-                            "exit_phase": "SL",
-                            "entry_date": pos["entry_date"],
-                            "exit_date": date_str,
-                            "entry_price": round(entry_p, 2),
-                            "exit_price": round(close_price, 2),
-                            "duration": d_idx - pos["entry_didx"],
-                            "profit": round(loss_pct, 2),
+                            "ticker":       tk,
+                            "entry_phase":  pos["entry_phase"],
+                            "exit_phase":   "SL",
+                            "entry_date":   pos["entry_date"],
+                            "exit_date":    date_str,
+                            "entry_price":  round(entry_p, 2),
+                            "exit_price":   round(close_price, 2),
+                            "duration":     d_idx - pos["entry_didx"] if d_idx is not None else 0,
+                            "profit":       round(loss_pct, 2),
                         })
                     else:
                         surviving.append(pos)
                 open_positions = surviving
 
+            # ── Process signal for this day if one exists ──
+            if date_str not in signal_lookup:
+                continue
+
+            phase, action = signal_lookup[date_str]
+
             if action == "BUY":
                 # Open new position at next day's open
-                next_idx = d_idx + 1
-                if next_idx >= len(all_dates):
+                next_idx = d_idx + 1 if d_idx is not None else None
+                if next_idx is None or next_idx >= len(all_dates):
                     continue
                 next_date = all_dates[next_idx]
                 next_data = tp.get(next_date)
                 if next_data and next_data["o"] and next_data["o"] > 0:
                     open_positions.append({
-                        "entry_date": date_str,
+                        "entry_date":  date_str,
                         "entry_phase": phase,
                         "entry_price": next_data["o"],
-                        "entry_didx": d_idx,
+                        "entry_didx":  d_idx,
                     })
 
             elif action == "SELL" and open_positions:
                 # Close ALL remaining open positions at next day's open
-                next_idx = d_idx + 1
-                if next_idx >= len(all_dates):
+                next_idx = d_idx + 1 if d_idx is not None else None
+                if next_idx is None or next_idx >= len(all_dates):
                     if close_price:
                         exit_price = close_price
                     else:
@@ -1696,19 +1710,19 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
                         continue
 
                 for pos in open_positions:
-                    entry_p = pos["entry_price"]
-                    duration = d_idx - pos["entry_didx"]
-                    profit = round((exit_price - entry_p) / entry_p * 100, 2)
+                    entry_p  = pos["entry_price"]
+                    duration = (d_idx - pos["entry_didx"]) if d_idx is not None else 0
+                    profit   = round((exit_price - entry_p) / entry_p * 100, 2)
                     trades.append({
-                        "ticker": tk,
-                        "entry_phase": pos["entry_phase"],
-                        "exit_phase": phase,
-                        "entry_date": pos["entry_date"],
-                        "exit_date": date_str,
-                        "entry_price": round(entry_p, 2),
-                        "exit_price": round(exit_price, 2),
-                        "duration": duration,
-                        "profit": profit,
+                        "ticker":       tk,
+                        "entry_phase":  pos["entry_phase"],
+                        "exit_phase":   phase,
+                        "entry_date":   pos["entry_date"],
+                        "exit_date":    date_str,
+                        "entry_price":  round(entry_p, 2),
+                        "exit_price":   round(exit_price, 2),
+                        "duration":     duration,
+                        "profit":       profit,
                     })
                 open_positions = []
 
