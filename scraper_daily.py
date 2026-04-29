@@ -1773,6 +1773,8 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
     for t in trades:
         if t.get("exit_phase") == "RI_SKIP":  # exclude corporate-action force-closes
             continue
+        if t.get("profit", 0) < -50:  # exclude extreme losses (rights issue, delisting, etc.)
+            continue
         key = t["entry_phase"]
         combos[key]["trades"] += 1
         combos[key]["profits"].append(t["profit"])
