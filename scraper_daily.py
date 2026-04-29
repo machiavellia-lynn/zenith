@@ -1409,7 +1409,7 @@ def request_backtest(days: int):
 def get_backtest_result(conn, days=None):
     """Read latest cached backtest result from DB."""
     try:
-        if days:
+        if days is not None:
             row = conn.execute(
                 "SELECT results FROM backtest_cache WHERE days=? ORDER BY computed_at DESC LIMIT 1", [days]
             ).fetchone()

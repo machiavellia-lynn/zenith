@@ -52,6 +52,8 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .btn.danger:hover{background:rgba(255,77,106,.15)}
 
 .ctrl-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.mode-btn{background:none;border:none;color:var(--muted);border-radius:4px;padding:5px 12px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:all .15s;text-transform:uppercase}
+.mode-btn.active{background:var(--surface2);border:1px solid rgba(0,232,162,.25);color:var(--accent)}
 .summary{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
 .sum-item{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:12px 18px;display:flex;flex-direction:column;gap:3px;min-width:120px}
 .sum-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
@@ -128,13 +130,19 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 <main id="main">
 <div class="content">
   <div class="controls">
-    <span class="ctrl-label">Lookback</span>
-    <input type="number" class="num-input" id="daysInput" value="30" min="1" max="365"/>
-    <span class="ctrl-label">hari</span>
-    <span class="ctrl-label" style="margin-left:8px">atau</span>
-    <input type="text" class="num-input" id="dateFrom" placeholder="DD-MM-YYYY" style="width:100px;text-align:left" title="Dari tanggal (kosongkan untuk pakai lookback)"/>
-    <span class="ctrl-label">→</span>
-    <input type="text" class="num-input" id="dateTo" placeholder="DD-MM-YYYY" style="width:100px;text-align:left" title="Sampai tanggal"/>
+    <div style="display:flex;background:var(--bg);border:1px solid var(--border2);border-radius:6px;padding:2px;gap:2px">
+      <button id="modeLookback" class="mode-btn active" onclick="setMode('lookback')">LOOKBACK</button>
+      <button id="modeCustom"   class="mode-btn"        onclick="setMode('custom')">CUSTOM</button>
+    </div>
+    <div id="panelLookback" style="display:flex;align-items:center;gap:8px">
+      <input type="number" class="num-input" id="daysInput" value="30" min="1" max="365"/>
+      <span class="ctrl-label">hari</span>
+    </div>
+    <div id="panelCustom" style="display:none;align-items:center;gap:8px">
+      <input type="text" class="num-input" id="dateFrom" placeholder="DD-MM-YYYY" style="width:100px;text-align:left"/>
+      <span class="ctrl-label">→</span>
+      <input type="text" class="num-input" id="dateTo" placeholder="DD-MM-YYYY" style="width:100px;text-align:left"/>
+    </div>
     <button class="btn" id="runBtn" onclick="runBacktest()">Run Backtest</button>
     <button class="btn outline" onclick="loadResults()">Load Cached</button>
     <div style="flex:1"></div>
@@ -213,17 +221,30 @@ let lbData = [];
 let sortCol = 'profit_factor';
 let sortAsc = false;
 
+let btMode = 'lookback';
+function setMode(m) {
+  btMode = m;
+  document.getElementById('modeLookback').classList.toggle('active', m === 'lookback');
+  document.getElementById('modeCustom').classList.toggle('active', m === 'custom');
+  document.getElementById('panelLookback').style.display = m === 'lookback' ? 'flex' : 'none';
+  document.getElementById('panelCustom').style.display   = m === 'custom'   ? 'flex' : 'none';
+}
+
 function setStatus(t, s) {
   document.getElementById('statusText').textContent = t;
   document.getElementById('spinner').classList.toggle('active', !!s);
 }
 
 function buildUrl(base, extra = '') {
-  const days = document.getElementById('daysInput').value || 30;
-  const df   = (document.getElementById('dateFrom').value || '').trim();
-  const dt   = (document.getElementById('dateTo').value || '').trim();
-  let url = `${base}?days=${days}`;
-  if (df && dt) url += `&date_from=${encodeURIComponent(df)}&date_to=${encodeURIComponent(dt)}`;
+  let url;
+  if (btMode === 'custom') {
+    const df = (document.getElementById('dateFrom').value || '').trim();
+    const dt = (document.getElementById('dateTo').value || '').trim();
+    url = `${base}?days=0&date_from=${encodeURIComponent(df)}&date_to=${encodeURIComponent(dt)}`;
+  } else {
+    const days = document.getElementById('daysInput').value || 30;
+    url = `${base}?days=${days}`;
+  }
   return url + extra;
 }
 
