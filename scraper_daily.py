@@ -1651,14 +1651,15 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
             close_price = day_data["c"] if day_data and day_data.get("c") else None
 
             # ── RI guard: detect corporate action days (rights issue / split) ──
-            # If price drops >30% vs previous close in a single day, skip SL —
-            # this is almost certainly a TERP adjustment, not a real loss.
-            ri_day = False
+            # Price drop >30% in one day = TERP adjustment, not a real market move.
+            ri_day        = False
+            prev_ri_price = None
             if close_price and d_idx is not None and d_idx > 0:
                 prev_data = tp.get(all_dates[d_idx - 1])
                 if prev_data and prev_data.get("c") and prev_data["c"] > 0:
                     if (close_price - prev_data["c"]) / prev_data["c"] * 100 < -30:
-                        ri_day = True
+                        ri_day        = True
+                        prev_ri_price = prev_data["c"]
 
             # ── Stop loss check every trading day (skipped on RI days) ──
             if close_price and open_positions and not ri_day:
@@ -1681,6 +1682,25 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
                     else:
                         surviving.append(pos)
                 open_positions = surviving
+
+            # ── RI day: force-close open positions at pre-RI price ──
+            # Exit at H-1 close so the -90% TERP drop doesn't contaminate P&L.
+            # Marked RI_SKIP so aggregation can exclude them from stats.
+            if ri_day and open_positions and prev_ri_price:
+                for pos in open_positions:
+                    profit = round((prev_ri_price - pos["entry_price"]) / pos["entry_price"] * 100, 2)
+                    trades.append({
+                        "ticker":       tk,
+                        "entry_phase":  pos["entry_phase"],
+                        "exit_phase":   "RI_SKIP",
+                        "entry_date":   pos["entry_date"],
+                        "exit_date":    date_str,
+                        "entry_price":  round(pos["entry_price"], 2),
+                        "exit_price":   round(prev_ri_price, 2),
+                        "duration":     d_idx - pos["entry_didx"] if d_idx is not None else 0,
+                        "profit":       profit,
+                    })
+                open_positions = []
 
             # ── Process signal for this day if one exists ──
             if date_str not in signal_lookup:
@@ -1751,6 +1771,8 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
     combos = defaultdict(lambda: {"trades": 0, "wins": 0, "profits": [], "durations": [], "details": []})
 
     for t in trades:
+        if t.get("exit_phase") == "RI_SKIP":  # exclude corporate-action force-closes
+            continue
         key = t["entry_phase"]
         combos[key]["trades"] += 1
         combos[key]["profits"].append(t["profit"])
