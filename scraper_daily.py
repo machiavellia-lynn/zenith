@@ -1686,6 +1686,11 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
             if date_str not in signal_lookup:
                 continue
 
+            # Skip RI-contaminated signals — price on RI day reflects TERP adjustment,
+            # not real SM behavior, so neither BUY entries nor SELL exits are valid.
+            if ri_day:
+                continue
+
             phase, action, sig_atr = signal_lookup[date_str]
 
             if action == "BUY":
