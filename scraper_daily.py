@@ -1690,7 +1690,7 @@ def run_backtest(conn, days=30, date_from=None, date_to=None):
 
             if action == "BUY":
                 # SL threshold: ATR-based, floor 5%, ceiling 12%
-                sl_thresh = -min(max(sig_atr * 2.0, 5.0), 12.0)
+                sl_thresh = -min(max(sig_atr * 2.0, 5.0), 10.0)
                 # Open new position at next day's open
                 next_idx = d_idx + 1 if d_idx is not None else None
                 if next_idx is None or next_idx >= len(all_dates):
