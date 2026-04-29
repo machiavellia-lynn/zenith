@@ -1320,6 +1320,39 @@ def api_backtest():
         from scraper_daily import get_backtest_result
         result = get_backtest_result(conn, days)
         if result:
+            # Strip extreme-loss trades (rights issue / delisting) and recompute all stats.
+            # Applied at read time so old cached data is also clean.
+            total_trades = 0
+            total_wins   = 0
+            total_losses = 0
+            all_profits  = []
+            for row in result.get("leaderboard", []):
+                row["details"] = [d for d in row.get("details", []) if d.get("profit", 0) >= -50]
+                profits  = [d["profit"] for d in row["details"]]
+                wins_p   = [p for p in profits if p > 0]
+                losses_p = [p for p in profits if p <= 0]
+                gp = sum(wins_p)
+                gl = abs(sum(losses_p))
+                row["trades"]        = len(profits)
+                row["wins"]          = len(wins_p)
+                row["losses"]        = len(losses_p)
+                row["win_rate"]      = round(len(wins_p) / len(profits) * 100, 1) if profits else 0
+                row["avg_profit"]    = round(sum(profits) / len(profits), 2) if profits else 0
+                row["avg_win"]       = round(gp / len(wins_p), 2) if wins_p else 0
+                row["avg_loss"]      = round(sum(losses_p) / len(losses_p), 2) if losses_p else 0
+                row["profit_factor"] = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
+                row["avg_duration"]  = round(sum(d["duration"] for d in row["details"]) / len(row["details"]), 1) if row["details"] else 0
+                total_trades += len(profits)
+                total_wins   += len(wins_p)
+                total_losses += len(losses_p)
+                all_profits.extend(profits)
+            aw = [p for p in all_profits if p > 0]
+            al = [p for p in all_profits if p <= 0]
+            result["total_trades"]          = total_trades
+            result["total_wins"]            = total_wins
+            result["total_losses"]          = total_losses
+            result["overall_win_rate"]      = round(len(aw) / len(all_profits) * 100, 1) if all_profits else 0
+            result["overall_profit_factor"] = round(sum(aw) / abs(sum(al)), 2) if al else (99.0 if aw else 0)
             return jsonify(result)
         return jsonify({"error": f"No backtest for {days} days. Click RUN BACKTEST.", "total_trades": 0})
     except Exception as e:
