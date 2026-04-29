@@ -100,10 +100,13 @@ def get_action(
 
     Gate A — Supply Gate   : bm_val > bm_sma10 × 3.0  → HOLD
     Gate B — ARB Safety    : watch_flag == "ARB_SPRING" → HOLD
-    Gate C — Anti-Pucuk    : pchg >= th_sos_h for any BUY phase → HOLD
+    Gate C — Anti-Pucuk    : pchg >= threshold per phase → HOLD
+                             SOS: max(atr × 3.5, 7.0)  — SOS allowed to run higher
+                             Others: max(atr × 2.0, 5.0)
     """
-    atr      = atr_pct if atr_pct and atr_pct > 0 else 2.5
-    th_sos_h = max(atr * 2.0, 5.0)
+    atr       = atr_pct if atr_pct and atr_pct > 0 else 2.5
+    th_sos_h  = max(atr * 3.5, 7.0)   # SOS: more room to run
+    th_buy_h  = max(atr * 2.0, 5.0)   # SPRING / ABSORB / ACCUM
 
     BUY_PHASES  = ("SOS", "SPRING", "ABSORB", "ACCUM")
     SELL_PHASES = ("UPTHRUST", "DISTRI")
@@ -122,8 +125,9 @@ def get_action(
     if watch_flag == "ARB_SPRING":
         return "HOLD"
 
-    # Gate C: Global Anti-Pucuk — harga sudah terlalu tinggi hari ini
-    if pchg is not None and pchg >= th_sos_h:
+    # Gate C: Anti-Pucuk — SOS gets higher ceiling, other BUY phases stricter
+    limit = th_sos_h if phase == "SOS" else th_buy_h
+    if pchg is not None and pchg >= limit:
         return "HOLD"
 
     return "BUY"
