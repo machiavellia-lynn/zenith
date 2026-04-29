@@ -321,8 +321,8 @@ input[type="text"]:focus{border-color:var(--accent)}
     </div>
     <div style="display:flex;align-items:center;gap:16px;padding:10px 14px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
       <div style="display:flex;flex-direction:column;gap:2px;min-width:70px">
-        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Best Combo</div>
-        <div id="fitBestCombo" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
+        <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Best Phase</div>
+        <div id="fitBestPhase" style="font-family:'Space Mono',monospace;font-size:12px;font-weight:700">—</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:2px;min-width:60px">
         <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase">Profit Factor</div>
@@ -547,16 +547,16 @@ async function loadChartFitness(){
     card.style.display='block';
     if(window.ZenithAnim) ZenithAnim.fitnessCardIn(card);
     document.getElementById('fitPeriod').textContent=d.period?`${d.period} (${d.days}d)`:'—';
-    const bc=d.best_combo;
-    if(bc){
+    const bp=d.best_phase;
+    if(bp){
       const pc={SOS:'#00e8a2',SPRING:'#00e8a2',ACCUM:'#5abf8e',ABSORB:'#4d9fff',UPTHRUST:'#ff8c42',DISTRI:'#ff4d6a'};
-      document.getElementById('fitBestCombo').innerHTML=
-        `<span style="color:${pc[bc.entry]||'var(--text)'}">${bc.entry}</span> → <span style="color:${pc[bc.exit]||'var(--text)'}">${bc.exit}</span><span style="font-size:10px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% · ${bc.trades}t</span>`;
-    }else{document.getElementById('fitBestCombo').textContent='—'}
-    const bestPF=bc?bc.pf:d.profit_factor;
+      document.getElementById('fitBestPhase').innerHTML=
+        `<span style="color:${pc[bp.phase]||'var(--text)'}">${bp.phase}</span><span style="font-size:10px;color:var(--muted);margin-left:4px">${bp.win_rate||0}% · ${bp.trades}t</span>`;
+    }else{document.getElementById('fitBestPhase').textContent='—'}
+    const bestPF=d.profit_factor;
     const pf=document.getElementById('fitPF');pf.textContent=bestPF+'×';
     pf.style.color=bestPF>=2?'#00e8a2':bestPF>=1?'#ff8c42':'#ff4d6a';
-    const bestAvg=bc?bc.avg_profit:d.avg_profit;
+    const bestAvg=d.avg_profit;
     const ap=document.getElementById('fitAvgProfit');ap.textContent=(bestAvg>0?'+':'')+bestAvg+'%';
     ap.style.color=bestAvg>0?'#00e8a2':'#ff4d6a';
     const bestWR=bc?(bc.win_rate||0):d.win_rate;

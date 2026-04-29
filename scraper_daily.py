@@ -926,7 +926,7 @@ def check_stop_loss(conn, date_str: str, threshold_pct: float = -10.0):
     return closed
 
 # Import centralised logic — single source of truth
-from logic import classify_zenith_v2_1, get_action, get_watch_flag
+from logic import classify_zenith_v3_1, get_action, get_watch_flag
 
 
 def compute_analytics_for_date(conn, date_str: str):
@@ -1022,9 +1022,9 @@ def compute_analytics_for_date(conn, date_str: str):
         rsm_val = round(sm / total_val * 100, 1) if total_val > 0 else 50
 
         # ── Phase / Action / Watch ──
-        phase  = classify_zenith_v2_1(sri, rsm_val, rpr, pchg, bm, bm_sma10, atr_pct)
-        action = get_action(phase, pchg, atr_pct)
+        phase  = classify_zenith_v3_1(sri, rsm_val, rpr, pchg, bm, bm_sma10, atr_pct)
         watch  = get_watch_flag(phase, pchg, atr_pct)
+        action = get_action(phase, pchg, atr_pct, bm_val=bm, bm_sma10=bm_sma10, watch_flag=watch)
 
         conn.execute("""
             UPDATE eod_summary
@@ -1461,14 +1461,15 @@ def _compute_phase_action(sm, bm, sri, gain, tx_sm, tx_bm, bm_sma10=0, atr_pct=N
     rsm = (sm / total_val * 100) if total_val > 0 else 50
     ttx = tx_sm + tx_bm
     rpr = tx_bm / ttx if ttx > 0 else 0.5
-    phase  = classify_zenith_v2_1(sri, rsm, rpr, gain, bm, bm_sma10, atr_pct)
-    action = get_action(phase, gain, atr_pct)
+    phase  = classify_zenith_v3_1(sri, rsm, rpr, gain, bm, bm_sma10, atr_pct)
+    watch  = get_watch_flag(phase, gain, atr_pct)
+    action = get_action(phase, gain, atr_pct, bm_val=bm, bm_sma10=bm_sma10, watch_flag=watch)
     return phase, action
 
 
-def run_backtest(conn, days=30):
+def run_backtest(conn, days=30, date_from=None, date_to=None):
     """Pair-based backtest: BUY signal opens position, SELL signal closes it.
-    Entry = OPEN D+1 after BUY. Exit = OPEN D+1 after SELL.
+    Entry = OPEN D+1 after BUY. Exit = OPEN D+1 after SELL or close price if SL -10%.
     Profit = (exit - entry) / entry × 100."""
     log.info(f"🧪 BACKTEST (pair-based) started: {days} days")
 
@@ -1491,8 +1492,13 @@ def run_backtest(conn, days=30):
     if len(all_dates) < 3:
         return {"error": "Not enough data", "total_trades": 0}
 
-    # Use last N dates
-    use_dates = all_dates[-days:] if len(all_dates) > days else all_dates
+    # Use date_from/date_to range if provided, else last N dates
+    if date_from and date_to:
+        df_sk = date_from[6:10] + date_from[3:5] + date_from[0:2]
+        dt_sk = date_to[6:10]   + date_to[3:5]   + date_to[0:2]
+        use_dates = [d for d in all_dates if df_sk <= d[6:10]+d[3:5]+d[0:2] <= dt_sk]
+    else:
+        use_dates = all_dates[-days:] if len(all_dates) > days else all_dates
     date_idx = {d: i for i, d in enumerate(all_dates)}
 
     log.info(f"  Dates: {len(use_dates)} ({use_dates[0]} → {use_dates[-1]})")
@@ -1624,6 +1630,8 @@ def run_backtest(conn, days=30):
             signal_timeline[tk].append((d_idx, date_str, phase, action))
 
     # 5. Pair matching: multiple BUY entries, single SELL closes all
+    #    Stop loss: force-close at day's CLOSE if loss >= -10%
+    SL_THRESHOLD = -10.0
     trades = []
 
     for tk, timeline in signal_timeline.items():
@@ -1631,8 +1639,33 @@ def run_backtest(conn, days=30):
         open_positions = []  # list of {entry_date, entry_phase, entry_price, entry_didx}
 
         for d_idx, date_str, phase, action in timeline:
+            day_data = tp.get(date_str)
+            close_price = day_data["c"] if day_data and day_data.get("c") else None
+
+            # ── Stop loss check: close positions that hit -10% on today's close ──
+            if close_price and open_positions:
+                surviving = []
+                for pos in open_positions:
+                    entry_p = pos["entry_price"]
+                    loss_pct = (close_price - entry_p) / entry_p * 100
+                    if loss_pct <= SL_THRESHOLD:
+                        trades.append({
+                            "ticker": tk,
+                            "entry_phase": pos["entry_phase"],
+                            "exit_phase": "SL",
+                            "entry_date": pos["entry_date"],
+                            "exit_date": date_str,
+                            "entry_price": round(entry_p, 2),
+                            "exit_price": round(close_price, 2),
+                            "duration": d_idx - pos["entry_didx"],
+                            "profit": round(loss_pct, 2),
+                        })
+                    else:
+                        surviving.append(pos)
+                open_positions = surviving
+
             if action == "BUY":
-                # Open new position (even if already have one)
+                # Open new position at next day's open
                 next_idx = d_idx + 1
                 if next_idx >= len(all_dates):
                     continue
@@ -1647,12 +1680,11 @@ def run_backtest(conn, days=30):
                     })
 
             elif action == "SELL" and open_positions:
-                # Close ALL open positions at same exit price
+                # Close ALL remaining open positions at next day's open
                 next_idx = d_idx + 1
                 if next_idx >= len(all_dates):
-                    day_data = tp.get(date_str)
-                    if day_data and day_data["c"]:
-                        exit_price = day_data["c"]
+                    if close_price:
+                        exit_price = close_price
                     else:
                         continue
                 else:
@@ -1678,16 +1710,16 @@ def run_backtest(conn, days=30):
                         "duration": duration,
                         "profit": profit,
                     })
-                open_positions = []  # reset all
+                open_positions = []
 
     log.info(f"  Total completed trades: {len(trades)}")
 
-    # 6. Aggregate into leaderboard by Entry→Exit combo
+    # 6. Aggregate into leaderboard by Entry phase only (4 combos: SOS/SPRING/ABSORB/ACCUM)
     from collections import defaultdict
     combos = defaultdict(lambda: {"trades": 0, "wins": 0, "profits": [], "durations": [], "details": []})
 
     for t in trades:
-        key = f"{t['entry_phase']}|{t['exit_phase']}"
+        key = t["entry_phase"]
         combos[key]["trades"] += 1
         combos[key]["profits"].append(t["profit"])
         combos[key]["durations"].append(t["duration"])
@@ -1695,6 +1727,7 @@ def run_backtest(conn, days=30):
             "ticker": t["ticker"],
             "entry_date": t["entry_date"],
             "exit_date": t["exit_date"],
+            "exit_phase": t["exit_phase"],
             "entry_price": t["entry_price"],
             "exit_price": t["exit_price"],
             "duration": t["duration"],
@@ -1704,8 +1737,7 @@ def run_backtest(conn, days=30):
             combos[key]["wins"] += 1
 
     leaderboard = []
-    for key, data in combos.items():
-        entry_phase, exit_phase = key.split("|")
+    for entry_phase, data in combos.items():
         profits = data["profits"]
         wins = [p for p in profits if p > 0]
         losses = [p for p in profits if p <= 0]
@@ -1715,15 +1747,15 @@ def run_backtest(conn, days=30):
         avg_loss = round(sum(losses) / len(losses), 2) if losses else 0
         avg_dur = round(sum(data["durations"]) / len(data["durations"]), 1) if data["durations"] else 0
 
-        # Profit Factor = Gross Profit / |Gross Loss|
         gross_profit = sum(p for p in profits if p > 0)
         gross_loss = abs(sum(p for p in profits if p <= 0))
         profit_factor = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0)
 
         leaderboard.append({
             "entry": entry_phase,
-            "exit": exit_phase,
             "trades": data["trades"],
+            "wins": data["wins"],
+            "losses": data["trades"] - data["wins"],
             "win_rate": win_pct,
             "avg_profit": avg_profit,
             "avg_win": avg_win,
@@ -1735,11 +1767,24 @@ def run_backtest(conn, days=30):
 
     leaderboard.sort(key=lambda x: x.get("profit_factor") or 0, reverse=True)
 
+    # Overall stats across all trades
+    all_profits = [t["profit"] for t in trades]
+    total_wins  = sum(1 for p in all_profits if p > 0)
+    total_losses = len(all_profits) - total_wins
+    overall_wr  = round(total_wins / len(all_profits) * 100, 1) if all_profits else 0
+    gp_all = sum(p for p in all_profits if p > 0)
+    gl_all = abs(sum(p for p in all_profits if p <= 0))
+    overall_pf = round(gp_all / gl_all, 2) if gl_all > 0 else (99.0 if gp_all > 0 else 0)
+
     result = {
         "computed_at": datetime.now(WIB).strftime("%Y-%m-%d %H:%M WIB"),
         "days": days,
         "date_range": f"{use_dates[0]} → {use_dates[-1]}" if use_dates else "",
         "total_trades": len(trades),
+        "total_wins": total_wins,
+        "total_losses": total_losses,
+        "overall_win_rate": overall_wr,
+        "overall_profit_factor": overall_pf,
         "tickers_tested": len(set(t["ticker"] for t in trades)),
         "leaderboard": leaderboard,
     }

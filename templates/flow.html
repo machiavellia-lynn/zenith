@@ -1185,16 +1185,16 @@ td:first-child { text-align: left; }
         </div>
       </div>
 
-      <!-- Ticker Strategy Fitness -->
+      <!-- Ticker Track Record -->
       <div class="fitness-card" id="fitnessCard" style="display:none">
         <div class="fitness-header">
-          <span class="fitness-title">📊 Strategy Fitness</span>
+          <span class="fitness-title">📊 Track Record</span>
           <span class="fitness-period" id="fitPeriod">—</span>
         </div>
         <div class="fitness-stats">
           <div class="fit-col">
-            <div class="fit-label">Best Combo</div>
-            <div class="fit-value" id="fitBestCombo">—</div>
+            <div class="fit-label">Best Phase</div>
+            <div class="fit-value" id="fitBestPhase">—</div>
           </div>
           <div class="fit-col">
             <div class="fit-label">Profit Factor</div>
@@ -1213,6 +1213,26 @@ td:first-child { text-align: left; }
               <span class="fit-wr-w" id="fitWins">0W</span>
               <span class="fit-wr-l" id="fitLosses">0L</span>
             </div>
+          </div>
+        </div>
+        <!-- Per-phase expandable breakdown -->
+        <div id="fitPhaseWrap" style="border-top:1px solid var(--border)">
+          <button id="fitPhaseToggle" onclick="togglePhaseBreakdown()"
+            style="width:100%;background:none;border:none;padding:6px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;color:var(--muted);font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.06em">
+            <span>PER-PHASE BREAKDOWN</span>
+            <span id="fitPhaseChevron">▼</span>
+          </button>
+          <div id="fitPhaseBody" style="display:none;overflow:auto">
+            <table class="fitness-trades-table">
+              <thead><tr>
+                <th style="text-align:left">PHASE</th>
+                <th>TRADES</th>
+                <th>WIN RATE</th>
+                <th>AVG PROFIT</th>
+                <th>PROFIT FACTOR</th>
+              </tr></thead>
+              <tbody id="fitPhaseRows"></tbody>
+            </table>
           </div>
         </div>
         <div class="fitness-trades-wrap" id="fitTradesWrap">
@@ -1931,6 +1951,14 @@ function populateMetricsPanel(r) {
   }
 }
 
+function togglePhaseBreakdown() {
+  const body = document.getElementById('fitPhaseBody');
+  const chev = document.getElementById('fitPhaseChevron');
+  const open = body.style.display === 'none';
+  body.style.display = open ? 'block' : 'none';
+  chev.textContent = open ? '▲' : '▼';
+}
+
 async function loadTickerFitness(ticker) {
   const card = document.getElementById('fitnessCard');
   try {
@@ -1943,56 +1971,72 @@ async function loadTickerFitness(ticker) {
     card.style.display = 'block';
     if (window.ZenithAnim) ZenithAnim.fitnessCardIn(card);
 
-    // Period
     document.getElementById('fitPeriod').textContent = d.period ? `${d.period} (${d.days}d)` : '—';
 
-    // Best combo
-    const bc = d.best_combo;
-    if (bc) {
-      document.getElementById('fitBestCombo').innerHTML =
-        `<span class="phase-badge ${bc.entry.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bc.entry}</span>` +
-        ` → <span class="phase-badge ${bc.exit.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bc.exit}</span>` +
-        `<span style="font-size:10px;color:var(--muted);margin-left:4px">${bc.win_rate||0}% win · ${bc.trades} trades</span>`;
+    // Best phase
+    const bp = d.best_phase;
+    if (bp) {
+      document.getElementById('fitBestPhase').innerHTML =
+        `<span class="phase-badge ${bp.phase.toLowerCase()}" style="font-size:10px;padding:2px 6px">${bp.phase}</span>` +
+        `<span style="font-size:10px;color:var(--muted);margin-left:4px">${bp.win_rate||0}% win · ${bp.trades} trades</span>`;
     } else {
-      document.getElementById('fitBestCombo').textContent = '—';
+      document.getElementById('fitBestPhase').textContent = '—';
     }
 
-    // Profit Factor — from best combo
-    const bestPF = bc ? bc.pf : d.profit_factor;
+    // Profit Factor — overall
+    const pf = d.profit_factor;
     const pfEl = document.getElementById('fitPF');
-    pfEl.textContent = bestPF + '×';
-    pfEl.className = 'fit-value ' + (bestPF >= 2.0 ? 'pos' : bestPF >= 1.0 ? 'ok' : 'neg');
+    pfEl.textContent = pf + '×';
+    pfEl.className = 'fit-value ' + (pf >= 2.0 ? 'pos' : pf >= 1.0 ? 'ok' : 'neg');
 
-    // Avg profit — from best combo
-    const bestAvg = bc ? bc.avg_profit : d.avg_profit;
+    // Avg profit — overall
+    const avg = d.avg_profit;
     const apEl = document.getElementById('fitAvgProfit');
-    apEl.textContent = (bestAvg > 0 ? '+' : '') + bestAvg + '%';
-    apEl.className = 'fit-value ' + (bestAvg > 0 ? 'pos' : 'neg');
+    apEl.textContent = (avg > 0 ? '+' : '') + avg + '%';
+    apEl.className = 'fit-value ' + (avg > 0 ? 'pos' : 'neg');
 
-    // Win rate progress bar — show BEST COMBO win rate only
-    const bestWR = bc ? (bc.win_rate || 0) : d.win_rate;
-    const bestWins = bc ? Math.round(bc.trades * (bc.win_rate/100)) : d.wins;
-    const bestLosses = bc ? (bc.trades - bestWins) : d.losses;
-    document.getElementById('fitWRLabel').textContent = `Win Rate ${bestWR}%`;
-    if (window.ZenithAnim) ZenithAnim.animateWinRate(document.getElementById('fitWRFill'), bestWR);
-    else document.getElementById('fitWRFill').style.width = bestWR + '%';
-    document.getElementById('fitWins').textContent = bestWins + 'W';
-    document.getElementById('fitLosses').textContent = bestLosses + 'L';
+    // Win rate progress bar — overall
+    const wr = d.win_rate || 0;
+    document.getElementById('fitWRLabel').textContent = `Win Rate ${wr}%`;
+    if (window.ZenithAnim) ZenithAnim.animateWinRate(document.getElementById('fitWRFill'), wr);
+    else document.getElementById('fitWRFill').style.width = wr + '%';
+    document.getElementById('fitWins').textContent = (d.wins || 0) + 'W';
+    document.getElementById('fitLosses').textContent = (d.losses || 0) + 'L';
 
-    // Trade table
+    // Per-phase breakdown
+    const phaseRows = document.getElementById('fitPhaseRows');
+    const phaseStats = d.phase_stats || [];
+    if (phaseStats.length) {
+      phaseRows.innerHTML = phaseStats.map(ps => {
+        const wrCls = ps.win_rate >= 60 ? 'color:var(--up)' : ps.win_rate >= 45 ? 'color:#ff8c42' : 'color:var(--down)';
+        const avgCls = ps.avg_profit > 0 ? 'color:var(--up)' : 'color:var(--down)';
+        const pfCls  = ps.profit_factor >= 2 ? 'color:var(--up)' : ps.profit_factor >= 1 ? 'color:#ff8c42' : 'color:var(--down)';
+        return `<tr>
+          <td style="text-align:left"><span class="phase-badge ${ps.phase.toLowerCase()}" style="font-size:10px;padding:1px 5px">${ps.phase}</span></td>
+          <td style="color:var(--muted)">${ps.trades}</td>
+          <td style="${wrCls};font-weight:700">${ps.win_rate}%</td>
+          <td style="${avgCls};font-weight:700">${ps.avg_profit > 0 ? '+' : ''}${ps.avg_profit}%</td>
+          <td style="${pfCls};font-weight:700">${ps.profit_factor}×</td>
+        </tr>`;
+      }).join('');
+    } else {
+      phaseRows.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:8px">—</td></tr>';
+    }
+
+    // Trade history table
     const tbody = document.getElementById('fitTradesBody');
     const trades = d.trades || [];
     if (trades.length) {
       tbody.innerHTML = trades.map(t => {
-        const cls = t.profit > 0 ? 'color:var(--up)' : t.profit < 0 ? 'color:var(--down)' : '';
+        const cls  = t.profit > 0 ? 'color:var(--up)' : t.profit < 0 ? 'color:var(--down)' : '';
         const sign = t.profit > 0 ? '+' : '';
         const eCls = (t.entry_phase || '').toLowerCase();
-        const xCls = (t.exit_phase || '').toLowerCase();
+        const xCls = (t.exit_phase  || '').toLowerCase();
         return `<tr>
           <td style="text-align:left"><span class="phase-badge ${eCls}" style="font-size:10px;padding:1px 5px">${t.entry_phase||'—'}</span> ${t.entry_date||''}</td>
           <td style="text-align:left"><span class="phase-badge ${xCls}" style="font-size:10px;padding:1px 5px">${t.exit_phase||'—'}</span> ${t.exit_date||''}</td>
           <td>${t.entry_price ? t.entry_price.toLocaleString('id-ID') : '—'}</td>
-          <td>${t.exit_price ? t.exit_price.toLocaleString('id-ID') : '—'}</td>
+          <td>${t.exit_price  ? t.exit_price.toLocaleString('id-ID')  : '—'}</td>
           <td style="color:var(--muted)">${t.duration}d</td>
           <td style="${cls};font-weight:700">${sign}${t.profit}%</td>
         </tr>`;

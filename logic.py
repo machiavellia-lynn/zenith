@@ -1,35 +1,16 @@
 """
-logic.py — Zenith Phase Classification Engine v2.1
+logic.py — Zenith Phase Classification Engine v3.1
 ====================================================
-Single source of truth for all phase/action/watch/SL computation.
+Single source of truth for all phase/action/watch computation.
 Imported by app.py, scraper_daily.py, and backtest engine.
 
 DO NOT duplicate this logic elsewhere. If thresholds change, change here only.
 """
 
 
-# ── IDX Price Fraction ────────────────────────────────────────────────────────
-
-def floor_to_fraction(price: float) -> int:
-    """Round price DOWN to nearest valid IDX price fraction (tick size)."""
-    if price <= 0:
-        return 0
-    if price < 200:
-        f = 1
-    elif price < 500:
-        f = 2
-    elif price < 2000:
-        f = 5
-    elif price < 5000:
-        f = 10
-    else:
-        f = 25
-    return int(price // f) * f
-
-
 # ── Phase Classification ──────────────────────────────────────────────────────
 
-def classify_zenith_v2_1(
+def classify_zenith_v3_1(
     sri: float,
     rsm: float,
     rpr: float,
@@ -39,7 +20,7 @@ def classify_zenith_v2_1(
     atr_pct=None,
 ) -> str:
     """
-    Classify Wyckoff phase using Zenith v2.1 logic.
+    Classify Wyckoff phase using Zenith v3.1 logic.
 
     Parameters
     ----------
@@ -59,7 +40,6 @@ def classify_zenith_v2_1(
     th_up    = max(atr * 0.8, 1.0)   # significant up   (min 1%)
     th_down  = max(atr * 0.4, 0.5)   # significant down (min 0.5%)
     th_flat  = atr * 0.5             # flat zone
-    # th_sos_h used in get_action only
 
     # BM activity gate: BM today must be ≥50% of its own 10-day avg
     # Prevents DISTRI firing on days SM is absent but BM is just noise
@@ -69,12 +49,12 @@ def classify_zenith_v2_1(
     else:
         bm_gate = bm_val > bm_sma10 * 0.5
 
-    # Primary guard: if price change unknown, cannot classify directional phases
     if pchg is None:
         return "NEUTRAL"
 
     # 1. SOS — Sign of Strength
-    if pchg > th_up and rsm > 65 and sri > 3.0:
+    # v3.1: OR clause — jika SM sangat agresif (SRI > 4.0), RSM dilonggarkan ke > 60%
+    if pchg > th_up and ((rsm > 65 and sri > 3.0) or (rsm > 60 and sri > 4.0)):
         return "SOS"
 
     # 2. UPTHRUST — Trap: price up but big players distributing
@@ -83,8 +63,7 @@ def classify_zenith_v2_1(
 
     # 3. ABSORB — Stealth accumulation: SM very active, price flat
     #    pchg > -th_down: prevents overlap with SPRING zone
-    #    Explicit pchg is not None: defense-in-depth (primary guard above handles this)
-    if pchg is not None and sri > 2.0 and rsm > 65 and pchg > -th_down and abs(pchg) < th_flat:
+    if sri > 2.0 and rsm > 65 and pchg > -th_down and abs(pchg) < th_flat:
         return "ABSORB"
 
     # 4. SPRING — Price drops but SM accumulating aggressively
@@ -92,11 +71,7 @@ def classify_zenith_v2_1(
         return "SPRING"
 
     # 5. DISTRI — Active distribution
-    #    SRI intentionally removed: SM absent ≠ no distribution (blind spot fix)
-    #    rpr > 0.4: BM transaction proportion is dominant
-    #    bm_gate:   BM today is not just noise vs its own history
-    #    Explicit pchg is not None: defense-in-depth (primary guard above handles this)
-    if pchg is not None and rsm < 40 and pchg < -(th_down * 0.5) and rpr > 0.4 and bm_gate:
+    if rsm < 40 and pchg < -(th_down * 0.5) and rpr > 0.4 and bm_gate:
         return "DISTRI"
 
     # 6. ACCUM — Steady accumulation, SM dominant
@@ -112,18 +87,46 @@ def classify_zenith_v2_1(
 
 # ── Action Signal ─────────────────────────────────────────────────────────────
 
-def get_action(phase: str, pchg, atr_pct=None) -> str:
-    """Derive trading action from phase."""
-    atr      = atr_pct if atr_pct and atr_pct > 0 else 2.5
-    th_sos_h = max(atr * 2.0, 5.0)  # SOS already ran too high → HOLD
+def get_action(
+    phase: str,
+    pchg,
+    atr_pct=None,
+    bm_val: float = 0,
+    bm_sma10: float = 0,
+    watch_flag=None,
+) -> str:
+    """
+    Derive trading action from phase with 3 safety gates (v3.1).
 
-    if phase == "SOS":
-        return "BUY" if (pchg is not None and pchg < th_sos_h) else "HOLD"
-    if phase in ("SPRING", "ABSORB", "ACCUM"):
-        return "BUY"
-    if phase in ("UPTHRUST", "DISTRI"):
+    Gate A — Supply Gate   : bm_val > bm_sma10 × 3.0  → HOLD
+    Gate B — ARB Safety    : watch_flag == "ARB_SPRING" → HOLD
+    Gate C — Anti-Pucuk    : pchg >= th_sos_h for any BUY phase → HOLD
+    """
+    atr      = atr_pct if atr_pct and atr_pct > 0 else 2.5
+    th_sos_h = max(atr * 2.0, 5.0)
+
+    BUY_PHASES  = ("SOS", "SPRING", "ABSORB", "ACCUM")
+    SELL_PHASES = ("UPTHRUST", "DISTRI")
+
+    if phase in SELL_PHASES:
         return "SELL"
-    return "HOLD"  # NEUTRAL
+
+    if phase not in BUY_PHASES:
+        return "HOLD"
+
+    # Gate A: Supply Gate — BM hari ini 3x rata-rata normal = tembok penjual masif
+    if bm_sma10 > 0 and bm_val > bm_sma10 * 3.0:
+        return "HOLD"
+
+    # Gate B: ARB Safety — SPRING dengan penurunan ekstrim
+    if watch_flag == "ARB_SPRING":
+        return "HOLD"
+
+    # Gate C: Global Anti-Pucuk — harga sudah terlalu tinggi hari ini
+    if pchg is not None and pchg >= th_sos_h:
+        return "HOLD"
+
+    return "BUY"
 
 
 # ── ARB Watch Flag ────────────────────────────────────────────────────────────
@@ -131,25 +134,9 @@ def get_action(phase: str, pchg, atr_pct=None) -> str:
 def get_watch_flag(phase: str, pchg, atr_pct=None):
     """
     Return "ARB_SPRING" if SPRING occurs during extreme drop (>1.5× ATR).
-    This signals elevated risk — the drop may be approaching Auto Rejection Bawah.
-    Phase remains SPRING, action remains BUY, but user gets a visual warning.
+    Phase remains SPRING; frontend displays ⚠️ WATCH when action == HOLD && watch == ARB_SPRING.
     """
     atr = atr_pct if atr_pct and atr_pct > 0 else 2.5
     if phase == "SPRING" and pchg is not None and pchg < -(atr * 1.5):
         return "ARB_SPRING"
     return None
-
-
-# ── Suggested Stop Loss ───────────────────────────────────────────────────────
-
-def get_suggested_sl(price_close, atr_pct):
-    """
-    Calculate SL = price × (1 − ATR% × 2.0), rounded DOWN to IDX price fraction.
-    Returns None if inputs are missing.
-    """
-    if not price_close or not atr_pct or price_close <= 0 or atr_pct <= 0:
-        return None
-    raw_sl = price_close * (1.0 - (atr_pct / 100.0) * 2.0)
-    if raw_sl <= 0:
-        return None
-    return floor_to_fraction(raw_sl)

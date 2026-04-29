@@ -245,7 +245,7 @@ def login():
         return redirect("/hub")
     if request.method == "POST":
         key = request.form.get("key", "").strip()
-        if key == os.environ.get("ACCESS_KEY", "zenith2026"):
+        if key == os.environ.get("ACCESS_KEY"):
             session["authed"] = True
             return jsonify({"ok": True})
         return jsonify({"ok": False})
@@ -391,7 +391,7 @@ def flow():
             latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
                 SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm,
-                       atr_pct, sm_sma10, bm_sma10, watch
+                       atr_pct, sm_sma10, bm_sma10, watch, price_change_pct
                 FROM eod_summary WHERE date = ?
             """, [latest_date]).fetchall()
             for ar in a_rows:
@@ -440,14 +440,17 @@ def flow():
                     gain = round((p_now - p_ref) / p_ref * 100, 2)
                 gains_map[t] = {"gain": gain, "price": price}
         else:
-            # Single day: get price from DB but compute gain via Yahoo
-            # (DB prev_row can be weeks ago → wrong gain%)
+            # Single day: use price_change_pct stored by scraper; Yahoo only for tickers missing it
             if latest_date:
                 for r in conn.execute(
-                    "SELECT ticker, price_close FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
+                    "SELECT ticker, price_close, price_change_pct FROM eod_summary WHERE date = ? AND price_close IS NOT NULL",
                     [latest_date]
                 ).fetchall():
-                    gains_map[r["ticker"]] = {"gain": None, "price": int(round(r["price_close"]))}
+                    pct = r["price_change_pct"]
+                    gains_map[r["ticker"]] = {
+                        "gain": round(pct, 2) if pct is not None else None,
+                        "price": int(round(r["price_close"])),
+                    }
 
     except Exception as e:
         return jsonify({"error": f"DB error: {e}"}), 500
@@ -537,11 +540,11 @@ def flow():
         watch        = None
 
         if rsm is not None and cm is not None:
-            from logic import classify_zenith_v2_1, get_action, get_watch_flag
+            from logic import classify_zenith_v3_1, get_action, get_watch_flag
             bm_raw = d.get("bm_val") or 0
-            phase  = classify_zenith_v2_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
-            action = get_action(phase, gain, atr_pct)
+            phase  = classify_zenith_v3_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
             watch  = get_watch_flag(phase, gain, atr_pct)
+            action = get_action(phase, gain, atr_pct, bm_val=bm_raw, bm_sma10=bm_sma10, watch_flag=watch)
             if watch is None and a.get("watch"):
                 watch = a.get("watch")
 
@@ -1273,8 +1276,10 @@ def backtest_page():
 @app.route("/api/backtest")
 def api_backtest():
     if not is_authed(): return jsonify({"error": "unauthorized"}), 401
-    days = int(request.args.get("days", "30"))
-    run = request.args.get("run", "")
+    days      = int(request.args.get("days", "30"))
+    date_from = request.args.get("date_from", "").strip()  # DD-MM-YYYY
+    date_to   = request.args.get("date_to",   "").strip()
+    run       = request.args.get("run", "")
 
     # Trigger new backtest in dedicated thread (bypass signal queue)
     if run == "1":
@@ -1284,6 +1289,9 @@ def api_backtest():
 
         _bt_status = {"status": "running", "days": days, "result": None}
 
+        _df = date_from or None
+        _dt = date_to   or None
+
         def _run_bt():
             global _bt_status
             try:
@@ -1292,7 +1300,7 @@ def api_backtest():
                 c.row_factory = sqlite3.Row
                 c.execute("PRAGMA busy_timeout = 10000")
                 from scraper_daily import run_backtest
-                result = run_backtest(c, days=days)
+                result = run_backtest(c, days=days, date_from=_df, date_to=_dt)
                 _bt_status = {"status": "done", "days": days, "result": result}
                 c.close()
             except Exception as e:
@@ -1350,42 +1358,49 @@ def api_ticker_fitness():
         computed = data.get("computed_at", "")
         bt_days = data.get("days", 0)
 
-        # Filter trades for this ticker across all combos
-        # Skip extreme moves (right issue, delisting, etc: >50% or <-50%)
+        # Leaderboard now groups by entry_phase only; gather this ticker's trades
+        # Skip extreme moves (rights issue, delisting: abs > 50%)
+        import collections
         ticker_trades = []
-        best_combo = None
-        best_avg = -999
+        phase_map = collections.defaultdict(list)
 
-        for combo in lb:
-            details = combo.get("details", [])
-            t_trades = [d for d in details if d["ticker"] == ticker and abs(d.get("profit", 0)) <= 50]
-            if t_trades:
-                ticker_trades.extend([{**t, "entry_phase": combo["entry"], "exit_phase": combo["exit"]} for t in t_trades])
-                # Best combo = highest average profit
-                combo_wins = [t for t in t_trades if t["profit"] > 0]
-                combo_wr = round(len(combo_wins) / len(t_trades) * 100, 1) if t_trades else 0
-                combo_avg = round(sum(t["profit"] for t in t_trades) / len(t_trades), 2)
-                gp = sum(t["profit"] for t in t_trades if t["profit"] > 0)
-                gl = abs(sum(t["profit"] for t in t_trades if t["profit"] <= 0))
-                combo_pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
-                if combo_avg > best_avg and len(t_trades) >= 1:
-                    best_avg = combo_avg
-                    best_combo = {
-                        "entry": combo["entry"], "exit": combo["exit"],
-                        "pf": combo_pf, "avg_profit": combo_avg,
-                        "trades": len(t_trades), "win_rate": combo_wr,
-                    }
+        for entry_row in lb:
+            entry_phase = entry_row.get("entry", "")
+            for d in entry_row.get("details", []):
+                if d["ticker"] == ticker and abs(d.get("profit", 0)) <= 50:
+                    trade = {**d, "entry_phase": entry_phase}
+                    ticker_trades.append(trade)
+                    phase_map[entry_phase].append(trade)
 
         if not ticker_trades:
             return jsonify({"ticker": ticker, "total_trades": 0, "period": period})
 
-        wins = [t for t in ticker_trades if t["profit"] > 0]
+        wins   = [t for t in ticker_trades if t["profit"] > 0]
         losses = [t for t in ticker_trades if t["profit"] <= 0]
-        gross_profit = sum(t["profit"] for t in wins)
-        gross_loss = abs(sum(t["profit"] for t in losses))
-        pf = round(gross_profit / gross_loss, 2) if gross_loss > 0 else (99.0 if gross_profit > 0 else 0)
+        gp = sum(t["profit"] for t in wins)
+        gl = abs(sum(t["profit"] for t in losses))
+        pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
 
-        # Sort trades by entry_date DESCENDING (latest first)
+        # Per-phase breakdown + pick best_phase (highest avg profit)
+        phase_stats = []
+        best_phase = None
+        best_avg = -999
+        for ph, ph_trades in phase_map.items():
+            ph_wins = [t for t in ph_trades if t["profit"] > 0]
+            ph_gl = abs(sum(t["profit"] for t in ph_trades if t["profit"] <= 0))
+            ph_gp = sum(t["profit"] for t in ph_trades if t["profit"] > 0)
+            ph_pf = round(ph_gp / ph_gl, 2) if ph_gl > 0 else (99.0 if ph_gp > 0 else 0)
+            ph_wr = round(len(ph_wins) / len(ph_trades) * 100, 1) if ph_trades else 0
+            ph_avg = round(sum(t["profit"] for t in ph_trades) / len(ph_trades), 2)
+            phase_stats.append({
+                "phase": ph, "trades": len(ph_trades),
+                "win_rate": ph_wr, "profit_factor": ph_pf, "avg_profit": ph_avg,
+            })
+            if ph_avg > best_avg:
+                best_avg = ph_avg
+                best_phase = {"phase": ph, "win_rate": ph_wr, "profit_factor": ph_pf,
+                              "avg_profit": ph_avg, "trades": len(ph_trades)}
+
         trades_sorted = sorted(ticker_trades, key=lambda t: (
             t.get("entry_date", "")[6:10] + t.get("entry_date", "")[3:5] + t.get("entry_date", "")[0:2]
         ), reverse=True)
@@ -1396,7 +1411,8 @@ def api_ticker_fitness():
             "win_rate": round(len(wins) / len(ticker_trades) * 100, 1),
             "profit_factor": pf,
             "avg_profit": round(sum(t["profit"] for t in ticker_trades) / len(ticker_trades), 2),
-            "best_combo": best_combo,
+            "best_phase": best_phase,
+            "phase_stats": sorted(phase_stats, key=lambda x: x["avg_profit"], reverse=True),
             "wins": len(wins),
             "losses": len(losses),
             "period": period,
