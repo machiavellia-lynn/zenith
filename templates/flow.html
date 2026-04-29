@@ -13,18 +13,18 @@
 <link rel="stylesheet" href="/static/tokens.css">
 <style>
 :root {
-  --bg:       #09090b;
-  --surface:  #18181b;
-  --surface2: #27272a;
-  --border:   #3f3f46;
-  --border2:  #52525b;
-  --accent:   #10b981;
-  --accent2:  #60a5fa;
-  --danger:   #f87171;
-  --text:     #f4f4f5;
-  --muted:    #a1a1aa;
-  --up:       #10b981;
-  --down:     #f87171;
+  --bg:       #080c10;
+  --surface:  #0e1318;
+  --surface2: #121920;
+  --border:   #1a2230;
+  --border2:  #243040;
+  --accent:   #00e8a2;
+  --accent2:  #4d9fff;
+  --danger:   #ff4d6a;
+  --text:     #c8d8e8;
+  --muted:    #bfcbd4;
+  --up:       #00e8a2;
+  --down:     #ff4d6a;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; scrollbar-width: thin; scrollbar-color: var(--border2) transparent; }
 ::-webkit-scrollbar { width: 5px; height: 5px; }
@@ -163,7 +163,7 @@ header::before {
   border-right: none;
   border-left: 1px solid var(--border);
 }
-.stat-item.highlight { background: rgba(16,185,129,.06); border-right-color: rgba(16,185,129,.2); }
+.stat-item.highlight { background: rgba(0,232,162,.025); }
 .stat-item .s-label {
   font-family: 'Space Mono', monospace;
   font-size:10px; letter-spacing: .1em;
@@ -427,7 +427,7 @@ tbody tr {
 tbody tr.action-buy  { border-left-color: var(--up); }
 tbody tr.action-sell { border-left-color: var(--down); }
 tbody tr.action-hold { border-left-color: var(--border2); }
-tbody tr:hover { background: rgba(16,185,129,.03); }
+tbody tr:hover { background: rgba(0,232,162,.025); }
 @keyframes rowIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -955,9 +955,9 @@ td:first-child { text-align: left; }
 .phase-badge.accum   {background:rgba(110,231,183,.07);color:#6ee7b7;border-color:rgba(110,231,183,.18)}
 .phase-badge.neutral {background:rgba(82,82,91,.15);  color:#a1a1aa;border-color:rgba(82,82,91,.3)}
 .action-badge{font-family:'Space Mono',monospace;font-size:10px;font-weight:700;cursor:help;white-space:nowrap}
-.action-badge.buy {color:#10b981}
-.action-badge.sell{color:#f87171}
-.action-badge.hold{color:#fb923c}
+.action-badge.buy {color:#00e8a2}
+.action-badge.sell{color:#ff4d6a}
+.action-badge.hold{color:#ff8c42}
 </style>
 </head>
 <body>
