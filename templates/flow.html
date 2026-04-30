@@ -2649,12 +2649,17 @@ function generateShareCard(ticker) {
   const fmtPct = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '—';
   const fmtDec = v => v != null ? v.toFixed(2) : '—';
 
-  // Use modal date (trxDateFrom), fallback to main filter (dateFrom), then today
-  const _dfVal = document.getElementById('trxDateFrom')?.value || document.getElementById('dateFrom')?.value || '';
-  const _dfParts = _dfVal.split('-');
-  const today = _dfParts.length === 3
-    ? new Date(+_dfParts[2], +_dfParts[1] - 1, +_dfParts[0])
-    : new Date();
+  // Use modal date (trxDateFrom DD/MM/YYYY), fallback to main filter (dateFrom DD-MM-YYYY), then today
+  let today = new Date();
+  const _trxVal = document.getElementById('trxDateFrom')?.value || '';
+  if (_trxVal) {
+    const [d, m, y] = _trxVal.split('/').map(Number);
+    if (d && m && y) today = new Date(y, m - 1, d);
+  } else {
+    const _dfVal = document.getElementById('dateFrom')?.value || '';
+    const [d, m, y] = _dfVal.split('-').map(Number);
+    if (d && m && y) today = new Date(y, m - 1, d);
+  }
   const dateStr = today.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
 
   const PHASE_STYLES = {
