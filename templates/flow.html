@@ -2649,7 +2649,12 @@ function generateShareCard(ticker) {
   const fmtPct = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '—';
   const fmtDec = v => v != null ? v.toFixed(2) : '—';
 
-  const today   = new Date();
+  // Use the active filter date, not today
+  const _dfVal = document.getElementById('dateFrom')?.value || '';
+  const _dfParts = _dfVal.split('-');
+  const today = _dfParts.length === 3
+    ? new Date(+_dfParts[2], +_dfParts[1] - 1, +_dfParts[0])
+    : new Date();
   const dateStr = today.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
 
   const PHASE_STYLES = {
