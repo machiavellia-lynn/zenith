@@ -2633,30 +2633,21 @@ function generateShareCard(ticker) {
   }
 
   function drawBadge(text, x, y, bgColor, textColor, borderColor) {
-    ctx.font = '600 11px "Space Mono", monospace';
+    ctx.font = '700 14px "Space Mono", monospace';
     const tw = ctx.measureText(text).width;
-    const padH = 12, bh = 24;
+    const padH = 16, bh = 30;
     const bw = tw + padH * 2;
-    rr(x, y, bw, bh, 5);
+    rr(x, y, bw, bh, 6);
     ctx.fillStyle = bgColor; ctx.fill();
     ctx.strokeStyle = borderColor; ctx.lineWidth = 1; ctx.stroke();
     ctx.fillStyle = textColor;
-    ctx.fillText(text, x + padH, y + bh / 2 + 4);
+    ctx.fillText(text, x + padH, y + bh / 2 + 5);
     return bw;
   }
 
   const fmtRp  = v => v != null ? 'Rp ' + Math.round(v).toLocaleString('id-ID') : '—';
   const fmtPct = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '—';
   const fmtDec = v => v != null ? v.toFixed(2) : '—';
-  const fmtMB  = v => {
-    if (v == null) return '—';
-    const abs = Math.abs(v), sign = v < 0 ? '-' : '';
-    if (abs >= 1e12) return sign + (abs/1e12).toFixed(1) + 'T';
-    if (abs >= 1e9)  return sign + (abs/1e9).toFixed(1) + 'B';
-    if (abs >= 1e6)  return sign + (abs/1e6).toFixed(1) + 'M';
-    if (abs >= 1e3)  return sign + (abs/1e3).toFixed(1) + 'K';
-    return sign + abs.toFixed(0);
-  };
 
   const today   = new Date();
   const dateStr = today.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
@@ -2704,12 +2695,12 @@ function generateShareCard(ticker) {
     ctx.fillStyle = '#dde4ea';
     ctx.fillText('ZENITH', 68, hY + 5);
 
-    ctx.font = '400 11px "DM Sans", sans-serif';
-    ctx.fillStyle = '#7a90a0';
-    ctx.fillText('Smart Money Analysis', 68, hY + 20);
+    ctx.font = '400 13px "DM Sans", sans-serif';
+    ctx.fillStyle = '#b0c4d4';
+    ctx.fillText('Smart Money Analysis', 68, hY + 21);
 
-    ctx.font = '400 11px "Space Mono", monospace';
-    ctx.fillStyle = '#7a90a0';
+    ctx.font = '400 13px "Space Mono", monospace';
+    ctx.fillStyle = '#b0c4d4';
     ctx.textAlign = 'right';
     ctx.fillText(dateStr, W - 56, hY + 5);
     ctx.textAlign = 'left';
@@ -2719,54 +2710,54 @@ function generateShareCard(ticker) {
     ctx.beginPath(); ctx.moveTo(56, 60); ctx.lineTo(W-56, 60); ctx.stroke();
 
     // ─ Left column ─────────────────────────────────────────────────────
-    const lx = 56, ly = 80;
+    const lx = 56, ly = 120;
 
-    ctx.font = '700 66px "Space Mono", monospace';
+    ctx.font = '700 72px "Space Mono", monospace';
     ctx.fillStyle = '#e8edf2';
-    ctx.fillText(r.ticker, lx, ly + 60);
+    ctx.fillText(r.ticker, lx, ly + 68);
 
-    ctx.font = '400 14px "DM Sans", sans-serif';
-    ctx.fillStyle = '#8898a8';
+    ctx.font = '400 15px "DM Sans", sans-serif';
+    ctx.fillStyle = '#b0c4d4';
     let nameDisplay = r.name || '';
-    ctx.font = '400 14px "DM Sans", sans-serif';
+    ctx.font = '400 15px "DM Sans", sans-serif';
     while (nameDisplay.length > 4 && ctx.measureText(nameDisplay).width > 430) {
       nameDisplay = nameDisplay.slice(0, -4) + '...';
     }
-    ctx.fillText(nameDisplay, lx, ly + 82);
+    ctx.fillText(nameDisplay, lx, ly + 92);
 
     ctx.strokeStyle = 'rgba(255,255,255,.07)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(lx, ly + 96); ctx.lineTo(lx+440, ly+96); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx, ly + 108); ctx.lineTo(lx+440, ly+108); ctx.stroke();
 
-    ctx.font = '400 10px "Space Mono", monospace';
-    ctx.fillStyle = '#7a90a0';
-    ctx.fillText('HARGA SEKARANG', lx, ly + 118);
+    ctx.font = '400 13px "Space Mono", monospace';
+    ctx.fillStyle = '#b0c4d4';
+    ctx.fillText('HARGA SEKARANG', lx, ly + 134);
 
-    ctx.font = '700 32px "Space Mono", monospace';
+    ctx.font = '700 38px "Space Mono", monospace';
     ctx.fillStyle = '#e8edf2';
-    ctx.fillText(fmtRp(r.price), lx, ly + 154);
+    ctx.fillText(fmtRp(r.price), lx, ly + 178);
 
     if (r.vwap_sm) {
       const smDiff = r.price ? ((r.price - r.vwap_sm) / r.vwap_sm * 100) : null;
-      ctx.font = '400 12px "DM Sans", sans-serif';
-      ctx.fillStyle = '#8898a8';
+      ctx.font = '400 14px "DM Sans", sans-serif';
+      ctx.fillStyle = '#b0c4d4';
       ctx.fillText('SM Avg ' + Math.round(r.vwap_sm).toLocaleString('id-ID') +
-        (smDiff != null ? '  ' + (smDiff >= 0 ? '+' : '') + smDiff.toFixed(2) + '%' : ''), lx, ly + 176);
+        (smDiff != null ? '  ' + (smDiff >= 0 ? '+' : '') + smDiff.toFixed(2) + '%' : ''), lx, ly + 204);
     }
 
     if (r.vwap_bm) {
       const bmDiff = r.price ? ((r.price - r.vwap_bm) / r.vwap_bm * 100) : null;
-      ctx.font = '400 12px "DM Sans", sans-serif';
-      ctx.fillStyle = '#8898a8';
+      ctx.font = '400 14px "DM Sans", sans-serif';
+      ctx.fillStyle = '#b0c4d4';
       ctx.fillText('BM Avg ' + Math.round(r.vwap_bm).toLocaleString('id-ID') +
-        (bmDiff != null ? '  ' + (bmDiff >= 0 ? '+' : '') + bmDiff.toFixed(2) + '%' : ''), lx, ly + 196);
+        (bmDiff != null ? '  ' + (bmDiff >= 0 ? '+' : '') + bmDiff.toFixed(2) + '%' : ''), lx, ly + 226);
     }
 
     let badgeX = lx;
-    const badgeY = ly + 220;
+    const badgeY = ly + 258;
     if (r.phase) {
       const ps = PHASE_STYLES[r.phase.toLowerCase()] || PHASE_STYLES.neutral;
-      badgeX += drawBadge(r.phase, badgeX, badgeY, ps.bg, ps.text, ps.border) + 8;
+      badgeX += drawBadge(r.phase, badgeX, badgeY, ps.bg, ps.text, ps.border) + 10;
     }
     if (r.action && ACTION_STYLES[r.action]) {
       const as = ACTION_STYLES[r.action];
@@ -2776,51 +2767,51 @@ function generateShareCard(ticker) {
     // ─ Vertical divider ───────────────────────────────────────────────
     ctx.strokeStyle = 'rgba(255,255,255,.055)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(558, 68); ctx.lineTo(558, 320); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(558, 68); ctx.lineTo(558, 400); ctx.stroke();
 
     // ─ Right column ───────────────────────────────────────────────────
-    const rx = 592, ry = 80;
+    const rx = 592, ry = 120;
 
-    ctx.font = '400 10px "Space Mono", monospace';
-    ctx.fillStyle = '#7a90a0';
-    ctx.fillText('PERUBAHAN HARGA', rx, ry + 22);
+    ctx.font = '400 13px "Space Mono", monospace';
+    ctx.fillStyle = '#b0c4d4';
+    ctx.fillText('PERUBAHAN HARGA', rx, ry + 24);
 
     const gainVal   = r.gain_pct;
     const gainStr   = gainVal != null ? (gainVal > 0 ? '+' : '') + gainVal.toFixed(2) + '%' : '—';
     const gainColor = gainVal == null ? '#7888a0' : gainVal >= 0 ? '#00e8a2' : '#ff4d6a';
-    const bigPx     = gainStr.length <= 7 ? 72 : gainStr.length <= 9 ? 60 : 50;
+    const bigPx     = gainStr.length <= 7 ? 80 : gainStr.length <= 9 ? 66 : 54;
     ctx.font = `700 ${bigPx}px "Space Mono", monospace`;
     ctx.fillStyle = gainColor;
-    ctx.fillText(gainStr, rx, ry + 104);
+    ctx.fillText(gainStr, rx, ry + 116);
 
     ctx.strokeStyle = 'rgba(255,255,255,.065)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(rx, ry + 120); ctx.lineTo(rx + 432, ry + 120); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rx, ry + 134); ctx.lineTo(rx + 432, ry + 134); ctx.stroke();
 
-    ctx.font = '400 10px "Space Mono", monospace';
-    ctx.fillStyle = '#7a90a0';
-    ctx.fillText('CLEAN MONEY', rx, ry + 142);
+    ctx.font = '400 13px "Space Mono", monospace';
+    ctx.fillStyle = '#b0c4d4';
+    ctx.fillText('CLEAN MONEY', rx, ry + 158);
 
     const cmVal   = r.clean_money;
-    const cmStr   = cmVal != null ? ((cmVal >= 0 ? '▲ ' : '▼ ') + fmtMB(Math.abs(cmVal))) : '—';
+    const cmStr   = cmVal != null ? ((cmVal >= 0 ? '▲ ' : '▼ ') + fmtM(Math.abs(cmVal))) : '—';
     const cmColor = cmVal == null ? '#7888a0' : cmVal >= 0 ? '#00e8a2' : '#ff4d6a';
-    ctx.font = '700 30px "Space Mono", monospace';
+    ctx.font = '700 34px "Space Mono", monospace';
     ctx.fillStyle = cmColor;
-    ctx.fillText(cmStr, rx, ry + 176);
+    ctx.fillText(cmStr, rx, ry + 200);
 
     if (r.rsm != null) {
-      ctx.font = '400 12px "DM Sans", sans-serif';
-      ctx.fillStyle = '#8898a8';
-      ctx.fillText('RSM ' + r.rsm.toFixed(1) + '%', rx, ry + 198);
+      ctx.font = '400 14px "DM Sans", sans-serif';
+      ctx.fillStyle = '#b0c4d4';
+      ctx.fillText('RSM ' + r.rsm.toFixed(1) + '%', rx, ry + 226);
     }
 
     // ─ Metrics strip ──────────────────────────────────────────────────
-    const msY = 348;
+    const msY = 430;
     ctx.strokeStyle = 'rgba(255,255,255,.055)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(56, msY); ctx.lineTo(W-56, msY); ctx.stroke();
 
-    const muted = '#7888a0';
+    const muted = '#8898b0';
     const metrics = [
       { label:'SRI',   value:fmtDec(r.sri),
         color: r.sri == null ? muted : r.sri >= 3.0 ? '#00e8a2' : r.sri >= 1.5 ? '#c8a84b' : muted },
@@ -2837,32 +2828,19 @@ function generateShareCard(ticker) {
     metrics.forEach((m, i) => {
       const mx = 56 + i * mW + mW / 2;
       if (i > 0) {
-        ctx.strokeStyle = 'rgba(255,255,255,.045)';
+        ctx.strokeStyle = 'rgba(255,255,255,.05)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(56 + i*mW, msY+12); ctx.lineTo(56 + i*mW, msY+90); ctx.stroke();
       }
-      ctx.font = '700 26px "Space Mono", monospace';
+      ctx.font = '700 28px "Space Mono", monospace';
       ctx.fillStyle = m.color;
       ctx.textAlign = 'center';
-      ctx.fillText(m.value, mx, msY + 48);
-      ctx.font = '400 13px "Space Mono", monospace';
-      ctx.fillStyle = '#6a8090';
-      ctx.fillText(m.label, mx, msY + 72);
+      ctx.fillText(m.value, mx, msY + 50);
+      ctx.font = '400 14px "Space Mono", monospace';
+      ctx.fillStyle = '#9ab8c8';
+      ctx.fillText(m.label, mx, msY + 76);
     });
     ctx.textAlign = 'left';
-
-    // ─ Footer ─────────────────────────────────────────────────────────
-    const fY = 468;
-    ctx.strokeStyle = 'rgba(255,255,255,.055)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(56, fY); ctx.lineTo(W-56, fY); ctx.stroke();
-
-    ctx.beginPath(); ctx.arc(66, fY+24, 4, 0, Math.PI*2);
-    ctx.fillStyle = '#00e8a2'; ctx.fill();
-
-    ctx.font = '700 13px "Space Mono", monospace';
-    ctx.fillStyle = '#c8d4dc';
-    ctx.fillText('ZENITH', 78, fY + 29);
 
     // Bottom accent bar
     const gBot = ctx.createLinearGradient(0,0,W,0);
