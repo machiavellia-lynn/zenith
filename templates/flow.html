@@ -1982,10 +1982,10 @@ function populateMetricsPanel(r) {
     acBadge.style.display = 'none';
   }
 
-  // Show share button only for BUY / SELL signals
+  // Show share button for BUY / SELL / HOLD signals
   const shareBtn = document.getElementById('mShareBtn');
   if (shareBtn) {
-    const showShare = r && (r.action === 'BUY' || r.action === 'SELL');
+    const showShare = r && (r.action === 'BUY' || r.action === 'SELL' || r.action === 'HOLD');
     shareBtn.style.display = showShare ? 'flex' : 'none';
   }
 }
@@ -2562,8 +2562,7 @@ function generateShareCard(ticker) {
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  const isBuy = r.action === 'BUY';
-  const accentColor = isBuy ? '#00e8a2' : '#ff4d6a';
+  const accentColor = r.action === 'BUY' ? '#00e8a2' : r.action === 'HOLD' ? '#f5c842' : '#ff4d6a';
 
   function rr(x, y, w, h, radius) {
     ctx.beginPath();
@@ -2616,6 +2615,7 @@ function generateShareCard(ticker) {
   const ACTION_STYLES = {
     BUY:  { bg:'rgba(0,232,162,.12)',  text:'#00e8a2', border:'rgba(0,232,162,.32)' },
     SELL: { bg:'rgba(255,77,106,.12)', text:'#ff4d6a', border:'rgba(255,77,106,.32)' },
+    HOLD: { bg:'rgba(245,200,66,.10)', text:'#f5c842', border:'rgba(245,200,66,.30)' },
   };
 
   document.fonts.ready.then(() => {
@@ -2647,11 +2647,11 @@ function generateShareCard(ticker) {
     ctx.fillText('ZENITH', 68, hY + 5);
 
     ctx.font = '400 11px "DM Sans", sans-serif';
-    ctx.fillStyle = '#3d5060';
+    ctx.fillStyle = '#7a90a0';
     ctx.fillText('Smart Money Analysis', 68, hY + 20);
 
     ctx.font = '400 11px "Space Mono", monospace';
-    ctx.fillStyle = '#3d5060';
+    ctx.fillStyle = '#7a90a0';
     ctx.textAlign = 'right';
     ctx.fillText(dateStr, W - 56, hY + 5);
     ctx.textAlign = 'left';
@@ -2663,108 +2663,116 @@ function generateShareCard(ticker) {
     // ─ Left column ─────────────────────────────────────────────────────
     const lx = 56, ly = 80;
 
-    ctx.font = '700 58px "Space Mono", monospace';
+    ctx.font = '700 66px "Space Mono", monospace';
     ctx.fillStyle = '#e8edf2';
-    ctx.fillText(r.ticker, lx, ly + 52);
+    ctx.fillText(r.ticker, lx, ly + 60);
 
-    ctx.font = '400 13px "DM Sans", sans-serif';
-    ctx.fillStyle = '#4a5f6e';
+    ctx.font = '400 14px "DM Sans", sans-serif';
+    ctx.fillStyle = '#8898a8';
     let nameDisplay = r.name || '';
-    ctx.font = '400 13px "DM Sans", sans-serif';
+    ctx.font = '400 14px "DM Sans", sans-serif';
     while (nameDisplay.length > 4 && ctx.measureText(nameDisplay).width > 430) {
       nameDisplay = nameDisplay.slice(0, -4) + '...';
     }
-    ctx.fillText(nameDisplay, lx, ly + 74);
+    ctx.fillText(nameDisplay, lx, ly + 82);
 
-    ctx.strokeStyle = 'rgba(255,255,255,.065)';
+    ctx.strokeStyle = 'rgba(255,255,255,.07)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(lx, ly + 88); ctx.lineTo(lx+440, ly+88); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx, ly + 96); ctx.lineTo(lx+440, ly+96); ctx.stroke();
 
     ctx.font = '400 10px "Space Mono", monospace';
-    ctx.fillStyle = '#2d4050';
-    ctx.fillText('HARGA SEKARANG', lx, ly + 110);
+    ctx.fillStyle = '#7a90a0';
+    ctx.fillText('HARGA SEKARANG', lx, ly + 118);
 
-    ctx.font = '700 30px "Space Mono", monospace';
+    ctx.font = '700 32px "Space Mono", monospace';
     ctx.fillStyle = '#e8edf2';
-    ctx.fillText(fmtRp(r.price), lx, ly + 144);
+    ctx.fillText(fmtRp(r.price), lx, ly + 154);
 
     if (r.vwap_sm) {
       const smDiff = r.price ? ((r.price - r.vwap_sm) / r.vwap_sm * 100) : null;
-      ctx.font = '400 11px "DM Sans", sans-serif';
-      ctx.fillStyle = '#3a5060';
+      ctx.font = '400 12px "DM Sans", sans-serif';
+      ctx.fillStyle = '#8898a8';
       ctx.fillText('SM Avg ' + Math.round(r.vwap_sm).toLocaleString('id-ID') +
-        (smDiff != null ? '  ' + (smDiff >= 0 ? '+' : '') + smDiff.toFixed(2) + '%' : ''), lx, ly + 165);
+        (smDiff != null ? '  ' + (smDiff >= 0 ? '+' : '') + smDiff.toFixed(2) + '%' : ''), lx, ly + 176);
+    }
+
+    if (r.vwap_bm) {
+      const bmDiff = r.price ? ((r.price - r.vwap_bm) / r.vwap_bm * 100) : null;
+      ctx.font = '400 12px "DM Sans", sans-serif';
+      ctx.fillStyle = '#8898a8';
+      ctx.fillText('BM Avg ' + Math.round(r.vwap_bm).toLocaleString('id-ID') +
+        (bmDiff != null ? '  ' + (bmDiff >= 0 ? '+' : '') + bmDiff.toFixed(2) + '%' : ''), lx, ly + 196);
     }
 
     let badgeX = lx;
-    const badgeY = ly + 188;
+    const badgeY = ly + 220;
     if (r.phase) {
       const ps = PHASE_STYLES[r.phase.toLowerCase()] || PHASE_STYLES.neutral;
       badgeX += drawBadge(r.phase, badgeX, badgeY, ps.bg, ps.text, ps.border) + 8;
     }
     if (r.action && ACTION_STYLES[r.action]) {
       const as = ACTION_STYLES[r.action];
-      const lbl = r.action === 'BUY' ? 'BUY' : 'SELL';
-      drawBadge(lbl, badgeX, badgeY, as.bg, as.text, as.border);
+      drawBadge(r.action, badgeX, badgeY, as.bg, as.text, as.border);
     }
 
     // ─ Vertical divider ───────────────────────────────────────────────
     ctx.strokeStyle = 'rgba(255,255,255,.055)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(558, 68); ctx.lineTo(558, 352); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(558, 68); ctx.lineTo(558, 320); ctx.stroke();
 
     // ─ Right column ───────────────────────────────────────────────────
     const rx = 592, ry = 80;
 
     ctx.font = '400 10px "Space Mono", monospace';
-    ctx.fillStyle = '#2d4050';
-    ctx.fillText('PERUBAHAN HARGA', rx, ry + 20);
+    ctx.fillStyle = '#7a90a0';
+    ctx.fillText('PERUBAHAN HARGA', rx, ry + 22);
 
     const gainVal   = r.gain_pct;
     const gainStr   = gainVal != null ? (gainVal > 0 ? '+' : '') + gainVal.toFixed(2) + '%' : '—';
-    const gainColor = gainVal == null ? '#3d5060' : gainVal >= 0 ? '#00e8a2' : '#ff4d6a';
-    const bigPx     = gainStr.length <= 7 ? 68 : gainStr.length <= 9 ? 56 : 46;
+    const gainColor = gainVal == null ? '#7888a0' : gainVal >= 0 ? '#00e8a2' : '#ff4d6a';
+    const bigPx     = gainStr.length <= 7 ? 72 : gainStr.length <= 9 ? 60 : 50;
     ctx.font = `700 ${bigPx}px "Space Mono", monospace`;
     ctx.fillStyle = gainColor;
-    ctx.fillText(gainStr, rx, ry + 96);
+    ctx.fillText(gainStr, rx, ry + 104);
 
     ctx.strokeStyle = 'rgba(255,255,255,.065)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(rx, ry + 112); ctx.lineTo(rx + 432, ry + 112); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(rx, ry + 120); ctx.lineTo(rx + 432, ry + 120); ctx.stroke();
 
     ctx.font = '400 10px "Space Mono", monospace';
-    ctx.fillStyle = '#2d4050';
-    ctx.fillText('CLEAN MONEY', rx, ry + 134);
+    ctx.fillStyle = '#7a90a0';
+    ctx.fillText('CLEAN MONEY', rx, ry + 142);
 
     const cmVal   = r.clean_money;
     const cmStr   = cmVal != null ? ((cmVal >= 0 ? '▲ ' : '▼ ') + fmtMB(Math.abs(cmVal))) : '—';
-    const cmColor = cmVal == null ? '#3d5060' : cmVal >= 0 ? '#00e8a2' : '#ff4d6a';
-    ctx.font = '700 26px "Space Mono", monospace';
+    const cmColor = cmVal == null ? '#7888a0' : cmVal >= 0 ? '#00e8a2' : '#ff4d6a';
+    ctx.font = '700 30px "Space Mono", monospace';
     ctx.fillStyle = cmColor;
-    ctx.fillText(cmStr, rx, ry + 164);
+    ctx.fillText(cmStr, rx, ry + 176);
 
     if (r.rsm != null) {
-      ctx.font = '400 11px "DM Sans", sans-serif';
-      ctx.fillStyle = '#3a5060';
-      ctx.fillText('RSM ' + r.rsm.toFixed(1) + '%', rx, ry + 185);
+      ctx.font = '400 12px "DM Sans", sans-serif';
+      ctx.fillStyle = '#8898a8';
+      ctx.fillText('RSM ' + r.rsm.toFixed(1) + '%', rx, ry + 198);
     }
 
     // ─ Metrics strip ──────────────────────────────────────────────────
-    const msY = 356;
+    const msY = 348;
     ctx.strokeStyle = 'rgba(255,255,255,.055)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(56, msY); ctx.lineTo(W-56, msY); ctx.stroke();
 
+    const muted = '#7888a0';
     const metrics = [
       { label:'SRI',   value:fmtDec(r.sri),
-        color: r.sri == null ? '#3d5060' : r.sri >= 3.0 ? '#00e8a2' : r.sri >= 1.5 ? '#c8a84b' : '#3d5060' },
+        color: r.sri == null ? muted : r.sri >= 3.0 ? '#00e8a2' : r.sri >= 1.5 ? '#c8a84b' : muted },
       { label:'ATR%',  value: r.atr_pct != null ? r.atr_pct.toFixed(2)+'%' : '—',
-        color: r.atr_pct == null ? '#3d5060' : r.atr_pct >= 4 ? '#ff4d6a' : r.atr_pct >= 2.5 ? '#c8a84b' : '#3d5060' },
+        color: r.atr_pct == null ? muted : r.atr_pct >= 4 ? '#ff4d6a' : r.atr_pct >= 2.5 ? '#c8a84b' : muted },
       { label:'RPR',   value:fmtDec(r.rpr),
-        color: r.rpr == null ? '#3d5060' : r.rpr >= 0.6 ? '#ff4d6a' : r.rpr <= 0.4 ? '#00e8a2' : '#3d5060' },
-      { label:'MES',   value:fmtDec(r.mes),   color:'#3d5060' },
+        color: r.rpr == null ? muted : r.rpr >= 0.6 ? '#ff4d6a' : r.rpr <= 0.4 ? '#00e8a2' : muted },
+      { label:'MES',   value:fmtDec(r.mes),   color: muted },
       { label:'VxGap', value: r.volx_gap != null ? fmtPct(r.volx_gap) : '—',
-        color: r.volx_gap == null ? '#3d5060' : r.volx_gap < -1.5 ? '#00e8a2' : r.volx_gap > 1.5 ? '#ff4d6a' : '#3d5060' },
+        color: r.volx_gap == null ? muted : r.volx_gap < -1.5 ? '#00e8a2' : r.volx_gap > 1.5 ? '#ff4d6a' : muted },
     ];
 
     const mW = (W - 112) / metrics.length;
@@ -2773,43 +2781,30 @@ function generateShareCard(ticker) {
       if (i > 0) {
         ctx.strokeStyle = 'rgba(255,255,255,.045)';
         ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(56 + i*mW, msY+10); ctx.lineTo(56 + i*mW, msY+74); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(56 + i*mW, msY+12); ctx.lineTo(56 + i*mW, msY+90); ctx.stroke();
       }
-      ctx.font = '700 20px "Space Mono", monospace';
+      ctx.font = '700 26px "Space Mono", monospace';
       ctx.fillStyle = m.color;
       ctx.textAlign = 'center';
-      ctx.fillText(m.value, mx, msY + 38);
-      ctx.font = '400 10px "Space Mono", monospace';
-      ctx.fillStyle = '#2d4050';
-      ctx.fillText(m.label, mx, msY + 56);
+      ctx.fillText(m.value, mx, msY + 48);
+      ctx.font = '400 13px "Space Mono", monospace';
+      ctx.fillStyle = '#6a8090';
+      ctx.fillText(m.label, mx, msY + 72);
     });
     ctx.textAlign = 'left';
 
     // ─ Footer ─────────────────────────────────────────────────────────
-    const fY = 454;
+    const fY = 468;
     ctx.strokeStyle = 'rgba(255,255,255,.055)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(56, fY); ctx.lineTo(W-56, fY); ctx.stroke();
 
-    ctx.beginPath(); ctx.arc(66, fY+22, 4, 0, Math.PI*2);
+    ctx.beginPath(); ctx.arc(66, fY+24, 4, 0, Math.PI*2);
     ctx.fillStyle = '#00e8a2'; ctx.fill();
 
-    ctx.font = '700 12px "Space Mono", monospace';
+    ctx.font = '700 13px "Space Mono", monospace';
     ctx.fillStyle = '#c8d4dc';
-    ctx.fillText('ZENITH', 77, fY + 27);
-
-    ctx.font = '400 11px "DM Sans", sans-serif';
-    ctx.fillStyle = '#2d4050';
-    ctx.fillText('Smart Money Analysis · Indonesia', 77, fY + 43);
-
-    ctx.font = '400 11px "Space Mono", monospace';
-    ctx.fillStyle = '#00e8a2';
-    ctx.textAlign = 'right';
-    ctx.fillText('zenith.app', W - 56, fY + 27);
-    ctx.font = '400 11px "DM Sans", sans-serif';
-    ctx.fillStyle = '#2d4050';
-    ctx.fillText(dateStr, W - 56, fY + 43);
-    ctx.textAlign = 'left';
+    ctx.fillText('ZENITH', 78, fY + 29);
 
     // Bottom accent bar
     const gBot = ctx.createLinearGradient(0,0,W,0);
