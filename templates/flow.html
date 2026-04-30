@@ -595,6 +595,17 @@ td:first-child { text-align: left; }
 }
 .close-btn:hover { color: var(--danger); }
 
+.share-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px;
+  background: none; border: 1px solid var(--border2); cursor: pointer;
+  color: var(--muted); transition: background .15s, color .15s, border-color .15s, transform .1s;
+  flex-shrink: 0;
+}
+.share-btn svg { width: 15px; height: 15px; }
+.share-btn:hover { background: rgba(0,232,162,.10); color: #00e8a2; border-color: rgba(0,232,162,.35); }
+.share-btn:active { transform: scale(0.96); }
+
 /* modal hover tooltip */
 .m-hover-tooltip {
   position: absolute; top: 12px; left: 50%;
@@ -1132,6 +1143,11 @@ td:first-child { text-align: left; }
         <button class="mtf-btn" id="mBtnLog"  onclick="modalToggleLog()"  title="Logarithmic scale">L</button>
         <button class="mtf-btn active" id="mBtnAuto" onclick="modalToggleAuto()" title="Auto scale">A</button>
       </div>
+      <button class="share-btn" id="mShareBtn" onclick="generateShareCard(modalTicker)" title="Download performance card">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M8 1v9M5 4l3-3 3 3M4 8H2.5A.5.5 0 002 8.5v6a.5.5 0 00.5.5h11a.5.5 0 00.5-.5v-6A.5.5 0 0013.5 8H12"/>
+        </svg>
+      </button>
       <button class="close-btn" onclick="closeModal()">✕</button>
     </div>
     <div class="modal-scroll">
@@ -1965,6 +1981,13 @@ function populateMetricsPanel(r) {
   } else {
     acBadge.style.display = 'none';
   }
+
+  // Show share button only for BUY / SELL signals
+  const shareBtn = document.getElementById('mShareBtn');
+  if (shareBtn) {
+    const showShare = r && (r.action === 'BUY' || r.action === 'SELL');
+    shareBtn.style.display = showShare ? 'flex' : 'none';
+  }
 }
 
 function togglePhaseBreakdown() {
@@ -2528,6 +2551,285 @@ const INFO_CONTENT=`
 function openInfoModal(){document.getElementById('infoBody').innerHTML=INFO_CONTENT;document.getElementById('infoBackdrop').classList.add('open');document.body.style.overflow='hidden'}
 function closeInfoModal(){document.getElementById('infoBackdrop').classList.remove('open');document.body.style.overflow=''}
 function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdrop'))closeInfoModal()}
+
+// ── SHARE CARD ────────────────────────────────────────────────────────────
+function generateShareCard(ticker) {
+  const r = allRows.find(row => row.ticker === ticker);
+  if (!r) return;
+
+  const W = 1080, H = 580;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  const isBuy = r.action === 'BUY';
+  const accentColor = isBuy ? '#00e8a2' : '#ff4d6a';
+
+  function rr(x, y, w, h, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.arcTo(x + w, y, x + w, y + h, radius);
+    ctx.arcTo(x + w, y + h, x, y + h, radius);
+    ctx.arcTo(x, y + h, x, y, radius);
+    ctx.arcTo(x, y, x + w, y, radius);
+    ctx.closePath();
+  }
+
+  function drawBadge(text, x, y, bgColor, textColor, borderColor) {
+    ctx.font = '600 11px "Space Mono", monospace';
+    const tw = ctx.measureText(text).width;
+    const padH = 12, bh = 24;
+    const bw = tw + padH * 2;
+    rr(x, y, bw, bh, 5);
+    ctx.fillStyle = bgColor; ctx.fill();
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, x + padH, y + bh / 2 + 4);
+    return bw;
+  }
+
+  const fmtRp  = v => v != null ? 'Rp ' + Math.round(v).toLocaleString('id-ID') : '—';
+  const fmtPct = v => v != null ? (v > 0 ? '+' : '') + v.toFixed(2) + '%' : '—';
+  const fmtDec = v => v != null ? v.toFixed(2) : '—';
+  const fmtMB  = v => {
+    if (v == null) return '—';
+    const abs = Math.abs(v), sign = v < 0 ? '-' : '';
+    if (abs >= 1e12) return sign + (abs/1e12).toFixed(1) + 'T';
+    if (abs >= 1e9)  return sign + (abs/1e9).toFixed(1) + 'B';
+    if (abs >= 1e6)  return sign + (abs/1e6).toFixed(1) + 'M';
+    if (abs >= 1e3)  return sign + (abs/1e3).toFixed(1) + 'K';
+    return sign + abs.toFixed(0);
+  };
+
+  const today   = new Date();
+  const dateStr = today.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' });
+
+  const PHASE_STYLES = {
+    spring:   { bg:'rgba(0,232,162,.14)',  text:'#00e8a2', border:'rgba(0,232,162,.32)' },
+    absorb:   { bg:'rgba(77,159,255,.12)', text:'#4d9fff', border:'rgba(77,159,255,.30)' },
+    sos:      { bg:'rgba(0,232,162,.12)',  text:'#00e8a2', border:'rgba(0,232,162,.28)' },
+    upthrust: { bg:'rgba(255,140,66,.12)', text:'#ff8c42', border:'rgba(255,140,66,.30)' },
+    distri:   { bg:'rgba(255,77,106,.12)', text:'#ff4d6a', border:'rgba(255,77,106,.30)' },
+    accum:    { bg:'rgba(0,232,162,.08)',  text:'#00e8a2', border:'rgba(0,232,162,.22)' },
+    neutral:  { bg:'rgba(100,120,140,.14)',text:'#8aa0b0', border:'rgba(100,120,140,.28)' },
+  };
+  const ACTION_STYLES = {
+    BUY:  { bg:'rgba(0,232,162,.12)',  text:'#00e8a2', border:'rgba(0,232,162,.32)' },
+    SELL: { bg:'rgba(255,77,106,.12)', text:'#ff4d6a', border:'rgba(255,77,106,.32)' },
+  };
+
+  document.fonts.ready.then(() => {
+    // Background
+    ctx.fillStyle = '#080d12';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle grid
+    ctx.strokeStyle = 'rgba(255,255,255,.022)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= W; x += 60) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+    for (let y = 0; y <= H; y += 60) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+    // Top accent bar
+    const gTop = ctx.createLinearGradient(0,0,W,0);
+    gTop.addColorStop(0, accentColor);
+    gTop.addColorStop(0.55, accentColor + 'aa');
+    gTop.addColorStop(1, 'transparent');
+    ctx.fillStyle = gTop;
+    ctx.fillRect(0, 0, W, 3);
+
+    // ─ Header ─────────────────────────────────────────────────────────────
+    const hY = 32;
+    ctx.beginPath(); ctx.arc(56, hY, 5, 0, Math.PI*2);
+    ctx.fillStyle = '#00e8a2'; ctx.fill();
+
+    ctx.font = '700 14px "Space Mono", monospace';
+    ctx.fillStyle = '#dde4ea';
+    ctx.fillText('ZENITH', 68, hY + 5);
+
+    ctx.font = '400 11px "DM Sans", sans-serif';
+    ctx.fillStyle = '#3d5060';
+    ctx.fillText('Smart Money Analysis', 68, hY + 20);
+
+    ctx.font = '400 11px "Space Mono", monospace';
+    ctx.fillStyle = '#3d5060';
+    ctx.textAlign = 'right';
+    ctx.fillText(dateStr, W - 56, hY + 5);
+    ctx.textAlign = 'left';
+
+    ctx.strokeStyle = 'rgba(255,255,255,.055)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(56, 60); ctx.lineTo(W-56, 60); ctx.stroke();
+
+    // ─ Left column ─────────────────────────────────────────────────────
+    const lx = 56, ly = 80;
+
+    ctx.font = '700 58px "Space Mono", monospace';
+    ctx.fillStyle = '#e8edf2';
+    ctx.fillText(r.ticker, lx, ly + 52);
+
+    ctx.font = '400 13px "DM Sans", sans-serif';
+    ctx.fillStyle = '#4a5f6e';
+    let nameDisplay = r.name || '';
+    ctx.font = '400 13px "DM Sans", sans-serif';
+    while (nameDisplay.length > 4 && ctx.measureText(nameDisplay).width > 430) {
+      nameDisplay = nameDisplay.slice(0, -4) + '...';
+    }
+    ctx.fillText(nameDisplay, lx, ly + 74);
+
+    ctx.strokeStyle = 'rgba(255,255,255,.065)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(lx, ly + 88); ctx.lineTo(lx+440, ly+88); ctx.stroke();
+
+    ctx.font = '400 10px "Space Mono", monospace';
+    ctx.fillStyle = '#2d4050';
+    ctx.fillText('HARGA SEKARANG', lx, ly + 110);
+
+    ctx.font = '700 30px "Space Mono", monospace';
+    ctx.fillStyle = '#e8edf2';
+    ctx.fillText(fmtRp(r.price), lx, ly + 144);
+
+    if (r.vwap_sm) {
+      const smDiff = r.price ? ((r.price - r.vwap_sm) / r.vwap_sm * 100) : null;
+      ctx.font = '400 11px "DM Sans", sans-serif';
+      ctx.fillStyle = '#3a5060';
+      ctx.fillText('SM Avg ' + Math.round(r.vwap_sm).toLocaleString('id-ID') +
+        (smDiff != null ? '  ' + (smDiff >= 0 ? '+' : '') + smDiff.toFixed(2) + '%' : ''), lx, ly + 165);
+    }
+
+    let badgeX = lx;
+    const badgeY = ly + 188;
+    if (r.phase) {
+      const ps = PHASE_STYLES[r.phase.toLowerCase()] || PHASE_STYLES.neutral;
+      badgeX += drawBadge(r.phase, badgeX, badgeY, ps.bg, ps.text, ps.border) + 8;
+    }
+    if (r.action && ACTION_STYLES[r.action]) {
+      const as = ACTION_STYLES[r.action];
+      const lbl = r.action === 'BUY' ? 'BUY' : 'SELL';
+      drawBadge(lbl, badgeX, badgeY, as.bg, as.text, as.border);
+    }
+
+    // ─ Vertical divider ───────────────────────────────────────────────
+    ctx.strokeStyle = 'rgba(255,255,255,.055)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(558, 68); ctx.lineTo(558, 352); ctx.stroke();
+
+    // ─ Right column ───────────────────────────────────────────────────
+    const rx = 592, ry = 80;
+
+    ctx.font = '400 10px "Space Mono", monospace';
+    ctx.fillStyle = '#2d4050';
+    ctx.fillText('PERUBAHAN HARGA', rx, ry + 20);
+
+    const gainVal   = r.gain_pct;
+    const gainStr   = gainVal != null ? (gainVal > 0 ? '+' : '') + gainVal.toFixed(2) + '%' : '—';
+    const gainColor = gainVal == null ? '#3d5060' : gainVal >= 0 ? '#00e8a2' : '#ff4d6a';
+    const bigPx     = gainStr.length <= 7 ? 68 : gainStr.length <= 9 ? 56 : 46;
+    ctx.font = `700 ${bigPx}px "Space Mono", monospace`;
+    ctx.fillStyle = gainColor;
+    ctx.fillText(gainStr, rx, ry + 96);
+
+    ctx.strokeStyle = 'rgba(255,255,255,.065)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(rx, ry + 112); ctx.lineTo(rx + 432, ry + 112); ctx.stroke();
+
+    ctx.font = '400 10px "Space Mono", monospace';
+    ctx.fillStyle = '#2d4050';
+    ctx.fillText('CLEAN MONEY', rx, ry + 134);
+
+    const cmVal   = r.clean_money;
+    const cmStr   = cmVal != null ? ((cmVal >= 0 ? '▲ ' : '▼ ') + fmtMB(Math.abs(cmVal))) : '—';
+    const cmColor = cmVal == null ? '#3d5060' : cmVal >= 0 ? '#00e8a2' : '#ff4d6a';
+    ctx.font = '700 26px "Space Mono", monospace';
+    ctx.fillStyle = cmColor;
+    ctx.fillText(cmStr, rx, ry + 164);
+
+    if (r.rsm != null) {
+      ctx.font = '400 11px "DM Sans", sans-serif';
+      ctx.fillStyle = '#3a5060';
+      ctx.fillText('RSM ' + r.rsm.toFixed(1) + '%', rx, ry + 185);
+    }
+
+    // ─ Metrics strip ──────────────────────────────────────────────────
+    const msY = 356;
+    ctx.strokeStyle = 'rgba(255,255,255,.055)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(56, msY); ctx.lineTo(W-56, msY); ctx.stroke();
+
+    const metrics = [
+      { label:'SRI',   value:fmtDec(r.sri),
+        color: r.sri == null ? '#3d5060' : r.sri >= 3.0 ? '#00e8a2' : r.sri >= 1.5 ? '#c8a84b' : '#3d5060' },
+      { label:'ATR%',  value: r.atr_pct != null ? r.atr_pct.toFixed(2)+'%' : '—',
+        color: r.atr_pct == null ? '#3d5060' : r.atr_pct >= 4 ? '#ff4d6a' : r.atr_pct >= 2.5 ? '#c8a84b' : '#3d5060' },
+      { label:'RPR',   value:fmtDec(r.rpr),
+        color: r.rpr == null ? '#3d5060' : r.rpr >= 0.6 ? '#ff4d6a' : r.rpr <= 0.4 ? '#00e8a2' : '#3d5060' },
+      { label:'MES',   value:fmtDec(r.mes),   color:'#3d5060' },
+      { label:'VxGap', value: r.volx_gap != null ? fmtPct(r.volx_gap) : '—',
+        color: r.volx_gap == null ? '#3d5060' : r.volx_gap < -1.5 ? '#00e8a2' : r.volx_gap > 1.5 ? '#ff4d6a' : '#3d5060' },
+    ];
+
+    const mW = (W - 112) / metrics.length;
+    metrics.forEach((m, i) => {
+      const mx = 56 + i * mW + mW / 2;
+      if (i > 0) {
+        ctx.strokeStyle = 'rgba(255,255,255,.045)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(56 + i*mW, msY+10); ctx.lineTo(56 + i*mW, msY+74); ctx.stroke();
+      }
+      ctx.font = '700 20px "Space Mono", monospace';
+      ctx.fillStyle = m.color;
+      ctx.textAlign = 'center';
+      ctx.fillText(m.value, mx, msY + 38);
+      ctx.font = '400 10px "Space Mono", monospace';
+      ctx.fillStyle = '#2d4050';
+      ctx.fillText(m.label, mx, msY + 56);
+    });
+    ctx.textAlign = 'left';
+
+    // ─ Footer ─────────────────────────────────────────────────────────
+    const fY = 454;
+    ctx.strokeStyle = 'rgba(255,255,255,.055)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(56, fY); ctx.lineTo(W-56, fY); ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(66, fY+22, 4, 0, Math.PI*2);
+    ctx.fillStyle = '#00e8a2'; ctx.fill();
+
+    ctx.font = '700 12px "Space Mono", monospace';
+    ctx.fillStyle = '#c8d4dc';
+    ctx.fillText('ZENITH', 77, fY + 27);
+
+    ctx.font = '400 11px "DM Sans", sans-serif';
+    ctx.fillStyle = '#2d4050';
+    ctx.fillText('Smart Money Analysis · Indonesia', 77, fY + 43);
+
+    ctx.font = '400 11px "Space Mono", monospace';
+    ctx.fillStyle = '#00e8a2';
+    ctx.textAlign = 'right';
+    ctx.fillText('zenith.app', W - 56, fY + 27);
+    ctx.font = '400 11px "DM Sans", sans-serif';
+    ctx.fillStyle = '#2d4050';
+    ctx.fillText(dateStr, W - 56, fY + 43);
+    ctx.textAlign = 'left';
+
+    // Bottom accent bar
+    const gBot = ctx.createLinearGradient(0,0,W,0);
+    gBot.addColorStop(0, 'transparent');
+    gBot.addColorStop(0.45, accentColor + '88');
+    gBot.addColorStop(1, accentColor);
+    ctx.fillStyle = gBot;
+    ctx.fillRect(0, H-3, W, 3);
+
+    // Download
+    canvas.toBlob(blob => {
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.href     = url;
+      a.download = `zenith-${r.ticker}-${today.toISOString().slice(0,10)}.png`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 8000);
+    }, 'image/png');
+  });
+}
 
 </script>
 
