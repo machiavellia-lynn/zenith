@@ -606,6 +606,44 @@ td:first-child { text-align: left; }
 .share-btn:hover { background: rgba(0,232,162,.10); color: #00e8a2; border-color: rgba(0,232,162,.35); }
 .share-btn:active { transform: scale(0.96); }
 
+.card-preview-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,.78); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none;
+  transition: opacity .22s;
+}
+.card-preview-backdrop.open { opacity: 1; pointer-events: auto; }
+.card-preview-modal {
+  display: flex; flex-direction: column; align-items: center; gap: 18px;
+  padding: 20px; max-width: 92vw;
+  transform: scale(0.95) translateY(8px);
+  transition: transform .24s cubic-bezier(0.2, 0, 0, 1);
+}
+.card-preview-backdrop.open .card-preview-modal { transform: scale(1) translateY(0); }
+.card-preview-img {
+  width: 100%; max-width: 860px; border-radius: 10px;
+  border: 1px solid rgba(255,255,255,.09);
+  box-shadow: 0 32px 80px rgba(0,0,0,.75);
+  display: block;
+}
+.card-preview-actions { display: flex; gap: 10px; }
+.card-preview-dl {
+  background: var(--accent); color: #020d08; border: none;
+  font-family: 'Space Mono', monospace; font-size: 12px; font-weight: 700;
+  letter-spacing: .04em; padding: 10px 28px; border-radius: 8px;
+  cursor: pointer; transition: opacity .15s, transform .1s;
+}
+.card-preview-dl:hover { opacity: .82; }
+.card-preview-dl:active { transform: scale(0.96); }
+.card-preview-close {
+  background: none; border: 1px solid var(--border2); color: var(--muted);
+  font-family: 'Space Mono', monospace; font-size: 12px;
+  padding: 10px 24px; border-radius: 8px; cursor: pointer;
+  transition: border-color .15s, color .15s;
+}
+.card-preview-close:hover { border-color: var(--text2); color: var(--text2); }
+
 /* modal hover tooltip */
 .m-hover-tooltip {
   position: absolute; top: 12px; left: 50%;
@@ -2553,6 +2591,26 @@ function closeInfoModal(){document.getElementById('infoBackdrop').classList.remo
 function handleInfoBackdrop(e){if(e.target===document.getElementById('infoBackdrop'))closeInfoModal()}
 
 // ── SHARE CARD ────────────────────────────────────────────────────────────
+let _previewCanvas = null, _previewFilename = '';
+
+function downloadCardFromPreview() {
+  if (!_previewCanvas) return;
+  _previewCanvas.toBlob(blob => {
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    a.href     = url;
+    a.download = _previewFilename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 8000);
+  }, 'image/png');
+}
+function closeCardPreview() {
+  document.getElementById('cardPreviewBackdrop').classList.remove('open');
+}
+function handleCardPreviewBackdrop(e) {
+  if (e.target === document.getElementById('cardPreviewBackdrop')) closeCardPreview();
+}
+
 function generateShareCard(ticker) {
   const r = allRows.find(row => row.ticker === ticker);
   if (!r) return;
@@ -2814,15 +2872,14 @@ function generateShareCard(ticker) {
     ctx.fillStyle = gBot;
     ctx.fillRect(0, H-3, W, 3);
 
-    // Download
-    canvas.toBlob(blob => {
-      const url = URL.createObjectURL(blob);
-      const a   = document.createElement('a');
-      a.href     = url;
-      a.download = `zenith-${r.ticker}-${today.toISOString().slice(0,10)}.png`;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 8000);
-    }, 'image/png');
+    // Show preview modal
+    _previewCanvas   = canvas;
+    _previewFilename = `zenith-${r.ticker}-${today.toISOString().slice(0,10)}.png`;
+    document.getElementById('cardPreviewImg').src = canvas.toDataURL('image/png');
+    const dlBtn = document.getElementById('cardPreviewDl');
+    dlBtn.style.background = accentColor;
+    dlBtn.style.color = r.action === 'HOLD' ? '#1a1200' : '#020d08';
+    document.getElementById('cardPreviewBackdrop').classList.add('open');
   });
 }
 
@@ -2838,6 +2895,17 @@ function generateShareCard(ticker) {
       <button class="close-btn" onclick="closeInfoModal()">✕</button>
     </div>
     <div class="info-body" id="infoBody"></div>
+  </div>
+</div>
+
+<!-- CARD PREVIEW MODAL -->
+<div class="card-preview-backdrop" id="cardPreviewBackdrop" onclick="handleCardPreviewBackdrop(event)">
+  <div class="card-preview-modal" id="cardPreviewModal">
+    <img class="card-preview-img" id="cardPreviewImg" src="" alt="Performance Card Preview"/>
+    <div class="card-preview-actions">
+      <button class="card-preview-dl" id="cardPreviewDl" onclick="downloadCardFromPreview()">↓ Download PNG</button>
+      <button class="card-preview-close" onclick="closeCardPreview()">Tutup</button>
+    </div>
   </div>
 </div>
 
