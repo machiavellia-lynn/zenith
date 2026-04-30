@@ -326,10 +326,10 @@ header::before {
 .fit-value.pos { color: var(--up); }
 .fit-value.neg { color: var(--down); }
 .fit-value.ok { color: #ff8c42; }
-.fit-wr-col { flex: 1; min-width: 120px; }
+.fit-wr-col { flex: 0 0 auto; width: 140px; }
 .fit-wr-bar {
   height: 6px; background: var(--down); border-radius: 3px;
-  overflow: hidden; margin-top: 4px;
+  overflow: hidden; margin-top: 4px; max-width: 100px;
 }
 .fit-wr-fill {
   height: 100%; background: var(--up); border-radius: 3px;
@@ -344,7 +344,6 @@ header::before {
 #fitPhaseBody {
   max-height: 0;
   overflow: hidden;
-  transition: max-height .32s cubic-bezier(0.4, 0, 0.2, 1);
 }
 #fitPhaseBody.open {
   max-height: 400px;
@@ -2047,7 +2046,7 @@ async function loadTickerFitness(ticker) {
     card.style.display = 'block';
     if (window.ZenithAnim) ZenithAnim.fitnessCardIn(card);
 
-    document.getElementById('fitPeriod').textContent = d.period ? `${d.period} (${d.days}d)` : '—';
+    document.getElementById('fitPeriod').textContent = d.period || '—';
 
     // Best phase
     const bp = d.best_phase;
