@@ -1877,7 +1877,7 @@ function populateMetricsPanel(r) {
   if (r && r.vwap_bm) {
     elBM.textContent = fmtNum(r.vwap_bm);
     if (close) {
-      const diff = ((close - r.vwap_bm) / r.vwap_bm * 100);
+      const diff = ((r.vwap_bm - close) / r.vwap_bm * 100);
       elBMsub.innerHTML = `<span style="color:var(--${diff>=0?'up':'down'})">${diff>=0?'+':''}${diff.toFixed(2)}% vs close</span>`;
     } else { elBMsub.textContent = ''; }
   } else {

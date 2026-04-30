@@ -1951,7 +1951,7 @@ function populateMetricsPanel(r) {
   if (r && r.vwap_bm) {
     elBM.textContent = fmtNum(r.vwap_bm);
     if (close) {
-      const diff = ((close - r.vwap_bm) / r.vwap_bm * 100);
+      const diff = ((r.vwap_bm - close) / r.vwap_bm * 100);
       elBMsub.innerHTML = `<span style="color:var(--${diff>=0?'up':'down'})">${diff>=0?'+':''}${diff.toFixed(2)}% vs close</span>`;
     } else { elBMsub.textContent = ''; }
   } else {
@@ -2746,7 +2746,7 @@ function generateShareCard(ticker) {
     }
 
     if (r.vwap_bm) {
-      const bmDiff = r.price ? ((r.price - r.vwap_bm) / r.vwap_bm * 100) : null;
+      const bmDiff = r.price ? ((r.vwap_bm - r.price) / r.vwap_bm * 100) : null;
       ctx.font = '400 14px "DM Sans", sans-serif';
       ctx.fillStyle = '#b0c4d4';
       ctx.fillText('BM Avg ' + Math.round(r.vwap_bm).toLocaleString('id-ID') +
