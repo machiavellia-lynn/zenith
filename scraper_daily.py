@@ -1280,11 +1280,12 @@ async def scraper_main():
                     log.error(f"❌ Second pass error: {e}")
                     second_pass_done = True
 
-            # Run backtest after second pass
+            # Run backtest after second pass — fixed start date for track record
             if (not backtest_done_today
                     and second_pass_done):
                 try:
-                    run_backtest(conn, days=30)
+                    today_wib_str = datetime.now(WIB).strftime("%d-%m-%Y")
+                    run_backtest(conn, days=0, date_from="29-09-2025", date_to=today_wib_str)
                     backtest_done_today = True
                 except Exception as e:
                     log.error(f"❌ Nightly backtest error: {e}")
