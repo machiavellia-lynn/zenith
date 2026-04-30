@@ -1189,6 +1189,23 @@ if SCRAPER_ENABLED:
         os.close(_lock_fd)
         from scraper_daily import start_scraper_thread
         _scraper_thread = start_scraper_thread()
+
+        # Run backtest immediately on startup so track record is ready without waiting
+        def _startup_backtest():
+            try:
+                import time, sqlite3 as _sq3
+                time.sleep(5)  # tunggu DB siap
+                from scraper_daily import run_backtest
+                today_str = datetime.now(WIB).strftime("%d-%m-%Y")
+                c = _sq3.connect(DB_PATH)
+                c.row_factory = _sq3.Row
+                c.execute("PRAGMA busy_timeout = 15000")
+                run_backtest(c, days=0, date_from="29-09-2025", date_to=today_str)
+                c.close()
+            except Exception as _e:
+                print(f"⚠️ Startup backtest error: {_e}")
+        threading.Thread(target=_startup_backtest, daemon=True, name="startup-backtest").start()
+
     except FileExistsError:
         pass  # Another worker already owns the scraper
     except Exception as e:
@@ -1373,9 +1390,9 @@ def api_ticker_fitness():
 
     try:
         conn = get_db()
-        # Prefer 90-day cache, fallback to any
+        # Prefer days=0 (fixed start-date range), fallback to any
         row = conn.execute(
-            "SELECT results, days FROM backtest_cache WHERE days=90 ORDER BY computed_at DESC LIMIT 1"
+            "SELECT results, days FROM backtest_cache WHERE days=0 ORDER BY computed_at DESC LIMIT 1"
         ).fetchone()
         if not row:
             row = conn.execute(
