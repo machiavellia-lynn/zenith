@@ -308,12 +308,13 @@ header::before {
   font-size:10px; color: var(--muted);
 }
 .fitness-stats {
-  display: flex; align-items: center; gap: 16px;
-  padding: 10px 14px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  flex-wrap: wrap;
 }
-.fit-col { display: flex; flex-direction: column; gap: 2px; min-width: 70px; }
+.fit-col { display: flex; flex-direction: column; gap: 2px; }
 .fit-label {
   font-family: 'Space Mono', monospace;
   font-size:10px; letter-spacing: .1em;
@@ -326,18 +327,21 @@ header::before {
 .fit-value.pos { color: var(--up); }
 .fit-value.neg { color: var(--down); }
 .fit-value.ok { color: #ff8c42; }
-.fit-wr-col { flex: 1; min-width: 200px; }
+.fit-wr-col {
+  grid-column: 1 / -1;
+  display: flex; flex-direction: column; gap: 4px;
+}
 .fit-wr-bar {
-  height: 6px; background: var(--down); border-radius: 3px;
-  overflow: hidden; margin-top: 4px; min-width: 180px;
+  height: 8px; background: var(--down); border-radius: 4px;
+  overflow: hidden; width: 100%;
 }
 .fit-wr-fill {
-  height: 100%; background: var(--up); border-radius: 3px;
+  height: 100%; background: var(--up); border-radius: 4px;
   transition: width .3s ease;
 }
 .fit-wr-nums {
   display: flex; justify-content: space-between;
-  font-family: 'Space Mono', monospace; font-size:10px; margin-top: 2px;
+  font-family: 'Space Mono', monospace; font-size:10px;
 }
 .fit-wr-w { color: var(--up); }
 .fit-wr-l { color: var(--down); }
@@ -346,6 +350,24 @@ header::before {
 }
 #fitPhaseBody.open {
   display: block;
+}
+#fitPhaseBody.open #fitPhaseRows tr {
+  animation: slideInRow .4s cubic-bezier(0.2, 0, 0, 1) forwards;
+}
+#fitPhaseBody.open #fitPhaseRows tr:nth-child(1) { animation-delay: 0ms; }
+#fitPhaseBody.open #fitPhaseRows tr:nth-child(2) { animation-delay: 50ms; }
+#fitPhaseBody.open #fitPhaseRows tr:nth-child(3) { animation-delay: 100ms; }
+#fitPhaseBody.open #fitPhaseRows tr:nth-child(4) { animation-delay: 150ms; }
+#fitPhaseBody.open #fitPhaseRows tr:nth-child(5) { animation-delay: 200ms; }
+@keyframes slideInRow {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 .fitness-trades-wrap {
   max-height: 150px; overflow-y: auto;
@@ -368,8 +390,8 @@ header::before {
 }
 .fitness-trades-table tr:hover { background: rgba(255,255,255,.02); }
 @media (max-width: 640px) {
-  .fitness-stats { gap: 10px; padding: 8px 10px; }
-  .fit-col { min-width: 60px; }
+  .fitness-stats { grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 10px 10px; }
+  .fit-wr-col { grid-column: 1 / -1; }
   .fit-value { font-size: 11px; }
   .fitness-trades-wrap { max-height: 120px; }
 }
