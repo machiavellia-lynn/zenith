@@ -1414,10 +1414,10 @@ def api_ticker_fitness():
         gl = abs(sum(t["profit"] for t in losses))
         pf = round(gp / gl, 2) if gl > 0 else (99.0 if gp > 0 else 0)
 
-        # Per-phase breakdown + pick best_phase (highest profit_factor)
+        # Per-phase breakdown + pick best_phase (highest gross profit)
         phase_stats = []
         best_phase = None
-        best_pf = -999
+        best_gp = -999
         for ph, ph_trades in phase_map.items():
             ph_wins = [t for t in ph_trades if t["profit"] > 0]
             ph_gl = abs(sum(t["profit"] for t in ph_trades if t["profit"] <= 0))
@@ -1429,8 +1429,8 @@ def api_ticker_fitness():
                 "phase": ph, "trades": len(ph_trades),
                 "win_rate": ph_wr, "profit_factor": ph_pf, "avg_profit": ph_avg,
             })
-            if ph_pf > best_pf:
-                best_pf = ph_pf
+            if ph_gp > best_gp:
+                best_gp = ph_gp
                 best_phase = {"phase": ph, "win_rate": ph_wr, "profit_factor": ph_pf,
                               "avg_profit": ph_avg, "trades": len(ph_trades)}
 
