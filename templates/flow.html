@@ -326,10 +326,10 @@ header::before {
 .fit-value.pos { color: var(--up); }
 .fit-value.neg { color: var(--down); }
 .fit-value.ok { color: #ff8c42; }
-.fit-wr-col { flex: 1; min-width: 160px; }
+.fit-wr-col { flex: 1; min-width: 200px; }
 .fit-wr-bar {
   height: 6px; background: var(--down); border-radius: 3px;
-  overflow: hidden; margin-top: 4px; min-width: 140px;
+  overflow: hidden; margin-top: 4px; min-width: 180px;
 }
 .fit-wr-fill {
   height: 100%; background: var(--up); border-radius: 3px;
@@ -342,12 +342,10 @@ header::before {
 .fit-wr-w { color: var(--up); }
 .fit-wr-l { color: var(--down); }
 #fitPhaseBody {
-  max-height: 0;
-  overflow: hidden;
+  display: none;
 }
 #fitPhaseBody.open {
-  max-height: 400px;
-  overflow: auto;
+  display: block;
 }
 .fitness-trades-wrap {
   max-height: 150px; overflow-y: auto;
