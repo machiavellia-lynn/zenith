@@ -17,7 +17,7 @@ html{scrollbar-gutter:stable}
 body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;min-height:100vh}
 
 /* ── HEADER ── */
-header{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:rgba(24,24,27,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-wrap:wrap}
+header{position:sticky;top:0;z-index:200;display:flex;align-items:center;gap:16px;padding:12px 24px;border-bottom:1px solid var(--border);background:rgba(8,12,16,.88);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-wrap:wrap}
 header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(0,232,162,.3),transparent)}
 .logo{display:flex;align-items:center;font-family:'Space Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.18em;color:var(--accent);text-transform:uppercase;text-decoration:none}
 .logo-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--accent);margin-right:8px;flex-shrink:0;animation:dotPulse 2.4s ease-in-out infinite}
@@ -55,10 +55,10 @@ header::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;back
 .ctrl-label{font-family:'Space Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
 .mode-btn{background:none;border:none;color:var(--muted);border-radius:4px;padding:5px 12px;font-family:'Space Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.08em;cursor:pointer;transition:all .15s;text-transform:uppercase}
 .mode-btn.active{background:var(--surface2);border:1px solid rgba(0,232,162,.25);color:var(--accent)}
-.summary{display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap}
-.sum-item{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:12px 18px;display:flex;flex-direction:column;gap:3px;min-width:120px}
+.summary{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.sum-item{background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:12px 16px;display:flex;flex-direction:column;gap:4px;flex:1;min-width:110px}
 .sum-label{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
-.sum-val{font-family:'Space Mono',monospace;font-size:18px;font-weight:700;color:var(--text)}
+.sum-val{font-family:'Space Mono',monospace;font-size:16px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
 .sum-val.accent{color:var(--accent)}
 .table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:10px;overflow:auto}
 table{width:100%;border-collapse:collapse}
@@ -74,13 +74,13 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 
 /* ── PILL BADGES ── */
 .phase-badge{font-family:'Space Mono',monospace;font-size:10px;padding:3px 10px;border-radius:20px;font-weight:700;letter-spacing:.04em;border:1px solid transparent}
-.phase-badge.spring  {background:rgba(16,185,129,.12);color:#34d399;border-color:rgba(52,211,153,.28)}
-.phase-badge.absorb  {background:rgba(96,165,250,.1); color:#93c5fd;border-color:rgba(147,197,253,.22)}
-.phase-badge.sos     {background:rgba(52,211,153,.15);color:#6ee7b7;border-color:rgba(110,231,183,.3)}
-.phase-badge.upthrust{background:rgba(251,146,60,.1); color:#fdba74;border-color:rgba(253,186,116,.25)}
-.phase-badge.distri  {background:rgba(248,113,113,.1);color:#fca5a5;border-color:rgba(252,165,165,.22)}
-.phase-badge.accum   {background:rgba(110,231,183,.07);color:#6ee7b7;border-color:rgba(110,231,183,.18)}
-.phase-badge.neutral {background:rgba(82,82,91,.15);  color:#a1a1aa;border-color:rgba(82,82,91,.3)}
+.phase-badge.spring  {background:rgba(0,232,162,.12); color:#00e8a2;border-color:rgba(0,232,162,.3)}
+.phase-badge.absorb  {background:rgba(77,159,255,.1);  color:#4d9fff;border-color:rgba(77,159,255,.25)}
+.phase-badge.sos     {background:rgba(0,232,162,.1);  color:#00e8a2;border-color:rgba(0,232,162,.25)}
+.phase-badge.upthrust{background:rgba(255,140,66,.1); color:#ff8c42;border-color:rgba(255,140,66,.25)}
+.phase-badge.distri  {background:rgba(255,77,106,.1); color:#ff4d6a;border-color:rgba(255,77,106,.25)}
+.phase-badge.accum   {background:rgba(0,232,162,.07); color:#00e8a2;border-color:rgba(0,232,162,.18)}
+.phase-badge.neutral {background:rgba(100,120,140,.12);color:#8aa0b0;border-color:rgba(100,120,140,.25)}
 
 .val{font-family:'Space Mono',monospace;font-size:11px;font-weight:700}
 .val.pos{color:#00e8a2}.val.neg{color:#ff4d6a}.val.ok{color:#ff8c42}.val.zero{color:var(--muted)}
@@ -114,6 +114,22 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 @media(max-width:768px){header{gap:8px;padding:10px 12px}.nav-btn{padding:3px 10px;font-size:10px}.content{padding:14px}.summary{gap:8px}.sum-item{padding:10px 14px;min-width:100px}.sum-val{font-size:15px}table{min-width:800px}.modal{max-width:100%;max-height:90vh;border-radius:8px}.detail-table{min-width:600px}}
 </style>
   <link rel="stylesheet" href="/static/tokens.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/css/pikaday.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pikaday/1.8.2/pikaday.min.js"></script>
+<style>
+/* Pikaday dark theme */
+.pika-single{background:var(--surface2)!important;border:1px solid var(--border2)!important;border-radius:8px!important;font-family:'DM Sans',sans-serif!important;color:var(--text)!important;box-shadow:0 8px 32px rgba(0,0,0,.5)!important}
+.pika-title{padding:8px 10px!important}
+.pika-label{background:transparent!important;color:var(--text)!important;font-family:'Space Mono',monospace!important;font-size:12px!important}
+.pika-prev,.pika-next{color:var(--text)!important;opacity:1!important;background-color:var(--surface2)!important;background-image:none!important;border:1px solid var(--border2)!important;border-radius:4px!important;text-indent:0!important;overflow:visible!important;font-size:14px!important}
+.pika-prev:hover,.pika-next:hover{color:var(--accent)!important;border-color:rgba(0,232,162,.35)!important}
+.pika-table th{color:var(--muted)!important;font-size:10px!important;font-family:'Space Mono',monospace!important}
+.pika-button{background:transparent!important;color:var(--text)!important;border-radius:4px!important;font-size:12px!important;text-align:center!important}
+.pika-button:hover,.is-selected .pika-button{background:var(--accent)!important;color:var(--bg)!important}
+.is-today .pika-button{color:var(--accent)!important;font-weight:700!important}
+.is-disabled .pika-button{color:var(--muted)!important;opacity:.4!important}
+.pika-select{background:var(--surface)!important;color:var(--text)!important;border:1px solid var(--border)!important}
+</style>
 </head>
 <body>
 <a href="#main" class="skip-link">Skip to main content</a>
@@ -140,9 +156,9 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
       <span class="ctrl-label">hari</span>
     </div>
     <div id="panelCustom" style="display:none;align-items:center;gap:8px">
-      <input type="text" class="num-input" id="dateFrom" placeholder="DD-MM-YYYY" style="width:100px;text-align:left"/>
-      <span class="ctrl-label">→</span>
-      <input type="text" class="num-input" id="dateTo" placeholder="DD-MM-YYYY" style="width:100px;text-align:left"/>
+      <input type="text" class="num-input" id="dateFrom" placeholder="DD-MM-YYYY" style="width:110px;text-align:left;cursor:pointer" readonly/>
+      <span class="ctrl-label" style="color:var(--text)">→</span>
+      <input type="text" class="num-input" id="dateTo" placeholder="DD-MM-YYYY" style="width:110px;text-align:left;cursor:pointer" readonly/>
     </div>
     <button class="btn" id="runBtn" onclick="runBacktest()">Run Backtest</button>
     <button class="btn outline" onclick="loadResults()">Load Cached</button>
@@ -158,12 +174,12 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
   </div>
   <div class="summary" id="summaryWrap" style="display:none">
     <div class="sum-item"><div class="sum-label">Completed Trades</div><div class="sum-val accent" id="sumTrades">—</div></div>
-    <div class="sum-item"><div class="sum-label">Win / Loss</div><div class="sum-val" id="sumWL" style="font-size:14px">—</div></div>
+    <div class="sum-item"><div class="sum-label">Win / Loss</div><div class="sum-val" id="sumWL">—</div></div>
     <div class="sum-item"><div class="sum-label">Win Rate</div><div class="sum-val" id="sumWR">—</div></div>
     <div class="sum-item"><div class="sum-label">Profit Factor</div><div class="sum-val" id="sumPF">—</div></div>
     <div class="sum-item"><div class="sum-label">Tickers</div><div class="sum-val" id="sumTickers">—</div></div>
-    <div class="sum-item"><div class="sum-label">Period</div><div class="sum-val" id="sumPeriod" style="font-size:11px">—</div></div>
-    <div class="sum-item"><div class="sum-label">Computed</div><div class="sum-val" id="sumComputed" style="font-size:11px">—</div></div>
+    <div class="sum-item"><div class="sum-label">Period</div><div class="sum-val" id="sumPeriod" style="font-size:11px;letter-spacing:0">—</div></div>
+    <div class="sum-item"><div class="sum-label">Computed</div><div class="sum-val" id="sumComputed" style="font-size:11px;letter-spacing:0">—</div></div>
   </div>
   <div class="table-wrap">
     <table>
@@ -221,6 +237,32 @@ td:first-child,td:nth-child(2),td:nth-child(3){text-align:left}
 let lbData = [];
 let sortCol = 'profit_factor';
 let sortAsc = false;
+
+// Pikaday date pickers for custom range
+let pickerFrom = null, pickerTo = null;
+function fmtPikaDate(d) {
+  const dd = String(d.getDate()).padStart(2,'0');
+  const mm = String(d.getMonth()+1).padStart(2,'0');
+  return `${dd}-${mm}-${d.getFullYear()}`;
+}
+function parsePikaDate(s) {
+  const [d,m,y] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+document.addEventListener('DOMContentLoaded', () => {
+  pickerFrom = new Pikaday({
+    field: document.getElementById('dateFrom'),
+    toString: d => fmtPikaDate(d),
+    parse: s => parsePikaDate(s),
+    i18n: { previousMonth:'‹', nextMonth:'›', months:['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], weekdays:['Min','Sen','Sel','Rab','Kam','Jum','Sab'], weekdaysShort:['Mi','Se','Se','Ra','Ka','Ju','Sa'] }
+  });
+  pickerTo = new Pikaday({
+    field: document.getElementById('dateTo'),
+    toString: d => fmtPikaDate(d),
+    parse: s => parsePikaDate(s),
+    i18n: { previousMonth:'‹', nextMonth:'›', months:['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'], weekdays:['Min','Sen','Sel','Rab','Kam','Jum','Sab'], weekdaysShort:['Mi','Se','Se','Ra','Ka','Ju','Sa'] }
+  });
+});
 
 let btMode = 'lookback';
 function setMode(m) {

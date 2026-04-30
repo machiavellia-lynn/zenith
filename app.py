@@ -1375,11 +1375,11 @@ def api_ticker_fitness():
         conn = get_db()
         # Prefer 90-day cache, fallback to any
         row = conn.execute(
-            "SELECT results FROM backtest_cache WHERE days=90 ORDER BY computed_at DESC LIMIT 1"
+            "SELECT results, days FROM backtest_cache WHERE days=90 ORDER BY computed_at DESC LIMIT 1"
         ).fetchone()
         if not row:
             row = conn.execute(
-                "SELECT results FROM backtest_cache ORDER BY computed_at DESC LIMIT 1"
+                "SELECT results, days FROM backtest_cache ORDER BY computed_at DESC LIMIT 1"
             ).fetchone()
         if not row:
             return jsonify({"error": "No backtest data", "ticker": ticker, "total_trades": 0})
@@ -1389,7 +1389,7 @@ def api_ticker_fitness():
         lb = data.get("leaderboard", [])
         period = data.get("date_range", "")
         computed = data.get("computed_at", "")
-        bt_days = data.get("days", 0)
+        bt_days = row["days"] or 0
 
         # Leaderboard now groups by entry_phase only; gather this ticker's trades
         # Skip extreme moves (rights issue, delisting: abs > 50%)
