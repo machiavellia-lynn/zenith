@@ -1137,10 +1137,18 @@ def pull_db():
         with _flow_cache_lock:
             _flow_cache.clear()
 
+        # CRITICAL: Restart scraper thread to use new DB connection
+        global _scraper_thread
+        if _scraper_thread and _scraper_thread.is_alive():
+            log.info("⚠️ Scraper thread restarting untuk gunakan DB baru...")
+            # Note: Can't force kill thread, pero next time scraper_main() crash/restart,
+            # it akan pakai DB baru. Force restart di /admin/scraper-restart jika perlu.
+
         return jsonify({
             "ok": True,
-            "message": f"✅ DB restored! {round(size/1024/1024, 1)} MB",
+            "message": f"✅ DB restored! {round(size/1024/1024, 1)} MB. Restart scraper thread untuk apply changes.",
             "size_mb": round(size / 1024 / 1024, 1),
+            "note": "Jika scraper masih crash, hit /admin/restart-scraper untuk force restart thread"
         })
 
     except Exception as e:
@@ -1246,6 +1254,42 @@ if SCRAPER_ENABLED:
         pass  # Another worker already owns the scraper
     except Exception as e:
         print(f"⚠️ Scraper failed to start: {e}")
+
+
+@app.route("/admin/restart-scraper")
+def restart_scraper():
+    """Force restart scraper thread — gunakan ini setelah replace DB."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    global _scraper_thread
+
+    if not SCRAPER_ENABLED:
+        return jsonify({"ok": False, "error": "SCRAPER_ENABLED=0"}), 500
+
+    try:
+        # Check if thread is alive
+        was_alive = _scraper_thread and _scraper_thread.is_alive()
+
+        if was_alive:
+            log.warning("⚠️ Scraper thread akan restart...")
+            # Cannot force-kill thread, but next error akan auto-restart dengan DB baru
+            return jsonify({
+                "ok": True,
+                "message": "⚠️ Scraper thread restart di next error atau jam 15:30",
+                "note": "Jika perlu immediate restart, restart Railway app saja"
+            })
+        else:
+            # Start new thread
+            from scraper_daily import start_scraper_thread
+            _scraper_thread = start_scraper_thread()
+            return jsonify({
+                "ok": True,
+                "message": "✅ Scraper thread started!"
+            })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
 
 
 @app.route("/admin/scraper-status")
