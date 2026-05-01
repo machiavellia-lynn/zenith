@@ -1524,6 +1524,55 @@ def admin_backfill_prices():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/admin/check-db-health")
+def check_db_health():
+    """Check if current DB is valid/corrupt."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    try:
+        if not os.path.exists(DB_PATH):
+            return jsonify({"ok": False, "status": "NOT_FOUND", "path": DB_PATH})
+
+        size_mb = round(os.path.getsize(DB_PATH) / 1024 / 1024, 1)
+
+        conn = sqlite3.connect(DB_PATH)
+
+        # Integrity check
+        result = conn.execute("PRAGMA integrity_check").fetchone()
+        integrity = result[0] if result else "unknown"
+
+        # Count tables
+        tables = conn.execute(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type='table'"
+        ).fetchone()[0]
+
+        # Count rows in eod_summary
+        rows = conn.execute(
+            "SELECT COUNT(*) FROM eod_summary"
+        ).fetchone()[0]
+
+        conn.close()
+
+        return jsonify({
+            "ok": integrity == "ok",
+            "status": "HEALTHY" if integrity == "ok" else "CORRUPT",
+            "path": DB_PATH,
+            "size_mb": size_mb,
+            "integrity_check": integrity,
+            "tables": tables,
+            "eod_summary_rows": rows,
+        })
+
+    except Exception as e:
+        return jsonify({
+            "ok": False,
+            "status": "ERROR",
+            "error": str(e)
+        }), 500
+
+
 @app.route("/admin/check-price-close")
 def check_price_close():
     """Check price_close data status."""
