@@ -324,11 +324,11 @@ def parse_mf_message(text: str, fallback_channel: str) -> list[dict]:
 
 def get_scraper_db():
     """Dedicated DB connection for scraper thread (separate from Flask)."""
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=30)
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False, timeout=60)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA busy_timeout=10000")  # wait up to 10s on lock
+    conn.execute("PRAGMA busy_timeout=30000")  # wait up to 30s on lock
     return conn
 
 
@@ -762,10 +762,10 @@ def fetch_all_gains_to_db(conn_ignored, date_str: str, delay_ms: int = 333):
     DB_PATH = os.environ.get("DB_PATH", "/data/zenith.db")
 
     def _open_conn():
-        c = _sqlite3.connect(DB_PATH, timeout=30, check_same_thread=False)
+        c = _sqlite3.connect(DB_PATH, timeout=60, check_same_thread=False)
         c.row_factory = _sqlite3.Row
         c.execute("PRAGMA journal_mode=WAL")
-        c.execute("PRAGMA busy_timeout=10000")
+        c.execute("PRAGMA busy_timeout=30000")
         c.execute("PRAGMA synchronous=NORMAL")
         return c
 
