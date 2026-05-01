@@ -690,10 +690,19 @@ def enrich_daily_prices(conn, date_str: str):
     return n
 
 
-def _fetch_close_history(ticker, days=45):
-    """Fetch daily close prices for last N calendar days. Returns {DD-MM-YYYY: close}."""
+def _fetch_close_history(ticker, date_from: datetime = None, date_to: datetime = None):
+    """Fetch daily close prices between two dates using timestamps. Returns {DD-MM-YYYY: close}.
+    Uses period1/period2 params — more reliable than range=Nd for historical data."""
     try:
-        url = f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}.JK?range={days}d&interval=1d"
+        import time as _t
+        if date_from is None:
+            date_from = datetime.now(WIB) - timedelta(days=60)
+        if date_to is None:
+            date_to = datetime.now(WIB)
+        p1 = int(date_from.timestamp())
+        p2 = int(date_to.timestamp()) + 86400  # +1 day buffer
+        url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{ticker}.JK"
+               f"?period1={p1}&period2={p2}&interval=1d")
         r = requests.get(url, headers=_YAHOO_HEADERS, timeout=15)
         data = r.json()["chart"]["result"][0]
         timestamps = data.get("timestamp", [])
@@ -708,44 +717,70 @@ def _fetch_close_history(ticker, days=45):
         return ticker, {}
 
 
-def backfill_prices(conn, days=30):
-    """Bulk-fetch Yahoo close prices for last N days. One request per ticker."""
-    log.info(f"💰 PRICE BACKFILL: fetching {days} days of close prices...")
+def backfill_prices(conn, days: int = 30, date_from: str = None, date_to: str = None):
+    """Bulk-fetch Yahoo close prices. One request per ticker covers entire date range.
 
-    # Get all tickers that have data in recent N dates
-    all_dates = conn.execute(f"""
-        SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT} DESC LIMIT ?
-    """, [days]).fetchall()
-    recent_dates = set(r["date"] for r in all_dates)
+    Args:
+        days: fallback — fetch last N distinct dates from eod_summary (ignored if date_from set)
+        date_from: DD-MM-YYYY start of range (inclusive)
+        date_to:   DD-MM-YYYY end of range (inclusive), defaults to today
+    """
+    fmt = "%d-%m-%Y"
+    now = datetime.now(WIB)
 
-    if not recent_dates:
+    if date_from:
+        dt_from = datetime.strptime(date_from, fmt).replace(tzinfo=WIB)
+        dt_to   = datetime.strptime(date_to, fmt).replace(tzinfo=WIB) if date_to else now
+        log.info(f"💰 PRICE BACKFILL: {date_from} → {date_to or 'today'}")
+        # Collect valid dates in range from eod_summary
+        rows = conn.execute("SELECT DISTINCT date FROM eod_summary").fetchall()
+        valid_dates = set()
+        for r in rows:
+            try:
+                d = datetime.strptime(r["date"], fmt).replace(tzinfo=WIB)
+                if dt_from <= d <= dt_to:
+                    valid_dates.add(r["date"])
+            except Exception:
+                pass
+    else:
+        log.info(f"💰 PRICE BACKFILL: last {days} dates")
+        all_dates = conn.execute(
+            f"SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT} DESC LIMIT ?", [days]
+        ).fetchall()
+        valid_dates = set(r["date"] for r in all_dates)
+        if valid_dates:
+            dates_sorted = sorted(valid_dates, key=lambda x: datetime.strptime(x, fmt))
+            dt_from = datetime.strptime(dates_sorted[0], fmt).replace(tzinfo=WIB)
+            dt_to   = datetime.strptime(dates_sorted[-1], fmt).replace(tzinfo=WIB)
+        else:
+            dt_from, dt_to = now - timedelta(days=60), now
+
+    if not valid_dates:
         log.info("  No dates to backfill")
         return 0
 
     tickers = conn.execute("""
         SELECT DISTINCT ticker FROM eod_summary
         WHERE date IN ({})
-    """.format(",".join("?" for _ in recent_dates)), list(recent_dates)).fetchall()
+    """.format(",".join("?" * len(valid_dates))), list(valid_dates)).fetchall()
     ticker_list = [r["ticker"] for r in tickers]
-    log.info(f"  Tickers: {len(ticker_list)}, Dates: {len(recent_dates)}")
+    log.info(f"  Tickers: {len(ticker_list)}, Dates: {len(valid_dates)}")
 
-    # Fetch in parallel — 1 request per ticker covers all dates
-    cal_days = int(days * 1.6) + 10
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        results = list(ex.map(lambda t: _fetch_close_history(t, cal_days), ticker_list))
+    # 1 Yahoo request per ticker — timestamp-based covers entire range
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(lambda t: _fetch_close_history(t, dt_from, dt_to), ticker_list))
 
-    # Bulk update
     updated = 0
     for tk, prices in results:
         for date_str, close in prices.items():
-            if date_str in recent_dates and close:
+            if date_str in valid_dates and close:
                 conn.execute(
                     "UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=?",
                     [close, date_str, tk]
                 )
                 updated += 1
     conn.commit()
-    log.info(f"✅ PRICE BACKFILL: {updated} cells updated for {len(ticker_list)} tickers")
+    log.info(f"✅ PRICE BACKFILL done: {updated} cells updated for {len(ticker_list)} tickers")
     return updated
 
 

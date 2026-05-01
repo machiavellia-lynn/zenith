@@ -128,13 +128,22 @@ async def run_weekly_backfill(client=None, conn=None, days=DAYS_BACK):
     if total_saved > 0:
         log.info(f"📊 Rebuilding summaries for {len(valid_dates)} dates...")
         ensure_summary_table(conn)
-        for d in valid_dates:
+        for d in sorted(valid_dates):
             try:
                 rebuild_summary_for_date(conn, d)
-                enrich_daily_prices(conn, d)
                 compute_analytics_for_date(conn, d)
             except Exception:
                 pass
+
+        # Batch price backfill — 1 Yahoo request per ticker, covers entire date range
+        # (enrich_daily_prices per-date would be N×tickers requests and only returns today's price)
+        try:
+            from scraper_daily import backfill_prices
+            dates_sorted = sorted(valid_dates, key=lambda x: datetime.strptime(x, "%d-%m-%Y"))
+            backfill_prices(conn, date_from=dates_sorted[0], date_to=dates_sorted[-1])
+        except Exception as e:
+            log.warning(f"⚠️ Price backfill failed: {e}")
+
         log.info(f"✅ Summaries + analytics rebuilt")
 
     if own_client:
