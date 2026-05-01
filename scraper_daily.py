@@ -1004,7 +1004,7 @@ def compute_analytics_for_date(conn, date_str: str):
 
         # History query with dry-spell cutoff (~20 trading days)
         hist = conn.execute(f"""
-            SELECT sm_val, bm_val, price_close FROM eod_summary
+            SELECT date, sm_val, bm_val, price_close FROM eod_summary
             WHERE ticker = ?
               AND {_DATE_SORT} >= substr(?,7,4)||substr(?,4,2)||substr(?,1,2)
             ORDER BY {_DATE_SORT} DESC LIMIT 14
@@ -1028,12 +1028,22 @@ def compute_analytics_for_date(conn, date_str: str):
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
         # ── Price change % ──
-        # Must use consecutive price_close from DB — rp["gain"] is Telegram's intraday
-        # signal gain (vs VWAP/reference), not day-over-day close change. Never use it.
-        prices = [h["price_close"] for h in hist if h["price_close"]]
+        # prices[1] must be the ACTUAL previous trading day — if there's a gap
+        # (e.g. prices not backfilled for some dates), prices[1] could be from
+        # weeks ago, making a multi-week return look like a 1-day bagger.
+        # Guard: only use prices[1] if it's within 7 calendar days of date_str.
+        hist_prices = [(h["date"], h["price_close"]) for h in hist if h["price_close"]]
+        prices = [p for _, p in hist_prices]  # plain list for ATR calc
         pchg = None
-        if pc and len(prices) >= 2 and prices[1] and prices[1] > 0:
-            pchg = round((pc - prices[1]) / prices[1] * 100, 2)
+        if pc and len(hist_prices) >= 2:
+            prev_date_str, prev_price = hist_prices[1]
+            if prev_price and prev_price > 0:
+                days_gap = (
+                    datetime.strptime(date_str, "%d-%m-%Y")
+                    - datetime.strptime(prev_date_str, "%d-%m-%Y")
+                ).days
+                if days_gap <= 7:
+                    pchg = round((pc - prev_price) / prev_price * 100, 2)
 
         # ── ATR% ──
         atr_pct = None
