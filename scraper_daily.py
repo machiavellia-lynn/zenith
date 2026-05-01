@@ -551,6 +551,17 @@ def ensure_summary_table(conn):
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_date ON eod_summary(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_ticker ON eod_summary(ticker, date)")
+
+    # price_history: Yahoo close for ALL trading days — not limited to signal dates
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS price_history (
+            date   TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            close  REAL NOT NULL,
+            PRIMARY KEY (date, ticker)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ph_ticker ON price_history(ticker, date)")
     conn.commit()
     ensure_trade_journal_table(conn)
 
@@ -773,7 +784,15 @@ def backfill_prices(conn, days: int = 30, date_from: str = None, date_to: str = 
     updated = 0
     for tk, prices in results:
         for date_str, close in prices.items():
-            if date_str in valid_dates and close:
+            if not close:
+                continue
+            # price_history stores ALL trading days from Yahoo (no eod_summary row needed)
+            conn.execute(
+                "INSERT OR REPLACE INTO price_history(date, ticker, close) VALUES(?,?,?)",
+                [date_str, tk, close]
+            )
+            # eod_summary: only update rows that exist (dates with Telegram signals)
+            if date_str in valid_dates:
                 conn.execute(
                     "UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=?",
                     [close, date_str, tk]
@@ -1002,9 +1021,9 @@ def compute_analytics_for_date(conn, date_str: str):
         if not pc and rp.get("price"):
             pc = rp["price"]
 
-        # History query with dry-spell cutoff (~20 trading days)
+        # History query: SM/BM rolling averages (only signal dates, no price needed)
         hist = conn.execute(f"""
-            SELECT date, sm_val, bm_val, price_close FROM eod_summary
+            SELECT sm_val, bm_val FROM eod_summary
             WHERE ticker = ?
               AND {_DATE_SORT} >= substr(?,7,4)||substr(?,4,2)||substr(?,1,2)
             ORDER BY {_DATE_SORT} DESC LIMIT 14
@@ -1027,23 +1046,45 @@ def compute_analytics_for_date(conn, date_str: str):
         ttx = tx_sm + tx_bm
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
-        # ── Price change % ──
-        # prices[1] must be the ACTUAL previous trading day — if there's a gap
-        # (e.g. prices not backfilled for some dates), prices[1] could be from
-        # weeks ago, making a multi-week return look like a 1-day bagger.
-        # Guard: only use prices[1] if it's within 7 calendar days of date_str.
-        hist_prices = [(h["date"], h["price_close"]) for h in hist if h["price_close"]]
-        prices = [p for _, p in hist_prices]  # plain list for ATR calc
+        # ── Price change % + ATR — from price_history (Yahoo, all trading days) ──
+        # eod_summary only has rows for days with Telegram signals, so hist[1] can jump
+        # weeks back when adjacent dates have no signals (e.g. 26-Jan has no signal →
+        # 28-Jan pchg calculates vs Dec close → bagger anomaly). price_history has
+        # every trading day regardless of signals, so prev is always the actual prior close.
+        ph_cutoff = (datetime.strptime(date_str, "%d-%m-%Y") - timedelta(days=20)).strftime("%Y%m%d")
+        ph_rows = conn.execute(f"""
+            SELECT date, close FROM price_history
+            WHERE ticker = ? AND {_DATE_SORT} >= ?
+            ORDER BY {_DATE_SORT} DESC LIMIT 14
+        """, [tk, ph_cutoff]).fetchall()
+
+        ph_closes = [h["close"] for h in ph_rows if h["close"]]
+
         pchg = None
-        if pc and len(hist_prices) >= 2:
-            prev_date_str, prev_price = hist_prices[1]
-            if prev_price and prev_price > 0:
-                days_gap = (
-                    datetime.strptime(date_str, "%d-%m-%Y")
-                    - datetime.strptime(prev_date_str, "%d-%m-%Y")
-                ).days
-                if days_gap <= 7:
-                    pchg = round((pc - prev_price) / prev_price * 100, 2)
+        # Today must appear in price_history (market was open). If absent → holiday/halt → pchg None.
+        if ph_rows and ph_rows[0]["date"] == date_str and len(ph_rows) >= 2:
+            today_ph_close = ph_rows[0]["close"]
+            prev_ph_close  = ph_rows[1]["close"]
+            if today_ph_close and prev_ph_close and prev_ph_close > 0:
+                pchg = round((today_ph_close - prev_ph_close) / prev_ph_close * 100, 2)
+                if not pc:
+                    pc = today_ph_close  # backfill pc from price_history if eod row missing
+
+        # Fallback: price_history not yet populated — use eod_summary hist with gap guard
+        if pchg is None and not ph_rows:
+            hist_prices = [(h["date"], h["price_close"]) for h in hist if h["price_close"]]
+            ph_closes = [p for _, p in hist_prices]
+            if pc and len(hist_prices) >= 2:
+                prev_date_str2, prev_price2 = hist_prices[1]
+                if prev_price2 and prev_price2 > 0:
+                    days_gap = (
+                        datetime.strptime(date_str, "%d-%m-%Y")
+                        - datetime.strptime(prev_date_str2, "%d-%m-%Y")
+                    ).days
+                    if days_gap <= 7:
+                        pchg = round((pc - prev_price2) / prev_price2 * 100, 2)
+
+        prices = ph_closes  # for ATR calc
 
         # ── ATR% ──
         atr_pct = None
