@@ -1591,22 +1591,52 @@ def admin_backfill_prices():
 
 @app.route("/admin/check-db-health")
 def check_db_health():
-    """Check if current DB is valid/corrupt."""
+    """Check if current DB is valid/corrupt + diagnose file issues."""
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
 
     try:
         if not os.path.exists(DB_PATH):
-            return jsonify({"ok": False, "status": "NOT_FOUND", "path": DB_PATH})
+            return jsonify({"ok": False, "status": "NOT_FOUND", "path": DB_PATH, "error": "File tidak ada di disk"})
 
-        size_mb = round(os.path.getsize(DB_PATH) / 1024 / 1024, 1)
+        # Check file details
+        import stat
+        size_bytes = os.path.getsize(DB_PATH)
+        size_mb = round(size_bytes / 1024 / 1024, 1)
+        file_stat = os.stat(DB_PATH)
+        file_mode = stat.filemode(file_stat.st_mode)
 
+        # Check if file is readable
+        if not os.access(DB_PATH, os.R_OK):
+            return jsonify({
+                "ok": False,
+                "status": "NOT_READABLE",
+                "error": "File tidak bisa dibaca (permission issue?)",
+                "path": DB_PATH,
+                "size_mb": size_mb,
+                "permissions": file_mode
+            }), 500
+
+        # Try to open
         conn = sqlite3.connect(DB_PATH)
 
         # Integrity check
         result = conn.execute("PRAGMA integrity_check").fetchone()
         integrity = result[0] if result else "unknown"
+
+        if integrity != "ok":
+            conn.close()
+            return jsonify({
+                "ok": False,
+                "status": "CORRUPT",
+                "path": DB_PATH,
+                "size_mb": size_mb,
+                "file_permissions": file_mode,
+                "integrity_check": integrity,
+                "error": f"SQLite integrity_check failed: {integrity}",
+                "diagnosis": "File mungkin corrupt saat transfer, atau incomplete upload"
+            }), 500
 
         # Count tables
         tables = conn.execute(
@@ -1621,10 +1651,12 @@ def check_db_health():
         conn.close()
 
         return jsonify({
-            "ok": integrity == "ok",
-            "status": "HEALTHY" if integrity == "ok" else "CORRUPT",
+            "ok": True,
+            "status": "HEALTHY",
             "path": DB_PATH,
             "size_mb": size_mb,
+            "size_bytes": size_bytes,
+            "file_permissions": file_mode,
             "integrity_check": integrity,
             "tables": tables,
             "eod_summary_rows": rows,
@@ -1634,7 +1666,8 @@ def check_db_health():
         return jsonify({
             "ok": False,
             "status": "ERROR",
-            "error": str(e)
+            "error": str(e),
+            "db_path": DB_PATH
         }), 500
 
 
