@@ -2012,14 +2012,14 @@ def direct_backfill():
     days = request.args.get('days', type=int, default=365)
 
     def _run():
-        import asyncio, sqlite3 as _sq
+        import asyncio
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         try:
             from scraper_weekly import run_weekly_backfill
-            conn = _sq.connect(DB_PATH)
-            conn.row_factory = _sq.Row
-            conn.execute("PRAGMA busy_timeout = 30000")
+            from scraper_daily import get_scraper_db
+            conn = get_scraper_db()  # WAL + synchronous=NORMAL + proper timeout
+            conn.execute("PRAGMA busy_timeout = 60000")  # override to 60s for long backfill
             loop.run_until_complete(run_weekly_backfill(client=None, conn=conn, days=days))
             conn.close()
         except Exception as e:
