@@ -926,6 +926,11 @@ def upload_db():
                 if not chunk:
                     break
                 out.write(chunk)
+        # Remove stale WAL/SHM from previous DB — prevents corruption
+        for suffix in ("-wal", "-shm"):
+            stale = dst_path + suffix
+            if os.path.exists(stale):
+                os.remove(stale)
         os.replace(tmp_path, dst_path)
         size = os.path.getsize(dst_path)
         return f"✅ Berhasil! {round(size/1024/1024,1)} MB tersimpan di /data/zenith.db"
@@ -1130,7 +1135,11 @@ def pull_db():
                 "error": f"Bukan SQLite database: {_ve}"
             }), 500
 
-        # Replace
+        # Remove stale WAL/SHM from previous DB — prevents corruption
+        for suffix in ("-wal", "-shm"):
+            stale = DB_PATH + suffix
+            if os.path.exists(stale):
+                os.remove(stale)
         os.replace(tmp_path, DB_PATH)
 
         # Clear cache
