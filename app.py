@@ -1584,16 +1584,33 @@ def trigger_backtest():
 
 @app.route("/admin/backfill-prices")
 def admin_backfill_prices():
-    """Bulk-fetch Yahoo close prices for last N days into eod_summary."""
+    """Bulk-fetch Yahoo close prices into eod_summary. 1 request per ticker.
+
+    Params:
+      date_from=DD-MM-YYYY  range start — enrich specific month/period
+      date_to=DD-MM-YYYY    range end   (default: today)
+      days=N                fallback: last N dates (default 30)
+
+    Usage — incremental monthly enrichment:
+      ?secret=...&date_from=01-10-2025&date_to=31-10-2025
+      ?secret=...&date_from=01-11-2025&date_to=30-11-2025
+    """
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
-    days = int(request.args.get("days", "30"))
+
+    date_from = request.args.get("date_from", "").strip() or None
+    date_to   = request.args.get("date_to",   "").strip() or None
+    days      = int(request.args.get("days", "30"))
+
     try:
-        conn = get_db()
-        from scraper_daily import backfill_prices
-        n = backfill_prices(conn, days=days)
-        return jsonify({"ok": True, "updated": n, "days": days})
+        from scraper_daily import backfill_prices, get_scraper_db
+        conn = get_scraper_db()
+        conn.execute("PRAGMA busy_timeout=60000")
+        n = backfill_prices(conn, days=days, date_from=date_from, date_to=date_to)
+        conn.close()
+        return jsonify({"ok": True, "updated": n,
+                        "date_from": date_from, "date_to": date_to, "days": days})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
