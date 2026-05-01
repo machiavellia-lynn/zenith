@@ -1305,6 +1305,38 @@ def trigger_weekly():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/admin/scrape-from-telegram")
+def scrape_from_telegram():
+    """Queue full scrape dari awal — fetch semua data dari Telegram."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    try:
+        from scraper_daily import request_backfill, request_rebuild, get_backfill_status
+
+        # Check status first
+        if request.args.get("status"):
+            return jsonify({
+                "backfill": get_backfill_status(),
+                "note": "Scrape dari Telegram sedang berjalan. Check status lagi untuk progress."
+            })
+
+        # Queue backfill for ~365 days (all historical data)
+        backfill_result = request_backfill(days=365)
+        rebuild_result = request_rebuild()
+
+        return jsonify({
+            "ok": True,
+            "message": "✅ Scrape dari Telegram queued!",
+            "backfill": backfill_result,
+            "rebuild": rebuild_result,
+            "note": "Check status dengan: /admin/scrape-from-telegram?secret=...&status=1"
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/admin/rebuild-summary")
 def rebuild_summary():
     """Queue summary rebuild — runs in scraper thread."""
