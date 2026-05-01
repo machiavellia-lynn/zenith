@@ -1487,6 +1487,66 @@ def admin_backfill_prices():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/admin/check-price-close")
+def check_price_close():
+    """Check price_close data status."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    try:
+        conn = get_db()
+
+        # Check 1: Total rows with price_close
+        total_with_pc = conn.execute(
+            "SELECT COUNT(*) as cnt FROM eod_summary WHERE price_close IS NOT NULL"
+        ).fetchone()["cnt"]
+
+        total_all = conn.execute(
+            "SELECT COUNT(*) as cnt FROM eod_summary"
+        ).fetchone()["cnt"]
+
+        # Check 2: Date range
+        date_range = conn.execute(
+            "SELECT MIN(date) as min_date, MAX(date) as max_date FROM eod_summary WHERE price_close IS NOT NULL"
+        ).fetchone()
+
+        # Check 3: Tickers with price_close (top 20)
+        tickers_stats = conn.execute("""
+            SELECT ticker, COUNT(*) as count FROM eod_summary
+            WHERE price_close IS NOT NULL
+            GROUP BY ticker
+            ORDER BY count DESC
+            LIMIT 20
+        """).fetchall()
+
+        # Check 4: Data from 29-09-2025 onwards
+        data_from_2509 = conn.execute("""
+            SELECT COUNT(*) as cnt FROM eod_summary
+            WHERE price_close IS NOT NULL
+              AND substr(date,7,4)||substr(date,4,2)||substr(date,1,2) >= '20250929'
+        """).fetchone()["cnt"]
+
+        return jsonify({
+            "total_rows_with_price_close": total_with_pc,
+            "total_rows_all": total_all,
+            "percentage_filled": round(total_with_pc / total_all * 100, 1) if total_all > 0 else 0,
+            "date_range": {
+                "min": date_range["min_date"],
+                "max": date_range["max_date"]
+            },
+            "top_tickers": [
+                {"ticker": t["ticker"], "count": t["count"]}
+                for t in tickers_stats
+            ],
+            "data_from_29_09_2025": data_from_2509,
+            "status": "READY" if total_with_pc > 5000 else "NEEDS_BACKFILL"
+        })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/admin/fix-date")
 def admin_fix_date():
     """Force-refresh price_close + recompute analytics for a specific date.
