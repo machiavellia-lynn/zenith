@@ -2004,18 +2004,38 @@ def check_logs_raw():
 
 @app.route('/admin/direct-backfill')
 def direct_backfill():
-    secret = request.args.get('secret')
-    days = request.args.get('days', type=int, default=3)
-    if secret != 'zenith2026':
+    """Spawn run_weekly_backfill in its own thread with its own Telegram client.
+    Bypasses the scraper queue — safe to call even if scraper thread is stuck/dead."""
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get('secret') != SECRET:
         return "Unauthorized", 403
-    try:
-        from scraper_daily import run_backfill
-        thread = threading.Thread(target=run_backfill, args=(days,))
-        thread.daemon = True
-        thread.start()
-        return f"⚡ DIRECT BACKFILL dipicu untuk {days} hari. Cek log Railway sekarang!"
-    except Exception as e:
-        return f"❌ Gagal memicu direct backfill: {e}"
+    days = request.args.get('days', type=int, default=365)
+
+    def _run():
+        import asyncio, sqlite3 as _sq
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            from scraper_weekly import run_weekly_backfill
+            conn = _sq.connect(DB_PATH)
+            conn.row_factory = _sq.Row
+            conn.execute("PRAGMA busy_timeout = 30000")
+            loop.run_until_complete(run_weekly_backfill(client=None, conn=conn, days=days))
+            conn.close()
+        except Exception as e:
+            import logging
+            logging.getLogger("zenith").error(f"❌ Direct backfill error: {e}")
+        finally:
+            loop.close()
+
+    t = threading.Thread(target=_run, daemon=True, name="direct-backfill")
+    t.start()
+    return jsonify({
+        "ok": True,
+        "message": f"⚡ Direct backfill started: {days} hari. Cek log Railway!",
+        "days": days,
+        "note": "Ini bypass queue — jalan di thread sendiri, independent dari scraper"
+    })
 
 
 # ── Kompas100 ─────────────────────────────────────────────────────────────
