@@ -1392,7 +1392,7 @@ def api_ticker_fitness():
         bt_days = row["days"] or 0
 
         # Leaderboard now groups by entry_phase only; gather this ticker's trades
-        # Skip extreme moves (rights issue, delisting: abs > 50%)
+        # Skip extreme-loss trades (rights issue, delisting) same as /api/backtest
         import collections
         ticker_trades = []
         phase_map = collections.defaultdict(list)
@@ -1400,7 +1400,7 @@ def api_ticker_fitness():
         for entry_row in lb:
             entry_phase = entry_row.get("entry", "")
             for d in entry_row.get("details", []):
-                if d["ticker"] == ticker and abs(d.get("profit", 0)) <= 50:
+                if d["ticker"] == ticker and d.get("profit", 0) >= -50:
                     trade = {**d, "entry_phase": entry_phase}
                     ticker_trades.append(trade)
                     phase_map[entry_phase].append(trade)
