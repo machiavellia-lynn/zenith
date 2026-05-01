@@ -1065,33 +1065,37 @@ def sector_api():
 
 @app.route("/admin/pull-db")
 def pull_db():
-    """Download zenith.db dari Dropbox → simpan ke Railway volume."""
+    """Download zenith.db dari Dropbox shareable link → simpan ke Railway volume."""
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
 
-    DROPBOX_TOKEN = os.environ.get("DROPBOX_ACCESS_TOKEN", "")
-    if not DROPBOX_TOKEN:
-        return "❌ DROPBOX_ACCESS_TOKEN belum di-set di Railway env vars", 500
+    url = request.args.get("url", "").strip()
+    if not url:
+        return jsonify({
+            "ok": False,
+            "error": "Parameter 'url' diperlukan",
+            "example": "/admin/pull-db?secret=...&url=https://www.dropbox.com/scl/fi/.../zenith.db?rlkey=...&dl=1"
+        }), 400
 
-    import json as _json
+    # Auto-fix dl=0 ke dl=1
+    url = url.replace("?dl=0", "?dl=1").replace("&dl=0", "&dl=1")
+    if "dl=" not in url:
+        url += "&dl=1" if "?" in url else "?dl=1"
+
     tmp_path = DB_PATH + ".tmp"
 
     try:
         os.makedirs(os.path.dirname(DB_PATH) or "/data", exist_ok=True)
 
-        r = requests.post(
-            "https://content.dropboxapi.com/2/files/download",
-            headers={
-                "Authorization":   f"Bearer {DROPBOX_TOKEN}",
-                "Dropbox-API-Arg": _json.dumps({"path": "/zenith.db"}),
-            },
-            stream=True,
-            timeout=600,
-        )
+        r = requests.get(url, stream=True, timeout=600)
 
         if r.status_code != 200:
-            return f"❌ Dropbox error {r.status_code}: {r.text[:300]}", 500
+            return jsonify({
+                "ok": False,
+                "error": f"HTTP {r.status_code}",
+                "detail": r.text[:300]
+            }), 500
 
         total = 0
         with open(tmp_path, "wb") as f:
@@ -1103,18 +1107,30 @@ def pull_db():
         size = os.path.getsize(tmp_path)
         if size < 1024 * 100:
             os.remove(tmp_path)
-            return f"❌ File terlalu kecil ({size} bytes) — DB di Dropbox mungkin corrupt", 500
+            return jsonify({
+                "ok": False,
+                "error": f"File terlalu kecil ({size} bytes) — mungkin link salah atau dl=0"
+            }), 500
 
-        # Verify valid SQLite
+        # Validate SQLite integrity
         try:
-            _tc = sqlite3.connect(tmp_path)
-            _tc.execute("SELECT 1 FROM sqlite_master LIMIT 1")
-            _tc.close()
+            _vc = sqlite3.connect(tmp_path)
+            _ic = _vc.execute("PRAGMA integrity_check").fetchone()
+            _vc.close()
+            if _ic[0] != "ok":
+                os.remove(tmp_path)
+                return jsonify({
+                    "ok": False,
+                    "error": f"File corrupt: {_ic[0]}"
+                }), 500
         except Exception as _ve:
             os.remove(tmp_path)
-            return f"❌ File bukan valid SQLite: {_ve}", 500
+            return jsonify({
+                "ok": False,
+                "error": f"Bukan SQLite database: {_ve}"
+            }), 500
 
-        # Replace live DB
+        # Replace
         os.replace(tmp_path, DB_PATH)
 
         # Clear cache
@@ -1123,7 +1139,7 @@ def pull_db():
 
         return jsonify({
             "ok": True,
-            "message": f"✅ DB restored dari Dropbox! {round(size/1024/1024, 1)} MB",
+            "message": f"✅ DB restored! {round(size/1024/1024, 1)} MB",
             "size_mb": round(size / 1024 / 1024, 1),
         })
 
