@@ -1028,12 +1028,12 @@ def compute_analytics_for_date(conn, date_str: str):
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
         # ── Price change % ──
+        # Must use consecutive price_close from DB — rp["gain"] is Telegram's intraday
+        # signal gain (vs VWAP/reference), not day-over-day close change. Never use it.
         prices = [h["price_close"] for h in hist if h["price_close"]]
         pchg = None
         if pc and len(prices) >= 2 and prices[1] and prices[1] > 0:
             pchg = round((pc - prices[1]) / prices[1] * 100, 2)
-        if pchg is None and rp.get("gain") is not None:
-            pchg = round(rp["gain"], 2)
 
         # ── ATR% ──
         atr_pct = None
