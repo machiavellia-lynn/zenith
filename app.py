@@ -1604,12 +1604,42 @@ def admin_backfill_prices():
     days      = int(request.args.get("days", "30"))
 
     try:
-        from scraper_daily import backfill_prices, get_scraper_db
+        from scraper_daily import backfill_prices, compute_analytics_for_date, get_scraper_db
         conn = get_scraper_db()
         conn.execute("PRAGMA busy_timeout=60000")
+
+        # Fill price_close first
         n = backfill_prices(conn, days=days, date_from=date_from, date_to=date_to)
+
+        # Then recompute analytics so gain%, phase, action reflect the new prices
+        fmt = "%d-%m-%Y"
+        if date_from:
+            dt_f = datetime.strptime(date_from, fmt)
+            dt_t = datetime.strptime(date_to, fmt) if date_to else datetime.now(WIB)
+            all_rows = conn.execute("SELECT DISTINCT date FROM eod_summary").fetchall()
+            dates_to_recompute = sorted(
+                [r["date"] for r in all_rows
+                 if dt_f <= datetime.strptime(r["date"], fmt) <= dt_t],
+                key=lambda x: datetime.strptime(x, fmt)
+            )
+        else:
+            rows = conn.execute(
+                f"SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT} DESC LIMIT ?", [days]
+            ).fetchall()
+            dates_to_recompute = sorted(
+                [r["date"] for r in rows], key=lambda x: datetime.strptime(x, fmt)
+            )
+
+        recomputed = 0
+        for d in dates_to_recompute:
+            try:
+                compute_analytics_for_date(conn, d)
+                recomputed += 1
+            except Exception:
+                pass
+
         conn.close()
-        return jsonify({"ok": True, "updated": n,
+        return jsonify({"ok": True, "prices_updated": n, "analytics_recomputed": recomputed,
                         "date_from": date_from, "date_to": date_to, "days": days})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
