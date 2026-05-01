@@ -1645,6 +1645,52 @@ def admin_backfill_prices():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/admin/recompute-analytics")
+def admin_recompute_analytics():
+    """Recompute analytics (gain%, phase, action) for date range after price_close filled.
+
+    Fixes anomalies from execution order bug (PR #52).
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    date_from = request.args.get("date_from", "").strip()
+    date_to   = request.args.get("date_to",   "").strip() or None
+
+    if not date_from:
+        return jsonify({"ok": False, "error": "date_from required (DD-MM-YYYY)"}), 400
+
+    try:
+        from scraper_daily import compute_analytics_for_date, get_scraper_db
+        conn = get_scraper_db()
+        conn.execute("PRAGMA busy_timeout=60000")
+
+        fmt = "%d-%m-%Y"
+        dt_f = datetime.strptime(date_from, fmt)
+        dt_t = datetime.strptime(date_to, fmt) if date_to else datetime.now(WIB)
+
+        all_rows = conn.execute("SELECT DISTINCT date FROM eod_summary").fetchall()
+        dates_to_recompute = sorted(
+            [r["date"] for r in all_rows
+             if dt_f <= datetime.strptime(r["date"], fmt) <= dt_t],
+            key=lambda x: datetime.strptime(x, fmt)
+        )
+
+        recomputed = 0
+        for d in dates_to_recompute:
+            try:
+                compute_analytics_for_date(conn, d)
+                recomputed += 1
+            except Exception:
+                pass
+
+        conn.close()
+        return jsonify({"ok": True, "recomputed": recomputed, "dates": dates_to_recompute})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/admin/check-db-health")
 def check_db_health():
     """Check if current DB is valid/corrupt + diagnose file issues."""
