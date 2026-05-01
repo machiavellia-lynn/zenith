@@ -1069,30 +1069,61 @@ def pull_db():
     if request.args.get("secret", "") != SECRET:
         return "❌ Secret salah", 403
 
+    # Accept Dropbox URL as parameter
+    dropbox_url = request.args.get("url", "").strip()
+    if not dropbox_url:
+        return "❌ Parameter 'url' diperlukan. Contoh: /admin/pull-db?secret=...&url=https://www.dropbox.com/scl/fi/.../zenith.db?rlkey=...&dl=0", 400
+
+    # Auto-convert dl=0 to dl=1 untuk direct download
+    dropbox_url = dropbox_url.replace("?dl=0", "?dl=1").replace("&dl=0", "&dl=1")
+    if "dl=" not in dropbox_url:
+        dropbox_url += "&dl=1" if "?" in dropbox_url else "?dl=1"
+
     with _flow_cache_lock:
         _flow_cache.clear()
-
-    DROPBOX_URL = "https://www.dropbox.com/scl/fi/62frlur8c81juwm27m4o2/zenith.db?rlkey=t5mubroonjnkqjsh8zogj9blj&dl=1"
 
     try:
         os.makedirs("/data", exist_ok=True)
         tmp_path = DB_PATH + ".tmp"
 
-        r = requests.get(DROPBOX_URL, stream=True, timeout=300)
+        print(f"🔄 Pulling from: {dropbox_url[:80]}...")
+        r = requests.get(dropbox_url, stream=True, timeout=300)
+
+        if r.status_code != 200:
+            return f"❌ Dropbox error: {r.status_code} - {r.text[:200]}", 500
+
         total = 0
         with open(tmp_path, "wb") as f:
             for chunk in r.iter_content(chunk_size=1024 * 1024):
                 if chunk:
                     f.write(chunk)
                     total += len(chunk)
+                    print(f"  Downloaded: {total / 1024 / 1024:.1f} MB...")
 
         size = os.path.getsize(tmp_path)
-        if size < 1024 * 100:
-            return f"❌ File terlalu kecil ({size} bytes)", 500
+        if size < 1024 * 100:  # Minimal 100 KB
+            os.remove(tmp_path)
+            return f"❌ File terlalu kecil ({size} bytes) — mungkin link salah atau dl=0. Gunakan dl=1", 500
+
+        # Verify it's a valid SQLite DB
+        try:
+            test_conn = sqlite3.connect(tmp_path)
+            test_conn.execute("SELECT 1 FROM sqlite_master LIMIT 1")
+            test_conn.close()
+        except Exception as verify_err:
+            os.remove(tmp_path)
+            return f"❌ File bukan valid SQLite database: {verify_err}", 500
 
         os.replace(tmp_path, DB_PATH)
-        return f"✅ Done! {round(size/1024/1024, 1)} MB tersimpan di {DB_PATH}"
+        return jsonify({
+            "ok": True,
+            "message": f"✅ DB restored! {round(size/1024/1024, 1)} MB",
+            "size_mb": round(size/1024/1024, 1),
+            "path": DB_PATH
+        })
     except Exception as e:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
         return f"❌ Error: {e}", 500
 
 
