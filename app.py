@@ -549,7 +549,7 @@ def flow():
         watch        = None
 
         if rsm is not None and cm is not None:
-            from logic import classify_zenith_v3_1, get_action, get_watch_flag, get_ma_structure, get_phase_narrative
+            from logic import classify_zenith_v3_1, get_action, get_watch_flag, get_ma_structure, get_phase_narrative, detect_trade_detail_gate
             bm_raw = d.get("bm_val") or 0
             phase  = classify_zenith_v3_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
             watch  = get_watch_flag(phase, gain, atr_pct)
@@ -557,11 +557,13 @@ def flow():
             if watch is None and a.get("watch"):
                 watch = a.get("watch")
         else:
-            from logic import get_ma_structure, get_phase_narrative
+            from logic import get_ma_structure, get_phase_narrative, detect_trade_detail_gate
+            bm_raw = d.get("bm_val") or 0
 
         price_now    = g.get("price") or a.get("price_close")
         ma_structure = get_ma_structure(price_now, ma5_v, ma13_v, ma34_v, ma200_v)
-        narrative    = get_phase_narrative(phase, ma_structure)
+        trade_gate   = detect_trade_detail_gate(phase, gain, bm_raw, bm_sma10, atr_pct, action)
+        narrative    = get_phase_narrative(phase, ma_structure, trade_gate)
 
         tickers.append({
             "ticker":            t,
@@ -594,7 +596,7 @@ def flow():
             "rsi14":             round(rsi14_v, 1) if rsi14_v is not None else None,
             "cm_streak":         int(cm_streak_v) if cm_streak_v is not None else None,
             "ma_structure":      ma_structure,
-            "phase_narrative":   narrative,
+            "narrative":         narrative,
             "bm_sma10":          round(bm_sma10, 2) if bm_sma10 else None,
         })
 
@@ -2530,9 +2532,9 @@ def get_trade_detail(ticker: str, date_str: str):
         conn.row_factory = sqlite3.Row
         row = conn.execute("""
             SELECT
-                date, ticker, price_close, price_change_pct, phase,
+                date, ticker, price_close, price_change_pct, phase, watch,
                 ma_structure, ma5, ma13, ma34, ma200, rsi14, cm_streak,
-                sm_sma10, bm_sma10, sm_val, bm_val, narrative
+                sm_sma10, bm_sma10, sm_val, bm_val, atr_pct, narrative
             FROM eod_summary
             WHERE ticker = ? AND date = ?
         """, [ticker.upper(), date_str]).fetchone()
@@ -2548,6 +2550,8 @@ def get_trade_detail(ticker: str, date_str: str):
             "price_close": row["price_close"],
             "price_change_pct": row["price_change_pct"],
             "phase": row["phase"],
+            "watch": row["watch"],
+            "atr_pct": row["atr_pct"],
             "ma_structure": row["ma_structure"],
             "ma_values": {
                 "ma5": row["ma5"],
