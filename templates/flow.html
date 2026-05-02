@@ -292,7 +292,7 @@ header::before {
   margin-bottom: 12px;
 }
 .td-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; align-items: center; gap: 8px;
   padding: 8px 14px;
   border-bottom: 1px solid var(--border);
 }
@@ -301,6 +301,13 @@ header::before {
   font-size: 10px; font-weight: 700;
   letter-spacing: .08em; color: var(--accent);
   text-transform: uppercase;
+}
+.td-market-structure-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; font-weight: 500;
+  letter-spacing: .06em; color: var(--muted);
+  text-transform: uppercase;
+  margin-right: 4px;
 }
 .mas-badge {
   font-family: 'Space Mono', monospace;
@@ -1390,6 +1397,7 @@ td:first-child { text-align: left; }
       <div class="trade-detail-card" id="tradeDetailCard" style="display:none">
         <div class="td-header">
           <span class="td-title">Trade Detail</span>
+          <span class="td-market-structure-label">Market Structure:</span>
           <span class="mas-badge na" id="tdMASBadge">—</span>
         </div>
         <!-- MA grid -->
@@ -1397,29 +1405,29 @@ td:first-child { text-align: left; }
           <div class="td-ma-item">
             <div class="td-ma-label">MA 5</div>
             <div class="td-ma-val-row">
-              <span class="ma-stamp" id="tdMA5stamp"></span>
               <span class="td-ma-val" id="tdMA5">—</span>
+              <span class="ma-stamp" id="tdMA5stamp"></span>
             </div>
           </div>
           <div class="td-ma-item">
             <div class="td-ma-label">MA 13</div>
             <div class="td-ma-val-row">
-              <span class="ma-stamp" id="tdMA13stamp"></span>
               <span class="td-ma-val" id="tdMA13">—</span>
+              <span class="ma-stamp" id="tdMA13stamp"></span>
             </div>
           </div>
           <div class="td-ma-item">
             <div class="td-ma-label">MA 34</div>
             <div class="td-ma-val-row">
-              <span class="ma-stamp" id="tdMA34stamp"></span>
               <span class="td-ma-val" id="tdMA34">—</span>
+              <span class="ma-stamp" id="tdMA34stamp"></span>
             </div>
           </div>
           <div class="td-ma-item">
             <div class="td-ma-label">MA 200</div>
             <div class="td-ma-val-row">
-              <span class="ma-stamp" id="tdMA200stamp"></span>
               <span class="td-ma-val" id="tdMA200">—</span>
+              <span class="ma-stamp" id="tdMA200stamp"></span>
             </div>
           </div>
         </div>

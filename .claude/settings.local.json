@@ -9,7 +9,10 @@
       "mcp__code-review-graph__build_or_update_graph_tool",
       "mcp__code-review-graph__get_architecture_overview_tool",
       "mcp__code-review-graph__semantic_search_nodes_tool",
-      "Bash(python *)"
+      "Bash(python *)",
+      "Bash(git -C \"C:/Users/rabim/Downloads/my_project/zenith_web\" status --short)",
+      "Bash(git -C \"C:/Users/rabim/Downloads/my_project/zenith_web\" log --oneline -3)",
+      "Bash(git *)"
     ]
   },
   "enableAllProjectMcpServers": true,
