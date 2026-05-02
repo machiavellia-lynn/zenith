@@ -1675,7 +1675,9 @@ def admin_backfill_200d():
 
     Fetches ~300 calendar days of Yahoo close into price_history.
     Chunked 100 tickers × max_workers=3 to respect Yahoo rate limits.
-    After backfill, triggers recompute-analytics for all dates so MA columns are populated.
+
+    Does NOT recompute analytics — call /admin/recompute-analytics separately
+    to avoid Gunicorn worker timeout (analytics recompute takes several minutes).
 
     Usage: ?secret=<UPLOAD_SECRET>
     """
@@ -1684,26 +1686,16 @@ def admin_backfill_200d():
         return "❌ Secret salah", 403
 
     try:
-        from scraper_daily import backfill_price_history_200d, compute_analytics_for_date, get_scraper_db
+        from scraper_daily import backfill_price_history_200d, get_scraper_db
         conn = get_scraper_db()
         conn.execute("PRAGMA busy_timeout=120000")
-
         ph_rows = backfill_price_history_200d(conn)
-
-        # Recompute analytics so MA columns get populated for all existing dates
-        all_dates = conn.execute(
-            f"SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT}"
-        ).fetchall()
-        recomputed = 0
-        for row in all_dates:
-            try:
-                compute_analytics_for_date(conn, row["date"])
-                recomputed += 1
-            except Exception:
-                pass
-
         conn.close()
-        return jsonify({"ok": True, "price_history_rows": ph_rows, "dates_recomputed": recomputed})
+        return jsonify({
+            "ok": True,
+            "price_history_rows": ph_rows,
+            "next_step": "Call /admin/recompute-analytics?date_from=DD-MM-YYYY to populate MA columns",
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
@@ -2500,6 +2492,82 @@ def backup_db():
         return jsonify({"ok": False, "error": f"Dropbox error {r.status_code}: {r.text[:300]}"}), 500
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+# ── API: Trade Detail (for Trade Detail card display) ──────────────────────────
+@app.route("/api/trade-detail/<ticker>/<date_str>")
+def get_trade_detail(ticker: str, date_str: str):
+    """
+    Fetch Trade Detail narrative and metrics for a specific ticker on a date.
+
+    Returns:
+    {
+        "ok": true,
+        "ticker": "MINA",
+        "date": "01-05-2025",
+        "price_close": 3150,
+        "price_change_pct": 2.5,
+        "phase": "SOS",
+        "ma_structure": "Strong Uptrend",
+        "ma_values": {
+            "ma5": 3080,
+            "ma13": 2950,
+            "ma34": 2810,
+            "ma200": 2600
+        },
+        "rsi14": 64,
+        "cm_streak": 12,
+        "sm_metrics": {
+            "sm_sma10": 5820000,
+            "bm_sma10": 1030000,
+            "sm_val": 6500000,
+            "bm_val": 800000
+        },
+        "narrative": "Strongest Momentum: Smart Money sangat agresif melakukan markup..."
+    }
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("""
+            SELECT
+                date, ticker, price_close, price_change_pct, phase,
+                ma_structure, ma5, ma13, ma34, ma200, rsi14, cm_streak,
+                sm_sma10, bm_sma10, sm_val, bm_val, narrative
+            FROM eod_summary
+            WHERE ticker = ? AND date = ?
+        """, [ticker.upper(), date_str]).fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"ok": False, "error": f"Trade detail tidak ditemukan untuk {ticker} pada {date_str}"}), 404
+
+        return jsonify({
+            "ok": True,
+            "ticker": row["ticker"],
+            "date": row["date"],
+            "price_close": row["price_close"],
+            "price_change_pct": row["price_change_pct"],
+            "phase": row["phase"],
+            "ma_structure": row["ma_structure"],
+            "ma_values": {
+                "ma5": row["ma5"],
+                "ma13": row["ma13"],
+                "ma34": row["ma34"],
+                "ma200": row["ma200"],
+            },
+            "rsi14": row["rsi14"],
+            "cm_streak": row["cm_streak"],
+            "sm_metrics": {
+                "sm_sma10": row["sm_sma10"],
+                "bm_sma10": row["bm_sma10"],
+                "sm_val": row["sm_val"],
+                "bm_val": row["bm_val"],
+            },
+            "narrative": row["narrative"],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)

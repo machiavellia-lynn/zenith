@@ -540,21 +540,27 @@ def ensure_summary_table(conn):
             ma200            REAL,
             rsi14            REAL,
             cm_streak        INTEGER,
+            ma_structure     TEXT,
+            trade_gate       TEXT,
+            narrative        TEXT,
             UNIQUE(date, ticker)
         )
     """)
 
-    # Safely add columns for existing databases (v4 → v5 upgrade)
+    # Safely add columns for existing databases (v4 → v6 upgrade)
     for col, typedef in [
-        ("sm_sma10",  "REAL"),
-        ("bm_sma10",  "REAL"),
-        ("watch",     "TEXT"),
-        ("ma5",       "REAL"),
-        ("ma13",      "REAL"),
-        ("ma34",      "REAL"),
-        ("ma200",     "REAL"),
-        ("rsi14",     "REAL"),
-        ("cm_streak", "INTEGER"),
+        ("sm_sma10",    "REAL"),
+        ("bm_sma10",    "REAL"),
+        ("watch",       "TEXT"),
+        ("ma5",         "REAL"),
+        ("ma13",        "REAL"),
+        ("ma34",        "REAL"),
+        ("ma200",       "REAL"),
+        ("rsi14",       "REAL"),
+        ("cm_streak",   "INTEGER"),
+        ("ma_structure", "TEXT"),
+        ("trade_gate",   "TEXT"),
+        ("narrative",    "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE eod_summary ADD COLUMN {col} {typedef}")
@@ -1042,6 +1048,7 @@ def check_stop_loss(conn, date_str: str, threshold_pct: float = -10.0):
 from logic import (
     classify_zenith_v3_1, get_action, get_watch_flag,
     compute_ma, compute_rsi14, compute_cm_streak,
+    get_ma_structure, detect_trade_detail_gate, get_phase_narrative,
 )
 
 
@@ -1184,15 +1191,22 @@ def compute_analytics_for_date(conn, date_str: str):
         watch  = get_watch_flag(phase, pchg, atr_pct)
         action = get_action(phase, pchg, atr_pct, bm_val=bm, bm_sma10=bm_sma10, watch_flag=watch)
 
+        # ── Trade Detail: MA Structure, Gate, Narrative ──
+        ma_struct = get_ma_structure(pc, ma5, ma13, ma34, ma200)
+        trade_gate = detect_trade_detail_gate(phase, pchg, bm, bm_sma10, atr_pct, action)
+        narrative = get_phase_narrative(phase, ma_struct, trade_gate)
+
         conn.execute("""
             UPDATE eod_summary
             SET price_change_pct=?, sri=?, mes=?, volx_gap=?, rpr=?,
                 atr_pct=?, sm_sma10=?, bm_sma10=?, phase=?, action=?,
-                watch=?, ma5=?, ma13=?, ma34=?, ma200=?, rsi14=?, cm_streak=?
+                watch=?, ma5=?, ma13=?, ma34=?, ma200=?, rsi14=?, cm_streak=?,
+                ma_structure=?, trade_gate=?, narrative=?
             WHERE date=? AND ticker=?
         """, [pchg, sri, mes, vg, rpr,
               atr_pct, sm_sma10, bm_sma10, phase, action,
               watch, ma5, ma13, ma34, ma200, rsi14, cm_streak,
+              ma_struct, trade_gate, narrative,
               date_str, tk])
 
         # ── Auto-populate trade_journal ──
