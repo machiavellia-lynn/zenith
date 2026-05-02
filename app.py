@@ -1675,7 +1675,9 @@ def admin_backfill_200d():
 
     Fetches ~300 calendar days of Yahoo close into price_history.
     Chunked 100 tickers × max_workers=3 to respect Yahoo rate limits.
-    After backfill, triggers recompute-analytics for all dates so MA columns are populated.
+
+    Does NOT recompute analytics — call /admin/recompute-analytics separately
+    to avoid Gunicorn worker timeout (analytics recompute takes several minutes).
 
     Usage: ?secret=<UPLOAD_SECRET>
     """
@@ -1684,26 +1686,16 @@ def admin_backfill_200d():
         return "❌ Secret salah", 403
 
     try:
-        from scraper_daily import backfill_price_history_200d, compute_analytics_for_date, get_scraper_db
+        from scraper_daily import backfill_price_history_200d, get_scraper_db
         conn = get_scraper_db()
         conn.execute("PRAGMA busy_timeout=120000")
-
         ph_rows = backfill_price_history_200d(conn)
-
-        # Recompute analytics so MA columns get populated for all existing dates
-        all_dates = conn.execute(
-            f"SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT}"
-        ).fetchall()
-        recomputed = 0
-        for row in all_dates:
-            try:
-                compute_analytics_for_date(conn, row["date"])
-                recomputed += 1
-            except Exception:
-                pass
-
         conn.close()
-        return jsonify({"ok": True, "price_history_rows": ph_rows, "dates_recomputed": recomputed})
+        return jsonify({
+            "ok": True,
+            "price_history_rows": ph_rows,
+            "next_step": "Call /admin/recompute-analytics?date_from=DD-MM-YYYY to populate MA columns",
+        })
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
