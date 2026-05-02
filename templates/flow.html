@@ -308,32 +308,37 @@ header::before {
   padding: 3px 8px; border-radius: 4px;
   letter-spacing: .04em; text-transform: uppercase;
 }
-.mas-badge.strong-uptrend { background: rgba(0,232,162,.18); color: #00e8a2; border: 1px solid rgba(0,232,162,.3); }
-.mas-badge.transitional   { background: rgba(255,140,66,.15); color: #ff8c42; border: 1px solid rgba(255,140,66,.3); }
-.mas-badge.sideways        { background: rgba(160,160,180,.15); color: #aab; border: 1px solid rgba(160,160,180,.3); }
-.mas-badge.downtrend       { background: rgba(255,107,107,.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,.3); }
-.mas-badge.na              { background: rgba(100,100,120,.12); color: var(--muted); border: 1px solid var(--border); }
+.mas-badge.strong-uptrend        { background: rgba(0,232,162,.18); color: #00e8a2; border: 1px solid rgba(0,232,162,.3); }
+.mas-badge.transitional-uptrend  { background: rgba(0,200,130,.12); color: #00c882; border: 1px solid rgba(0,200,130,.25); }
+.mas-badge.bullish-messy         { background: rgba(255,200,80,.12); color: #ffc850; border: 1px solid rgba(255,200,80,.25); }
+.mas-badge.sideways              { background: rgba(160,160,180,.15); color: #aab; border: 1px solid rgba(160,160,180,.3); }
+.mas-badge.strong-downtrend      { background: rgba(255,107,107,.18); color: #ff6b6b; border: 1px solid rgba(255,107,107,.3); }
+.mas-badge.transitional-downtrend{ background: rgba(255,140,66,.15); color: #ff8c42; border: 1px solid rgba(255,140,66,.3); }
+.mas-badge.na                    { background: rgba(100,100,120,.12); color: var(--muted); border: 1px solid var(--border); }
 /* MA grid */
 .td-ma-grid {
   display: grid; grid-template-columns: repeat(4, 1fr);
   gap: 8px; padding: 10px 14px;
   border-bottom: 1px solid var(--border);
 }
-.td-ma-item { display: flex; flex-direction: column; gap: 1px; }
+.td-ma-item { display: flex; flex-direction: column; gap: 2px; }
 .td-ma-label {
   font-family: 'Space Mono', monospace;
   font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
 }
+.td-ma-val-row { display: flex; align-items: center; gap: 5px; }
 .td-ma-val {
   font-family: 'Space Mono', monospace;
   font-size: 12px; font-weight: 700; color: var(--text);
 }
-.td-ma-rel {
+.ma-stamp {
   font-family: 'Space Mono', monospace;
-  font-size: 9px; color: var(--muted);
+  font-size: 7px; font-weight: 700; letter-spacing: .05em;
+  padding: 1px 4px; border-radius: 3px; text-transform: uppercase; white-space: nowrap;
 }
-.td-ma-rel.above { color: var(--up); }
-.td-ma-rel.below { color: var(--down); }
+.ma-stamp.up   { background: rgba(0,232,162,.15); color: #00e8a2; border: 1px solid rgba(0,232,162,.25); }
+.ma-stamp.down { background: rgba(255,107,107,.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,.25); }
+.ma-stamp.side { background: rgba(160,160,180,.15); color: #aab; border: 1px solid rgba(160,160,180,.25); }
 /* RSI + CM row */
 .td-rsi-row {
   display: grid; grid-template-columns: 1fr 1fr;
@@ -1391,23 +1396,31 @@ td:first-child { text-align: left; }
         <div class="td-ma-grid">
           <div class="td-ma-item">
             <div class="td-ma-label">MA 5</div>
-            <div class="td-ma-val" id="tdMA5">—</div>
-            <div class="td-ma-rel" id="tdMA5rel"></div>
+            <div class="td-ma-val-row">
+              <span class="ma-stamp" id="tdMA5stamp"></span>
+              <span class="td-ma-val" id="tdMA5">—</span>
+            </div>
           </div>
           <div class="td-ma-item">
             <div class="td-ma-label">MA 13</div>
-            <div class="td-ma-val" id="tdMA13">—</div>
-            <div class="td-ma-rel" id="tdMA13rel"></div>
+            <div class="td-ma-val-row">
+              <span class="ma-stamp" id="tdMA13stamp"></span>
+              <span class="td-ma-val" id="tdMA13">—</span>
+            </div>
           </div>
           <div class="td-ma-item">
             <div class="td-ma-label">MA 34</div>
-            <div class="td-ma-val" id="tdMA34">—</div>
-            <div class="td-ma-rel" id="tdMA34rel"></div>
+            <div class="td-ma-val-row">
+              <span class="ma-stamp" id="tdMA34stamp"></span>
+              <span class="td-ma-val" id="tdMA34">—</span>
+            </div>
           </div>
           <div class="td-ma-item">
             <div class="td-ma-label">MA 200</div>
-            <div class="td-ma-val" id="tdMA200">—</div>
-            <div class="td-ma-rel" id="tdMA200rel"></div>
+            <div class="td-ma-val-row">
+              <span class="ma-stamp" id="tdMA200stamp"></span>
+              <span class="td-ma-val" id="tdMA200">—</span>
+            </div>
           </div>
         </div>
         <!-- RSI14 + CM Streak -->
@@ -2229,55 +2242,54 @@ function populateTradeDetail(r) {
   const price = r.price || r.price_close;
   const fmt   = (v) => v != null ? v.toLocaleString('id-ID', {maximumFractionDigits: 0}) : '—';
 
-  // ── MA Structure badge ──
+  // ── MA Structure badge (6 types) ──
   const masBadge = document.getElementById('tdMASBadge');
   const mas = r.ma_structure || 'N/A';
   const masClassMap = {
-    'Strong Uptrend': 'strong-uptrend',
-    'Transitional':   'transitional',
-    'Sideways':       'sideways',
-    'Downtrend':      'downtrend',
+    'Strong Uptrend':         'strong-uptrend',
+    'Transitional Uptrend':   'transitional-uptrend',
+    'Bullish Messy':          'bullish-messy',
+    'Sideways':               'sideways',
+    'Strong Downtrend':       'strong-downtrend',
+    'Transitional Downtrend': 'transitional-downtrend',
   };
   masBadge.textContent = mas;
   masBadge.className   = 'mas-badge ' + (masClassMap[mas] || 'na');
 
-  // ── MA values + price relationship ──
+  // ── MA values + individual stamp (Uptrend/Downtrend/Sideways per MA) ──
   const maFields = [
-    ['tdMA5', 'tdMA5rel', r.ma5],
-    ['tdMA13', 'tdMA13rel', r.ma13],
-    ['tdMA34', 'tdMA34rel', r.ma34],
-    ['tdMA200', 'tdMA200rel', r.ma200],
+    ['tdMA5',   'tdMA5stamp',   r.ma5],
+    ['tdMA13',  'tdMA13stamp',  r.ma13],
+    ['tdMA34',  'tdMA34stamp',  r.ma34],
+    ['tdMA200', 'tdMA200stamp', r.ma200],
   ];
-  for (const [valId, relId, maVal] of maFields) {
-    const elVal = document.getElementById(valId);
-    const elRel = document.getElementById(relId);
+  for (const [valId, stampId, maVal] of maFields) {
+    const elVal   = document.getElementById(valId);
+    const elStamp = document.getElementById(stampId);
     if (maVal != null) {
       elVal.textContent = fmt(maVal);
       if (price != null) {
-        const diff = ((price - maVal) / maVal * 100);
-        const abv  = diff >= 0;
-        elRel.textContent = (abv ? '↑ +' : '↓ ') + diff.toFixed(1) + '% vs close';
-        elRel.className   = 'td-ma-rel ' + (abv ? 'above' : 'below');
+        const diffPct = (price - maVal) / maVal * 100;
+        if (diffPct > 0.5)        { elStamp.textContent = 'Uptrend';   elStamp.className = 'ma-stamp up'; }
+        else if (diffPct < -0.5)  { elStamp.textContent = 'Downtrend'; elStamp.className = 'ma-stamp down'; }
+        else                       { elStamp.textContent = 'Sideways';  elStamp.className = 'ma-stamp side'; }
       } else {
-        elRel.textContent = '';
-        elRel.className   = 'td-ma-rel';
+        elStamp.textContent = ''; elStamp.className = 'ma-stamp';
       }
     } else {
-      elVal.textContent = '—';
-      elRel.textContent = '';
-      elRel.className   = 'td-ma-rel';
+      elVal.textContent   = '—';
+      elStamp.textContent = ''; elStamp.className = 'ma-stamp';
     }
   }
 
-  // ── RSI14 ──
+  // ── RSI14 — Overbought / Neutral / Oversold only ──
   const elRSI    = document.getElementById('tdRSI');
   const elRSIsub = document.getElementById('tdRSIsub');
   if (r.rsi14 != null) {
     elRSI.textContent = r.rsi14.toFixed(1);
-    if (r.rsi14 < 30)       { elRSI.className = 'td-rsi-val oversold';    elRSIsub.textContent = 'Oversold'; }
-    else if (r.rsi14 < 50)  { elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = 'Bearish zone'; }
-    else if (r.rsi14 < 70)  { elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = 'Bullish zone'; }
-    else                     { elRSI.className = 'td-rsi-val overbought';  elRSIsub.textContent = 'Overbought'; }
+    if (r.rsi14 < 30)      { elRSI.className = 'td-rsi-val oversold';    elRSIsub.textContent = 'Oversold'; }
+    else if (r.rsi14 <= 70){ elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = 'Neutral'; }
+    else                    { elRSI.className = 'td-rsi-val overbought';  elRSIsub.textContent = 'Overbought'; }
   } else {
     elRSI.textContent = '—'; elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = '';
   }
@@ -2294,51 +2306,48 @@ function populateTradeDetail(r) {
     elCM.textContent = '—'; elCM.className = 'td-rsi-val neutral-rsi'; elCMsub.textContent = '';
   }
 
-  // ── Phase Narrative ──
+  // ── Phase Narrative (from DB — gate narrative overrides phase narrative automatically) ──
   const elNarr = document.getElementById('tdNarrative');
-  if (r.phase_narrative) {
-    elNarr.textContent  = r.phase_narrative;
+  if (r.narrative) {
+    elNarr.textContent   = r.narrative;
     elNarr.style.display = 'block';
   } else {
     elNarr.style.display = 'none';
   }
 
-  // ── Gate Conditions (derive from data) ──
+  // ── Gate Conditions ──
   const elGates = document.getElementById('tdGates');
   if (r.phase && ['SOS','SPRING','ABSORB','ACCUM'].includes(r.phase)) {
     elGates.style.display = 'flex';
-    const bm_sma10 = r.bm_sma10 || 0;
-    const bm_val   = r.bm_val   || 0;
+    const bm_sma10 = r.sm_metrics?.bm_sma10 || 0;
+    const bm_val   = r.sm_metrics?.bm_val   || 0;
     const atr      = r.atr_pct  || 2.5;
-    const pchg     = r.price_change;
+    const pchg     = r.price_change_pct;
 
     // Gate A: Supply — bm_val > bm_sma10 × 3
     const gateA_fail = bm_sma10 > 0 && bm_val > bm_sma10 * 3.0;
     const elGA = document.getElementById('tdGateA');
     elGA.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateA_fail ? 'fail' : 'pass');
-    elGA.querySelector('.td-gate-text').textContent = 'Gate A';
-    elGA.querySelector('.td-gate-sub').textContent  = gateA_fail
-      ? `Fail — BM ${bm_val.toFixed(0)}M > ${(bm_sma10*3).toFixed(0)}M (3× avg)`
-      : `Pass — Supply normal`;
+    elGA.querySelector('.td-gate-sub').textContent = gateA_fail
+      ? 'Abnormal Supply: Meskipun fase akumulasi, tekanan jual (Bad Money) hari ini 3× lipat rata-rata (baseline: BM SMA10). Area ini sangat berisiko.'
+      : 'Pass — Supply normal';
 
     // Gate B: ARB Safety — watch == ARB_SPRING
     const gateB_fail = r.watch === 'ARB_SPRING';
     const elGB = document.getElementById('tdGateB');
     elGB.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateB_fail ? 'fail' : 'pass');
-    elGB.querySelector('.td-gate-text').textContent = 'Gate B';
-    elGB.querySelector('.td-gate-sub').textContent  = gateB_fail
-      ? 'Fail — ARB Spring (penurunan > 1.5× ATR)'
+    elGB.querySelector('.td-gate-sub').textContent = gateB_fail
+      ? 'Extreme Panic: Terdeteksi fase SPRING, namun penurunan harga terlalu ekstrim (>1.5× ATR). Risiko ARB tinggi.'
       : 'Pass — Tidak ada ARB';
 
-    // Gate C: Anti-Pucuk — pchg >= max(atr×2, 5)
-    const th_c = Math.max(atr * 2.0, 5.0);
+    // Gate C: Anti-Pucuk — pchg >= atr × 2
+    const th_c = atr * 2.0;
     const gateC_fail = pchg != null && pchg >= th_c;
     const elGC = document.getElementById('tdGateC');
     elGC.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateC_fail ? 'fail' : 'pass');
-    elGC.querySelector('.td-gate-text').textContent = 'Gate C';
-    elGC.querySelector('.td-gate-sub').textContent  = gateC_fail
-      ? `Fail — Pchg ${pchg != null ? pchg.toFixed(1) : '?'}% ≥ threshold ${th_c.toFixed(1)}%`
-      : `Pass — Harga belum overextended`;
+    elGC.querySelector('.td-gate-sub').textContent = gateC_fail
+      ? 'Profit Taking Zone: Sinyal BUY valid, namun harga naik terlalu tinggi hari ini (>2× ATR). Tunggu koreksi ke area MA5.'
+      : 'Pass — Harga belum overextended';
   } else {
     elGates.style.display = 'none';
   }
