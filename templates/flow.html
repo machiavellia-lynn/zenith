@@ -315,13 +315,15 @@ header::before {
   padding: 3px 8px; border-radius: 4px;
   letter-spacing: .04em; text-transform: uppercase;
 }
-.mas-badge.strong-uptrend        { background: rgba(0,232,162,.18); color: #00e8a2; border: 1px solid rgba(0,232,162,.3); }
-.mas-badge.transitional-uptrend  { background: rgba(0,200,130,.12); color: #00c882; border: 1px solid rgba(0,200,130,.25); }
-.mas-badge.bullish-messy         { background: rgba(255,200,80,.12); color: #ffc850; border: 1px solid rgba(255,200,80,.25); }
-.mas-badge.sideways              { background: rgba(160,160,180,.15); color: #aab; border: 1px solid rgba(160,160,180,.3); }
-.mas-badge.strong-downtrend      { background: rgba(255,107,107,.18); color: #ff6b6b; border: 1px solid rgba(255,107,107,.3); }
-.mas-badge.transitional-downtrend{ background: rgba(255,140,66,.15); color: #ff8c42; border: 1px solid rgba(255,140,66,.3); }
-.mas-badge.na                    { background: rgba(100,100,120,.12); color: var(--muted); border: 1px solid var(--border); }
+.mas-badge.strong-uptrend          { background: rgba(0,232,162,.18); color: #00e8a2; border: 1px solid rgba(0,232,162,.3); }
+.mas-badge.transitional-uptrend   { background: rgba(0,200,130,.12); color: #00c882; border: 1px solid rgba(0,200,130,.25); }
+.mas-badge.transitional-correction{ background: rgba(255,200,80,.15); color: #ffc850; border: 1px solid rgba(255,200,80,.3); }
+.mas-badge.strong-downtrend       { background: rgba(255,107,107,.18); color: #ff6b6b; border: 1px solid rgba(255,107,107,.3); }
+.mas-badge.cluster-macro-up       { background: rgba(100,220,255,.12); color: #64dcff; border: 1px solid rgba(100,220,255,.25); }
+.mas-badge.cluster-macro-down     { background: rgba(180,120,255,.12); color: #b478ff; border: 1px solid rgba(180,120,255,.25); }
+.mas-badge.bullish-messy          { background: rgba(255,200,80,.12); color: #ffc850; border: 1px solid rgba(255,200,80,.25); }
+.mas-badge.bearish-messy          { background: rgba(255,80,80,.12); color: #ff5050; border: 1px solid rgba(255,80,80,.25); }
+.mas-badge.na                     { background: rgba(100,100,120,.12); color: var(--muted); border: 1px solid var(--border); }
 /* MA grid */
 .td-ma-grid {
   display: grid; grid-template-columns: repeat(4, 1fr);
@@ -2250,16 +2252,18 @@ function populateTradeDetail(r) {
   const price = r.price || r.price_close;
   const fmt   = (v) => v != null ? v.toLocaleString('id-ID', {maximumFractionDigits: 0}) : '—';
 
-  // ── MA Structure badge (6 types) ──
+  // ── MA Structure badge (8 types) ──
   const masBadge = document.getElementById('tdMASBadge');
   const mas = r.ma_structure || 'N/A';
   const masClassMap = {
-    'Strong Uptrend':         'strong-uptrend',
-    'Transitional Uptrend':   'transitional-uptrend',
-    'Bullish Messy':          'bullish-messy',
-    'Sideways':               'sideways',
-    'Strong Downtrend':       'strong-downtrend',
-    'Transitional Downtrend': 'transitional-downtrend',
+    'Strong Uptrend':           'strong-uptrend',
+    'Transitional Uptrend':     'transitional-uptrend',
+    'Transitional Correction':  'transitional-correction',
+    'Strong Downtrend':         'strong-downtrend',
+    'Cluster on Macro Uptrend': 'cluster-macro-up',
+    'Cluster on Macro Downtrend': 'cluster-macro-down',
+    'Bullish Messy':            'bullish-messy',
+    'Bearish Messy':            'bearish-messy',
   };
   masBadge.textContent = mas;
   masBadge.className   = 'mas-badge ' + (masClassMap[mas] || 'na');
