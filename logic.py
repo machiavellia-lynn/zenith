@@ -186,7 +186,8 @@ def detect_trade_detail_gate(
 # ── Technical Indicator Helpers (pure, no DB) ────────────────────────────────
 
 def compute_ma(closes: list, period: int):
-    """Simple Moving Average. closes = chronological list (oldest first)."""
+    """Simple Moving Average. closes = chronological list (oldest first).
+    Returns None if insufficient data (< period required)."""
     if len(closes) < period:
         return None
     return round(sum(closes[-period:]) / period, 2)

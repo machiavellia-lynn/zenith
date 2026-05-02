@@ -741,8 +741,11 @@ def _fetch_close_history(ticker, date_from: datetime = None, date_to: datetime =
             if c is not None:
                 d = datetime.fromtimestamp(ts, tz=WIB).strftime("%d-%m-%Y")
                 result[d] = round(c, 2)
+        if not result:
+            log.warning(f"⚠️ {ticker}: Yahoo returned no valid closes (timestamps={len(timestamps)}, closes={len(closes)})")
         return ticker, result
-    except Exception:
+    except Exception as e:
+        log.error(f"❌ {ticker}: Failed to fetch from Yahoo: {e}")
         return ticker, {}
 
 
@@ -1128,6 +1131,10 @@ def compute_analytics_for_date(conn, date_str: str):
         # ph_closes_all: most-recent-first (DESC). ph_closes: first 14 for pchg/ATR.
         ph_closes_all = [h["close"] for h in ph_rows if h["close"]]
         ph_closes = ph_closes_all[:14]
+        
+        # DEBUG: Log when MA200 will be None
+        if len(ph_closes_all) < 200:
+            log.debug(f"  ⚠️  {tk} {date_str}: only {len(ph_closes_all)}/200 closes for MA200")
 
         pchg = None
         # Today must appear in price_history (market was open). If absent → holiday/halt → pchg None.
