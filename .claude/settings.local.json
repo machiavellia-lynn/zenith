@@ -5,7 +5,15 @@
       "Bash(command -v gh.exe)",
       "Read(//c/Program Files/GitHub CLI/**)",
       "Read(//c/Users/rabim/AppData/Local/Programs/GitHub CLI/**)",
-      "Bash(\"gh.exe\" --version)"
+      "Bash(\"gh.exe\" --version)",
+      "mcp__code-review-graph__build_or_update_graph_tool",
+      "mcp__code-review-graph__get_architecture_overview_tool",
+      "mcp__code-review-graph__semantic_search_nodes_tool",
+      "Bash(python *)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "code-review-graph"
+  ]
 }

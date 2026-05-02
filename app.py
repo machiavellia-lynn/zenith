@@ -391,7 +391,8 @@ def flow():
             latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
                 SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm,
-                       atr_pct, sm_sma10, bm_sma10, watch, price_change_pct
+                       atr_pct, sm_sma10, bm_sma10, watch, price_change_pct,
+                       ma5, ma13, ma34, ma200, rsi14, cm_streak
                 FROM eod_summary WHERE date = ?
             """, [latest_date]).fetchall()
             for ar in a_rows:
@@ -534,44 +535,67 @@ def flow():
         pchg = gain
         mes  = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
+        # ── MA indicators from latest analytics ──
+        ma5_v       = a.get("ma5")
+        ma13_v      = a.get("ma13")
+        ma34_v      = a.get("ma34")
+        ma200_v     = a.get("ma200")
+        rsi14_v     = a.get("rsi14")
+        cm_streak_v = a.get("cm_streak")
+
         # ── Phase / Action / Watch / SL via centralised logic ──
         phase        = "NEUTRAL"
         action       = "HOLD"
         watch        = None
 
         if rsm is not None and cm is not None:
-            from logic import classify_zenith_v3_1, get_action, get_watch_flag
+            from logic import classify_zenith_v3_1, get_action, get_watch_flag, get_ma_structure, get_phase_narrative
             bm_raw = d.get("bm_val") or 0
             phase  = classify_zenith_v3_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
             watch  = get_watch_flag(phase, gain, atr_pct)
             action = get_action(phase, gain, atr_pct, bm_val=bm_raw, bm_sma10=bm_sma10, watch_flag=watch)
             if watch is None and a.get("watch"):
                 watch = a.get("watch")
+        else:
+            from logic import get_ma_structure, get_phase_narrative
+
+        price_now    = g.get("price") or a.get("price_close")
+        ma_structure = get_ma_structure(price_now, ma5_v, ma13_v, ma34_v, ma200_v)
+        narrative    = get_phase_narrative(phase, ma_structure)
 
         tickers.append({
-            "ticker":       t,
-            "clean_money":  cm,
-            "sm_val":       sm,
-            "bm_val":       bm,
-            "rsm":          rsm,
-            "mf_plus":      mfp,
-            "mf_minus":     mfm,
-            "net_mf":       net,
-            "gain_pct":     gain,
-            "price":        g.get("price") or a.get("price_close"),
-            "tx":           int(d.get("tx") or 0),
-            "phase":        phase,
-            "action":       action,
-            "watch":        watch,
-            "sri":          sri if sri else None,
-            "mes":          mes,
-            "volx_gap":     volx_gap,
-            "rpr":          rpr_val if rpr_val else None,
-            "price_change": pchg,
-            "atr_pct":      atr_pct,
-            "sm_sma10":     round(sm_sma10, 2) if sm_sma10 else None,
-            "vwap_sm":      round(vwap_sm, 2) if vwap_sm else None,
-            "vwap_bm":      round(vwap_bm, 2) if vwap_bm else None,
+            "ticker":            t,
+            "clean_money":       cm,
+            "sm_val":            sm,
+            "bm_val":            bm,
+            "rsm":               rsm,
+            "mf_plus":           mfp,
+            "mf_minus":          mfm,
+            "net_mf":            net,
+            "gain_pct":          gain,
+            "price":             price_now,
+            "tx":                int(d.get("tx") or 0),
+            "phase":             phase,
+            "action":            action,
+            "watch":             watch,
+            "sri":               sri if sri else None,
+            "mes":               mes,
+            "volx_gap":          volx_gap,
+            "rpr":               rpr_val if rpr_val else None,
+            "price_change":      pchg,
+            "atr_pct":           atr_pct,
+            "sm_sma10":          round(sm_sma10, 2) if sm_sma10 else None,
+            "vwap_sm":           round(vwap_sm, 2) if vwap_sm else None,
+            "vwap_bm":           round(vwap_bm, 2) if vwap_bm else None,
+            "ma5":               round(ma5_v,   2) if ma5_v   is not None else None,
+            "ma13":              round(ma13_v,  2) if ma13_v  is not None else None,
+            "ma34":              round(ma34_v,  2) if ma34_v  is not None else None,
+            "ma200":             round(ma200_v, 2) if ma200_v is not None else None,
+            "rsi14":             round(rsi14_v, 1) if rsi14_v is not None else None,
+            "cm_streak":         int(cm_streak_v) if cm_streak_v is not None else None,
+            "ma_structure":      ma_structure,
+            "phase_narrative":   narrative,
+            "bm_sma10":          round(bm_sma10, 2) if bm_sma10 else None,
         })
 
     # Sort default: clean_money desc (nulls last)
@@ -1641,6 +1665,45 @@ def admin_backfill_prices():
         conn.close()
         return jsonify({"ok": True, "prices_updated": n, "analytics_recomputed": recomputed,
                         "date_from": date_from, "date_to": date_to, "days": days})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/backfill-200d")
+def admin_backfill_200d():
+    """One-time 200-day price_history backfill for MA200 computation.
+
+    Fetches ~300 calendar days of Yahoo close into price_history.
+    Chunked 100 tickers × max_workers=3 to respect Yahoo rate limits.
+    After backfill, triggers recompute-analytics for all dates so MA columns are populated.
+
+    Usage: ?secret=<UPLOAD_SECRET>
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    try:
+        from scraper_daily import backfill_price_history_200d, compute_analytics_for_date, get_scraper_db
+        conn = get_scraper_db()
+        conn.execute("PRAGMA busy_timeout=120000")
+
+        ph_rows = backfill_price_history_200d(conn)
+
+        # Recompute analytics so MA columns get populated for all existing dates
+        all_dates = conn.execute(
+            f"SELECT DISTINCT date FROM eod_summary ORDER BY {_DATE_SORT}"
+        ).fetchall()
+        recomputed = 0
+        for row in all_dates:
+            try:
+                compute_analytics_for_date(conn, row["date"])
+                recomputed += 1
+            except Exception:
+                pass
+
+        conn.close()
+        return jsonify({"ok": True, "price_history_rows": ph_rows, "dates_recomputed": recomputed})
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
