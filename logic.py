@@ -270,8 +270,16 @@ def get_ma_structure(price, ma5, ma13, ma34, ma200=None) -> str:
     if price is not None and ma200 is not None and price > ma200:
         return "Bullish Messy"
 
-    # Fallback
-    return "Transitional"
+    # ── Fallback for incomplete data: infer based on what's available ──
+    # If bullish alignment but no ma200: assume Strong Uptrend
+    if ma5 is not None and ma13 is not None and ma34 is not None:
+        if price > ma5 > ma13 > ma34:
+            return "Strong Uptrend"
+        if price < ma5 < ma13 < ma34:
+            return "Strong Downtrend"
+
+    # Last resort
+    return "Sideways"
 
 
 # ── Phase × MA Structure Narrative (6 structures × 7 phases = 42 combinations) ──
@@ -336,9 +344,9 @@ _PHASE_NARRATIVE: dict = {
 # ── Gate Condition Overrides ──────────────────────────────────────────────────
 
 _GATE_NARRATIVES = {
-    "Gate A": "⚠️ Gate A — Abnormal Supply: Meskipun fase akumulasi, tekanan jual (Bad Money) hari ini 3× lipat rata-rata. Area ini sangat berisiko.",
-    "Gate B": "⚠️ Gate B — Extreme Panic: Terdeteksi fase SPRING, namun penurunan harga terlalu ekstrim (>1.5× ATR). Risiko ARB tinggi.",
-    "Gate C": "⚠️ Gate C — Profit Taking Zone: Sinyal BUY valid, namun harga naik terlalu tinggi hari ini (>2× ATR). Tunggu koreksi ke area MA5.",
+    "Gate A": "**Abnormal Supply:** Meskipun fase akumulasi, tekanan jual (Bad Money) hari ini 3× lipat rata-rata (baseline: BM SMA10). Area ini sangat berisiko.",
+    "Gate B": "**Extreme Panic:** Terdeteksi fase SPRING, namun penurunan harga terlalu ekstrim (>1.5× ATR). Risiko ARB tinggi.",
+    "Gate C": "**Profit Taking Zone:** Sinyal BUY valid, namun harga naik terlalu tinggi hari ini (>2× ATR). Tunggu koreksi ke area MA5.",
 }
 
 
