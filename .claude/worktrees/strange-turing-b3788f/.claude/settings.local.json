@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir \"C:\\\\Users\\\\rabim\\\\Downloads\\\\my_project\\\\zenith_web\\\\.claude\\\\worktrees\\\\strange-turing-b3788f\")",
+      "Bash(git -C \"C:\\\\Users\\\\rabim\\\\Downloads\\\\my_project\\\\zenith_web\" worktree prune)",
+      "Bash(git -C \"C:\\\\Users\\\\rabim\\\\Downloads\\\\my_project\\\\zenith_web\" worktree add \".claude/worktrees/strange-turing-b3788f\" \"claude/strange-turing-b3788f\")"
+    ]
+  }
+}

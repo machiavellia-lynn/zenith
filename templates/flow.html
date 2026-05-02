@@ -283,6 +283,110 @@ header::before {
   .mm-value { font-size: 11px; }
 }
 
+/* Trade Detail card */
+.trade-detail-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.td-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: .08em; color: var(--accent);
+  text-transform: uppercase;
+}
+.mas-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  padding: 3px 8px; border-radius: 4px;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.mas-badge.strong-uptrend { background: rgba(0,232,162,.18); color: #00e8a2; border: 1px solid rgba(0,232,162,.3); }
+.mas-badge.transitional   { background: rgba(255,140,66,.15); color: #ff8c42; border: 1px solid rgba(255,140,66,.3); }
+.mas-badge.sideways        { background: rgba(160,160,180,.15); color: #aab; border: 1px solid rgba(160,160,180,.3); }
+.mas-badge.downtrend       { background: rgba(255,107,107,.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,.3); }
+.mas-badge.na              { background: rgba(100,100,120,.12); color: var(--muted); border: 1px solid var(--border); }
+/* MA grid */
+.td-ma-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-ma-item { display: flex; flex-direction: column; gap: 1px; }
+.td-ma-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+}
+.td-ma-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700; color: var(--text);
+}
+.td-ma-rel {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; color: var(--muted);
+}
+.td-ma-rel.above { color: var(--up); }
+.td-ma-rel.below { color: var(--down); }
+/* RSI + CM row */
+.td-rsi-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-rsi-item { display: flex; flex-direction: column; gap: 2px; }
+.td-rsi-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+}
+.td-rsi-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 13px; font-weight: 700;
+}
+.td-rsi-val.oversold    { color: var(--up); }
+.td-rsi-val.neutral-rsi { color: var(--text); }
+.td-rsi-val.overbought  { color: var(--down); }
+.td-rsi-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; color: var(--muted);
+}
+/* Narrative */
+.td-narrative {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; color: var(--text); line-height: 1.5;
+}
+/* Gates */
+.td-gates {
+  padding: 9px 14px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.td-gates-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.td-gate {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Space Mono', monospace; font-size: 10px;
+}
+.td-gate-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.td-gate-dot.pass { background: var(--up); }
+.td-gate-dot.fail { background: var(--down); }
+.td-gate-text { color: var(--text); }
+.td-gate-sub  { color: var(--muted); margin-left: 2px; }
+@media (max-width: 640px) {
+  .td-ma-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* Ticker Strategy Fitness card */
 .fitness-card {
   margin: 0;
@@ -1277,6 +1381,71 @@ td:first-child { text-align: left; }
         </div>
       </div>
 
+      <!-- Trade Detail Card (MA Structure, RSI, CM Streak, Narrative, Gates) -->
+      <div class="trade-detail-card" id="tradeDetailCard" style="display:none">
+        <div class="td-header">
+          <span class="td-title">Trade Detail</span>
+          <span class="mas-badge na" id="tdMASBadge">—</span>
+        </div>
+        <!-- MA grid -->
+        <div class="td-ma-grid">
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 5</div>
+            <div class="td-ma-val" id="tdMA5">—</div>
+            <div class="td-ma-rel" id="tdMA5rel"></div>
+          </div>
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 13</div>
+            <div class="td-ma-val" id="tdMA13">—</div>
+            <div class="td-ma-rel" id="tdMA13rel"></div>
+          </div>
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 34</div>
+            <div class="td-ma-val" id="tdMA34">—</div>
+            <div class="td-ma-rel" id="tdMA34rel"></div>
+          </div>
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 200</div>
+            <div class="td-ma-val" id="tdMA200">—</div>
+            <div class="td-ma-rel" id="tdMA200rel"></div>
+          </div>
+        </div>
+        <!-- RSI14 + CM Streak -->
+        <div class="td-rsi-row">
+          <div class="td-rsi-item">
+            <div class="td-rsi-label">RSI 14</div>
+            <div class="td-rsi-val neutral-rsi" id="tdRSI">—</div>
+            <div class="td-rsi-sub" id="tdRSIsub"></div>
+          </div>
+          <div class="td-rsi-item">
+            <div class="td-rsi-label">CM Streak</div>
+            <div class="td-rsi-val neutral-rsi" id="tdCM">—</div>
+            <div class="td-rsi-sub" id="tdCMsub"></div>
+          </div>
+        </div>
+        <!-- Phase Narrative -->
+        <div class="td-narrative" id="tdNarrative" style="display:none"></div>
+        <!-- Gate Conditions -->
+        <div class="td-gates" id="tdGates" style="display:none">
+          <div class="td-gates-label">Action Gates</div>
+          <div class="td-gate" id="tdGateA">
+            <div class="td-gate-dot pass"></div>
+            <span class="td-gate-text">Gate A</span>
+            <span class="td-gate-sub">Supply</span>
+          </div>
+          <div class="td-gate" id="tdGateB">
+            <div class="td-gate-dot pass"></div>
+            <span class="td-gate-text">Gate B</span>
+            <span class="td-gate-sub">ARB Safety</span>
+          </div>
+          <div class="td-gate" id="tdGateC">
+            <div class="td-gate-dot pass"></div>
+            <span class="td-gate-text">Gate C</span>
+            <span class="td-gate-sub">Anti-Pucuk</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Ticker Track Record -->
       <div class="fitness-card" id="fitnessCard" style="display:none">
         <div class="fitness-header">
@@ -1913,9 +2082,10 @@ function openModal(ticker) {
   document.getElementById('ovlBtnSM').classList.toggle('active', ovlShowSM);
   document.getElementById('ovlBtnBM').classList.toggle('active', ovlShowBM);
 
-  // Populate metrics panel from current row data
+  // Populate metrics panel + trade detail from current row data
   const rowData = allRows.find(r => r.ticker === ticker);
   populateMetricsPanel(rowData);
+  populateTradeDetail(rowData);
 
   // Sync trx date pickers from main toolbar
   const mainFrom = document.getElementById('dateFrom').value;
@@ -2048,6 +2218,129 @@ function populateMetricsPanel(r) {
   if (shareBtn) {
     const showShare = r && (r.action === 'BUY' || r.action === 'SELL' || r.action === 'HOLD');
     shareBtn.style.display = showShare ? 'flex' : 'none';
+  }
+}
+
+function populateTradeDetail(r) {
+  const card = document.getElementById('tradeDetailCard');
+  if (!r) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const price = r.price || r.price_close;
+  const fmt   = (v) => v != null ? v.toLocaleString('id-ID', {maximumFractionDigits: 0}) : '—';
+
+  // ── MA Structure badge ──
+  const masBadge = document.getElementById('tdMASBadge');
+  const mas = r.ma_structure || 'N/A';
+  const masClassMap = {
+    'Strong Uptrend': 'strong-uptrend',
+    'Transitional':   'transitional',
+    'Sideways':       'sideways',
+    'Downtrend':      'downtrend',
+  };
+  masBadge.textContent = mas;
+  masBadge.className   = 'mas-badge ' + (masClassMap[mas] || 'na');
+
+  // ── MA values + price relationship ──
+  const maFields = [
+    ['tdMA5', 'tdMA5rel', r.ma5],
+    ['tdMA13', 'tdMA13rel', r.ma13],
+    ['tdMA34', 'tdMA34rel', r.ma34],
+    ['tdMA200', 'tdMA200rel', r.ma200],
+  ];
+  for (const [valId, relId, maVal] of maFields) {
+    const elVal = document.getElementById(valId);
+    const elRel = document.getElementById(relId);
+    if (maVal != null) {
+      elVal.textContent = fmt(maVal);
+      if (price != null) {
+        const diff = ((price - maVal) / maVal * 100);
+        const abv  = diff >= 0;
+        elRel.textContent = (abv ? '↑ +' : '↓ ') + diff.toFixed(1) + '% vs close';
+        elRel.className   = 'td-ma-rel ' + (abv ? 'above' : 'below');
+      } else {
+        elRel.textContent = '';
+        elRel.className   = 'td-ma-rel';
+      }
+    } else {
+      elVal.textContent = '—';
+      elRel.textContent = '';
+      elRel.className   = 'td-ma-rel';
+    }
+  }
+
+  // ── RSI14 ──
+  const elRSI    = document.getElementById('tdRSI');
+  const elRSIsub = document.getElementById('tdRSIsub');
+  if (r.rsi14 != null) {
+    elRSI.textContent = r.rsi14.toFixed(1);
+    if (r.rsi14 < 30)       { elRSI.className = 'td-rsi-val oversold';    elRSIsub.textContent = 'Oversold'; }
+    else if (r.rsi14 < 50)  { elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = 'Bearish zone'; }
+    else if (r.rsi14 < 70)  { elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = 'Bullish zone'; }
+    else                     { elRSI.className = 'td-rsi-val overbought';  elRSIsub.textContent = 'Overbought'; }
+  } else {
+    elRSI.textContent = '—'; elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = '';
+  }
+
+  // ── CM Streak ──
+  const elCM    = document.getElementById('tdCM');
+  const elCMsub = document.getElementById('tdCMsub');
+  if (r.cm_streak != null) {
+    const s = r.cm_streak;
+    elCM.textContent = (s > 0 ? '+' : '') + s + 'd';
+    elCM.className   = 'td-rsi-val ' + (s > 0 ? 'oversold' : s < 0 ? 'overbought' : 'neutral-rsi');
+    elCMsub.textContent = s > 0 ? 'Hari di atas MA5' : s < 0 ? 'Hari di bawah MA5' : 'Di MA5';
+  } else {
+    elCM.textContent = '—'; elCM.className = 'td-rsi-val neutral-rsi'; elCMsub.textContent = '';
+  }
+
+  // ── Phase Narrative ──
+  const elNarr = document.getElementById('tdNarrative');
+  if (r.phase_narrative) {
+    elNarr.textContent  = r.phase_narrative;
+    elNarr.style.display = 'block';
+  } else {
+    elNarr.style.display = 'none';
+  }
+
+  // ── Gate Conditions (derive from data) ──
+  const elGates = document.getElementById('tdGates');
+  if (r.phase && ['SOS','SPRING','ABSORB','ACCUM'].includes(r.phase)) {
+    elGates.style.display = 'flex';
+    const bm_sma10 = r.bm_sma10 || 0;
+    const bm_val   = r.bm_val   || 0;
+    const atr      = r.atr_pct  || 2.5;
+    const pchg     = r.price_change;
+
+    // Gate A: Supply — bm_val > bm_sma10 × 3
+    const gateA_fail = bm_sma10 > 0 && bm_val > bm_sma10 * 3.0;
+    const elGA = document.getElementById('tdGateA');
+    elGA.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateA_fail ? 'fail' : 'pass');
+    elGA.querySelector('.td-gate-text').textContent = 'Gate A';
+    elGA.querySelector('.td-gate-sub').textContent  = gateA_fail
+      ? `Fail — BM ${bm_val.toFixed(0)}M > ${(bm_sma10*3).toFixed(0)}M (3× avg)`
+      : `Pass — Supply normal`;
+
+    // Gate B: ARB Safety — watch == ARB_SPRING
+    const gateB_fail = r.watch === 'ARB_SPRING';
+    const elGB = document.getElementById('tdGateB');
+    elGB.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateB_fail ? 'fail' : 'pass');
+    elGB.querySelector('.td-gate-text').textContent = 'Gate B';
+    elGB.querySelector('.td-gate-sub').textContent  = gateB_fail
+      ? 'Fail — ARB Spring (penurunan > 1.5× ATR)'
+      : 'Pass — Tidak ada ARB';
+
+    // Gate C: Anti-Pucuk — pchg >= max(atr×2, 5)
+    const th_c = Math.max(atr * 2.0, 5.0);
+    const gateC_fail = pchg != null && pchg >= th_c;
+    const elGC = document.getElementById('tdGateC');
+    elGC.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateC_fail ? 'fail' : 'pass');
+    elGC.querySelector('.td-gate-text').textContent = 'Gate C';
+    elGC.querySelector('.td-gate-sub').textContent  = gateC_fail
+      ? `Fail — Pchg ${pchg != null ? pchg.toFixed(1) : '?'}% ≥ threshold ${th_c.toFixed(1)}%`
+      : `Pass — Harga belum overextended`;
+  } else {
+    elGates.style.display = 'none';
   }
 }
 

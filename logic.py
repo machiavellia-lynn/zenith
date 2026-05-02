@@ -144,3 +144,115 @@ def get_watch_flag(phase: str, pchg, atr_pct=None):
     if phase == "SPRING" and pchg is not None and pchg < -(atr * 1.5):
         return "ARB_SPRING"
     return None
+
+
+# ── Technical Indicator Helpers (pure, no DB) ────────────────────────────────
+
+def compute_ma(closes: list, period: int):
+    """Simple Moving Average. closes = chronological list (oldest first)."""
+    if len(closes) < period:
+        return None
+    return round(sum(closes[-period:]) / period, 2)
+
+
+def compute_rsi14(closes: list):
+    """Wilder RSI-14. closes = chronological (oldest first), needs ≥ 15 values."""
+    if len(closes) < 15:
+        return None
+    relevant = closes[-15:]
+    diffs = [relevant[i] - relevant[i - 1] for i in range(1, 15)]
+    gains  = [max(d, 0)   for d in diffs]
+    losses = [abs(min(d, 0)) for d in diffs]
+    avg_gain = sum(gains)  / 14
+    avg_loss = sum(losses) / 14
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return round(100 - 100 / (1 + rs), 1)
+
+
+def compute_cm_streak(closes: list, ma5):
+    """Consecutive Momentum: days close above (+N) or below (-N) MA5.
+    Returns None if insufficient data."""
+    if ma5 is None or not closes:
+        return None
+    above = closes[-1] > ma5
+    streak = 0
+    for c in reversed(closes):
+        if (c > ma5) == above:
+            streak += 1
+        else:
+            break
+    return streak if above else -streak
+
+
+# ── MA Structure Classifier ───────────────────────────────────────────────────
+
+def get_ma_structure(price, ma5, ma13, ma34, ma200=None) -> str:
+    """
+    Classify MA alignment.
+    Strong Uptrend : price > ma5 > ma13 > ma34
+    Downtrend      : price < ma5 < ma13 < ma34
+    Sideways       : ma5/13/34 within 2.5% spread
+    Transitional   : everything else (mixed / converging)
+    """
+    if price is None:
+        return "N/A"
+    if ma5 is None and ma13 is None:
+        return "N/A"
+
+    if ma5 is not None and ma13 is not None and ma34 is not None:
+        if price > ma5 > ma13 > ma34:
+            return "Strong Uptrend"
+        if price < ma5 < ma13 < ma34:
+            return "Downtrend"
+        spread_pct = (max(ma5, ma13, ma34) - min(ma5, ma13, ma34)) / max(ma5, ma13, ma34) * 100
+        if spread_pct < 2.5:
+            return "Sideways"
+        return "Transitional"
+
+    if ma5 is not None and ma13 is not None:
+        if price > ma5 > ma13:
+            return "Strong Uptrend"
+        if price < ma5 < ma13:
+            return "Downtrend"
+    return "Transitional"
+
+
+# ── Phase × MA Structure Narrative ───────────────────────────────────────────
+
+_PHASE_NARRATIVE: dict = {
+    ("SOS",      "Strong Uptrend"):  "Momentum kuat — SM mendorong dengan konfirmasi MA penuh. Probabilitas kelanjutan naik tinggi.",
+    ("SOS",      "Transitional"):    "SM agresif saat MA belum stack — watchlist konfirmasi golden cross atau MA13 > MA34.",
+    ("SOS",      "Sideways"):        "Breakout potensial dari konsolidasi — SM menekan harga keluar range. Konfirmasi volume kunci.",
+    ("SOS",      "Downtrend"):       "Counter-trend rally — SM melawan tren utama. Manajemen risiko ketat, ukuran posisi kecil.",
+    ("SPRING",   "Strong Uptrend"):  "Pullback sehat dalam uptrend — entry ideal sebelum kelanjutan naik. Risk/reward optimal.",
+    ("SPRING",   "Transitional"):    "SM akumulasi saat koreksi — tunggu konfirmasi bounce dari support MA13 atau MA34.",
+    ("SPRING",   "Sideways"):        "SM masuk di batas bawah range — potensi reversal dari support konsolidasi.",
+    ("SPRING",   "Downtrend"):       "SPRING dalam downtrend — SM melawan tekanan jual besar. Butuh konfirmasi volume kuat dan MA reversal.",
+    ("ABSORB",   "Strong Uptrend"):  "SM akumulasi diam-diam dalam uptrend — persiapan sebelum push berikutnya.",
+    ("ABSORB",   "Transitional"):    "Akumulasi tersembunyi saat MA konvergen — potensi breakout jika MA stack mulai terbentuk.",
+    ("ABSORB",   "Sideways"):        "SM terakumulasi di zona konsolidasi — tunggu breakout dari range dengan volume konfirmasi.",
+    ("ABSORB",   "Downtrend"):       "SM menyerap tekanan jual dalam downtrend — potensi reversal, tapi butuh konfirmasi MA turn.",
+    ("ACCUM",    "Strong Uptrend"):  "Akumulasi bertahap dalam tren kuat — SM support harga di setiap koreksi kecil.",
+    ("ACCUM",    "Transitional"):    "SM bertahap mengakumulasi saat MA belum aligned — risiko moderat, monitor perkembangan MA.",
+    ("ACCUM",    "Sideways"):        "Akumulasi bertahap di zona sideways — potensi breakout ke atas jika volume meningkat.",
+    ("ACCUM",    "Downtrend"):       "Akumulasi dalam downtrend — too early. Tunggu konfirmasi MA reversal sebelum masuk.",
+    ("UPTHRUST", "Strong Uptrend"):  "Jebakan naik meski uptrend — distribusi di resistance atas. Waspadai reversal mendadak.",
+    ("UPTHRUST", "Transitional"):    "Upthrust di MA konvergen — false breakout klasik. BM dominasi di harga tinggi, hindari.",
+    ("UPTHRUST", "Sideways"):        "Upthrust di batas atas range — distribusi klasik. Target penurunan ke support bawah range.",
+    ("UPTHRUST", "Downtrend"):       "Jebakan naik dalam downtrend — distribusi agresif. Hindari atau pertimbangkan short.",
+    ("DISTRI",   "Strong Uptrend"):  "Distribusi meski MA bullish — SM jual ke retail yang masih optimis. Waspadai reversal cepat.",
+    ("DISTRI",   "Transitional"):    "Distribusi aktif saat MA belum confirmed — momentum jual mendahului penurunan MA.",
+    ("DISTRI",   "Sideways"):        "Distribusi di zona sideways — BM jual ke support. Potensi breakdown dari bawah range.",
+    ("DISTRI",   "Downtrend"):       "Distribusi dalam downtrend — konfirmasi bearish penuh. Hindari posisi baru.",
+    ("NEUTRAL",  "Strong Uptrend"):  "Sinyal lemah dalam uptrend — SM tidak aktif hari ini. Hold dan pantau apakah SM kembali.",
+    ("NEUTRAL",  "Transitional"):    "Tidak ada sinyal jelas dan MA belum aligned — tunggu sinyal yang lebih kuat.",
+    ("NEUTRAL",  "Sideways"):        "Konsolidasi tanpa SM aktif — tunggu breakout dari range dengan SM participation.",
+    ("NEUTRAL",  "Downtrend"):       "Tidak ada SM aktif dalam downtrend — hindari posisi baru, pantau dari jarak aman.",
+}
+
+
+def get_phase_narrative(phase: str, ma_structure: str) -> str:
+    """Return Phase × MA Structure narrative."""
+    return _PHASE_NARRATIVE.get((phase, ma_structure), f"Phase {phase} dalam {ma_structure}.")

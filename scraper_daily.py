@@ -534,15 +534,27 @@ def ensure_summary_table(conn):
             sm_sma10         REAL,
             bm_sma10         REAL,
             watch            TEXT,
+            ma5              REAL,
+            ma13             REAL,
+            ma34             REAL,
+            ma200            REAL,
+            rsi14            REAL,
+            cm_streak        INTEGER,
             UNIQUE(date, ticker)
         )
     """)
 
-    # Safely add v4 columns if upgrading from older schema
+    # Safely add columns for existing databases (v4 → v5 upgrade)
     for col, typedef in [
-        ("sm_sma10", "REAL"),
-        ("bm_sma10", "REAL"),
-        ("watch",    "TEXT"),
+        ("sm_sma10",  "REAL"),
+        ("bm_sma10",  "REAL"),
+        ("watch",     "TEXT"),
+        ("ma5",       "REAL"),
+        ("ma13",      "REAL"),
+        ("ma34",      "REAL"),
+        ("ma200",     "REAL"),
+        ("rsi14",     "REAL"),
+        ("cm_streak", "INTEGER"),
     ]:
         try:
             conn.execute(f"ALTER TABLE eod_summary ADD COLUMN {col} {typedef}")
@@ -800,6 +812,53 @@ def backfill_prices(conn, days: int = 30, date_from: str = None, date_to: str = 
                 updated += 1
     conn.commit()
     log.info(f"✅ PRICE BACKFILL done: {updated} cells updated for {len(ticker_list)} tickers")
+
+
+def backfill_price_history_200d(conn):
+    """One-time 200-day price_history backfill for MA200 computation.
+
+    Chunked in batches of 100 tickers with max_workers=3 to stay under Yahoo rate limits.
+    Fetches ~300 calendar days back (≈ 200+ trading days).
+    Only writes to price_history — does NOT touch eod_summary.price_close.
+    """
+    CHUNK   = 100
+    WORKERS = 3
+    CAL_DAYS = 300   # calendar days ≈ 200+ trading days
+
+    now     = datetime.now(WIB)
+    dt_from = now - timedelta(days=CAL_DAYS)
+
+    rows = conn.execute("SELECT DISTINCT ticker FROM eod_summary").fetchall()
+    ticker_list = [r["ticker"] for r in rows]
+    if not ticker_list:
+        log.info("⚠️ BACKFILL 200D: no tickers found in eod_summary")
+        return 0
+
+    log.info(f"🔄 BACKFILL 200D: {len(ticker_list)} tickers × {CAL_DAYS} calendar days (workers={WORKERS})")
+    total_rows = 0
+
+    for i in range(0, len(ticker_list), CHUNK):
+        batch = ticker_list[i:i + CHUNK]
+        chunk_no = i // CHUNK + 1
+        total_chunks = (len(ticker_list) - 1) // CHUNK + 1
+        log.info(f"  Chunk {chunk_no}/{total_chunks} ({len(batch)} tickers)...")
+
+        with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+            results = list(ex.map(lambda t: _fetch_close_history(t, dt_from, now), batch))
+
+        for tk, prices in results:
+            for date_str, close in prices.items():
+                if close:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO price_history(date, ticker, close) VALUES(?,?,?)",
+                        [date_str, tk, close]
+                    )
+                    total_rows += 1
+        conn.commit()
+        log.info(f"  ... {min(i + CHUNK, len(ticker_list))}/{len(ticker_list)} tickers done")
+
+    log.info(f"✅ BACKFILL 200D: {total_rows} price_history rows upserted")
+    return total_rows
     return updated
 
 
@@ -980,7 +1039,10 @@ def check_stop_loss(conn, date_str: str, threshold_pct: float = -10.0):
     return closed
 
 # Import centralised logic — single source of truth
-from logic import classify_zenith_v3_1, get_action, get_watch_flag
+from logic import (
+    classify_zenith_v3_1, get_action, get_watch_flag,
+    compute_ma, compute_rsi14, compute_cm_streak,
+)
 
 
 def compute_analytics_for_date(conn, date_str: str):
@@ -1046,19 +1108,19 @@ def compute_analytics_for_date(conn, date_str: str):
         ttx = tx_sm + tx_bm
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
-        # ── Price change % + ATR — from price_history (Yahoo, all trading days) ──
-        # eod_summary only has rows for days with Telegram signals, so hist[1] can jump
-        # weeks back when adjacent dates have no signals (e.g. 26-Jan has no signal →
-        # 28-Jan pchg calculates vs Dec close → bagger anomaly). price_history has
-        # every trading day regardless of signals, so prev is always the actual prior close.
-        ph_cutoff = (datetime.strptime(date_str, "%d-%m-%Y") - timedelta(days=20)).strftime("%Y%m%d")
+        # ── Price history: fetch up to 220 rows for MA200 + RSI14 + ATR + pchg ──
+        # Upper bound = date_str so historical recomputation doesn't peek at future data.
+        # No lower bound cutoff — price_history is a clean series unlike eod_summary.
+        date_sort_key = date_str[6:10] + date_str[3:5] + date_str[0:2]
         ph_rows = conn.execute(f"""
             SELECT date, close FROM price_history
-            WHERE ticker = ? AND {_DATE_SORT} >= ?
-            ORDER BY {_DATE_SORT} DESC LIMIT 14
-        """, [tk, ph_cutoff]).fetchall()
+            WHERE ticker = ? AND {_DATE_SORT} <= ?
+            ORDER BY {_DATE_SORT} DESC LIMIT 220
+        """, [tk, date_sort_key]).fetchall()
 
-        ph_closes = [h["close"] for h in ph_rows if h["close"]]
+        # ph_closes_all: most-recent-first (DESC). ph_closes: first 14 for pchg/ATR.
+        ph_closes_all = [h["close"] for h in ph_rows if h["close"]]
+        ph_closes = ph_closes_all[:14]
 
         pchg = None
         # Today must appear in price_history (market was open). If absent → holiday/halt → pchg None.
@@ -1084,7 +1146,7 @@ def compute_analytics_for_date(conn, date_str: str):
                     if days_gap <= 7:
                         pchg = round((pc - prev_price2) / prev_price2 * 100, 2)
 
-        prices = ph_closes  # for ATR calc
+        prices = ph_closes  # for ATR calc (14-day window)
 
         # ── ATR% ──
         atr_pct = None
@@ -1096,6 +1158,16 @@ def compute_analytics_for_date(conn, date_str: str):
             ]
             if daily_changes:
                 atr_pct = round(sum(daily_changes) / len(daily_changes), 2)
+
+        # ── MA5 / MA13 / MA34 / MA200 / RSI14 / CM Streak — from price_history ──
+        # closes_chrono: chronological order (oldest first) for MA/RSI computation
+        closes_chrono = list(reversed(ph_closes_all))
+        ma5       = compute_ma(closes_chrono, 5)
+        ma13      = compute_ma(closes_chrono, 13)
+        ma34      = compute_ma(closes_chrono, 34)
+        ma200     = compute_ma(closes_chrono, 200)
+        rsi14     = compute_rsi14(closes_chrono)
+        cm_streak = compute_cm_streak(closes_chrono, ma5)
 
         # ── MES ──
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
@@ -1116,11 +1188,11 @@ def compute_analytics_for_date(conn, date_str: str):
             UPDATE eod_summary
             SET price_change_pct=?, sri=?, mes=?, volx_gap=?, rpr=?,
                 atr_pct=?, sm_sma10=?, bm_sma10=?, phase=?, action=?,
-                watch=?
+                watch=?, ma5=?, ma13=?, ma34=?, ma200=?, rsi14=?, cm_streak=?
             WHERE date=? AND ticker=?
         """, [pchg, sri, mes, vg, rpr,
               atr_pct, sm_sma10, bm_sma10, phase, action,
-              watch,
+              watch, ma5, ma13, ma34, ma200, rsi14, cm_streak,
               date_str, tk])
 
         # ── Auto-populate trade_journal ──
