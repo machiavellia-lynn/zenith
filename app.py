@@ -2493,5 +2493,81 @@ def backup_db():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+# ── API: Trade Detail (for Trade Detail card display) ──────────────────────────
+@app.route("/api/trade-detail/<ticker>/<date_str>")
+def get_trade_detail(ticker: str, date_str: str):
+    """
+    Fetch Trade Detail narrative and metrics for a specific ticker on a date.
+
+    Returns:
+    {
+        "ok": true,
+        "ticker": "MINA",
+        "date": "01-05-2025",
+        "price_close": 3150,
+        "price_change_pct": 2.5,
+        "phase": "SOS",
+        "ma_structure": "Strong Uptrend",
+        "ma_values": {
+            "ma5": 3080,
+            "ma13": 2950,
+            "ma34": 2810,
+            "ma200": 2600
+        },
+        "rsi14": 64,
+        "cm_streak": 12,
+        "sm_metrics": {
+            "sm_sma10": 5820000,
+            "bm_sma10": 1030000,
+            "sm_val": 6500000,
+            "bm_val": 800000
+        },
+        "narrative": "Strongest Momentum: Smart Money sangat agresif melakukan markup..."
+    }
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("""
+            SELECT
+                date, ticker, price_close, price_change_pct, phase,
+                ma_structure, ma5, ma13, ma34, ma200, rsi14, cm_streak,
+                sm_sma10, bm_sma10, sm_val, bm_val, narrative
+            FROM eod_summary
+            WHERE ticker = ? AND date = ?
+        """, [ticker.upper(), date_str]).fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"ok": False, "error": f"Trade detail tidak ditemukan untuk {ticker} pada {date_str}"}), 404
+
+        return jsonify({
+            "ok": True,
+            "ticker": row["ticker"],
+            "date": row["date"],
+            "price_close": row["price_close"],
+            "price_change_pct": row["price_change_pct"],
+            "phase": row["phase"],
+            "ma_structure": row["ma_structure"],
+            "ma_values": {
+                "ma5": row["ma5"],
+                "ma13": row["ma13"],
+                "ma34": row["ma34"],
+                "ma200": row["ma200"],
+            },
+            "rsi14": row["rsi14"],
+            "cm_streak": row["cm_streak"],
+            "sm_metrics": {
+                "sm_sma10": row["sm_sma10"],
+                "bm_sma10": row["bm_sma10"],
+                "sm_val": row["sm_val"],
+                "bm_val": row["bm_val"],
+            },
+            "narrative": row["narrative"],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
