@@ -534,15 +534,33 @@ def ensure_summary_table(conn):
             sm_sma10         REAL,
             bm_sma10         REAL,
             watch            TEXT,
+            ma5              REAL,
+            ma13             REAL,
+            ma34             REAL,
+            ma200            REAL,
+            rsi14            REAL,
+            cm_streak        INTEGER,
+            ma_structure     TEXT,
+            trade_gate       TEXT,
+            narrative        TEXT,
             UNIQUE(date, ticker)
         )
     """)
 
-    # Safely add v4 columns if upgrading from older schema
+    # Safely add columns for existing databases (v4 → v6 upgrade)
     for col, typedef in [
-        ("sm_sma10", "REAL"),
-        ("bm_sma10", "REAL"),
-        ("watch",    "TEXT"),
+        ("sm_sma10",    "REAL"),
+        ("bm_sma10",    "REAL"),
+        ("watch",       "TEXT"),
+        ("ma5",         "REAL"),
+        ("ma13",        "REAL"),
+        ("ma34",        "REAL"),
+        ("ma200",       "REAL"),
+        ("rsi14",       "REAL"),
+        ("cm_streak",   "INTEGER"),
+        ("ma_structure", "TEXT"),
+        ("trade_gate",   "TEXT"),
+        ("narrative",    "TEXT"),
     ]:
         try:
             conn.execute(f"ALTER TABLE eod_summary ADD COLUMN {col} {typedef}")
@@ -551,6 +569,17 @@ def ensure_summary_table(conn):
 
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_date ON eod_summary(date)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_eod_ticker ON eod_summary(ticker, date)")
+
+    # price_history: Yahoo close for ALL trading days — not limited to signal dates
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS price_history (
+            date   TEXT NOT NULL,
+            ticker TEXT NOT NULL,
+            close  REAL NOT NULL,
+            PRIMARY KEY (date, ticker)
+        )
+    """)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_ph_ticker ON price_history(ticker, date)")
     conn.commit()
     ensure_trade_journal_table(conn)
 
@@ -773,7 +802,15 @@ def backfill_prices(conn, days: int = 30, date_from: str = None, date_to: str = 
     updated = 0
     for tk, prices in results:
         for date_str, close in prices.items():
-            if date_str in valid_dates and close:
+            if not close:
+                continue
+            # price_history stores ALL trading days from Yahoo (no eod_summary row needed)
+            conn.execute(
+                "INSERT OR REPLACE INTO price_history(date, ticker, close) VALUES(?,?,?)",
+                [date_str, tk, close]
+            )
+            # eod_summary: only update rows that exist (dates with Telegram signals)
+            if date_str in valid_dates:
                 conn.execute(
                     "UPDATE eod_summary SET price_close=? WHERE date=? AND ticker=?",
                     [close, date_str, tk]
@@ -781,6 +818,53 @@ def backfill_prices(conn, days: int = 30, date_from: str = None, date_to: str = 
                 updated += 1
     conn.commit()
     log.info(f"✅ PRICE BACKFILL done: {updated} cells updated for {len(ticker_list)} tickers")
+
+
+def backfill_price_history_200d(conn):
+    """One-time 200-day price_history backfill for MA200 computation.
+
+    Chunked in batches of 100 tickers with max_workers=3 to stay under Yahoo rate limits.
+    Fetches ~300 calendar days back (≈ 200+ trading days).
+    Only writes to price_history — does NOT touch eod_summary.price_close.
+    """
+    CHUNK   = 100
+    WORKERS = 3
+    CAL_DAYS = 300   # calendar days ≈ 200+ trading days
+
+    now     = datetime.now(WIB)
+    dt_from = now - timedelta(days=CAL_DAYS)
+
+    rows = conn.execute("SELECT DISTINCT ticker FROM eod_summary").fetchall()
+    ticker_list = [r["ticker"] for r in rows]
+    if not ticker_list:
+        log.info("⚠️ BACKFILL 200D: no tickers found in eod_summary")
+        return 0
+
+    log.info(f"🔄 BACKFILL 200D: {len(ticker_list)} tickers × {CAL_DAYS} calendar days (workers={WORKERS})")
+    total_rows = 0
+
+    for i in range(0, len(ticker_list), CHUNK):
+        batch = ticker_list[i:i + CHUNK]
+        chunk_no = i // CHUNK + 1
+        total_chunks = (len(ticker_list) - 1) // CHUNK + 1
+        log.info(f"  Chunk {chunk_no}/{total_chunks} ({len(batch)} tickers)...")
+
+        with ThreadPoolExecutor(max_workers=WORKERS) as ex:
+            results = list(ex.map(lambda t: _fetch_close_history(t, dt_from, now), batch))
+
+        for tk, prices in results:
+            for date_str, close in prices.items():
+                if close:
+                    conn.execute(
+                        "INSERT OR REPLACE INTO price_history(date, ticker, close) VALUES(?,?,?)",
+                        [date_str, tk, close]
+                    )
+                    total_rows += 1
+        conn.commit()
+        log.info(f"  ... {min(i + CHUNK, len(ticker_list))}/{len(ticker_list)} tickers done")
+
+    log.info(f"✅ BACKFILL 200D: {total_rows} price_history rows upserted")
+    return total_rows
     return updated
 
 
@@ -961,7 +1045,11 @@ def check_stop_loss(conn, date_str: str, threshold_pct: float = -10.0):
     return closed
 
 # Import centralised logic — single source of truth
-from logic import classify_zenith_v3_1, get_action, get_watch_flag
+from logic import (
+    classify_zenith_v3_1, get_action, get_watch_flag,
+    compute_ma, compute_rsi14, compute_cm_streak,
+    get_ma_structure, detect_trade_detail_gate, get_phase_narrative,
+)
 
 
 def compute_analytics_for_date(conn, date_str: str):
@@ -1002,9 +1090,9 @@ def compute_analytics_for_date(conn, date_str: str):
         if not pc and rp.get("price"):
             pc = rp["price"]
 
-        # History query with dry-spell cutoff (~20 trading days)
+        # History query: SM/BM rolling averages (only signal dates, no price needed)
         hist = conn.execute(f"""
-            SELECT sm_val, bm_val, price_close FROM eod_summary
+            SELECT sm_val, bm_val FROM eod_summary
             WHERE ticker = ?
               AND {_DATE_SORT} >= substr(?,7,4)||substr(?,4,2)||substr(?,1,2)
             ORDER BY {_DATE_SORT} DESC LIMIT 14
@@ -1027,13 +1115,45 @@ def compute_analytics_for_date(conn, date_str: str):
         ttx = tx_sm + tx_bm
         rpr = round(tx_bm / ttx, 2) if ttx > 0 else 0
 
-        # ── Price change % ──
-        prices = [h["price_close"] for h in hist if h["price_close"]]
+        # ── Price history: fetch up to 220 rows for MA200 + RSI14 + ATR + pchg ──
+        # Upper bound = date_str so historical recomputation doesn't peek at future data.
+        # No lower bound cutoff — price_history is a clean series unlike eod_summary.
+        date_sort_key = date_str[6:10] + date_str[3:5] + date_str[0:2]
+        ph_rows = conn.execute(f"""
+            SELECT date, close FROM price_history
+            WHERE ticker = ? AND {_DATE_SORT} <= ?
+            ORDER BY {_DATE_SORT} DESC LIMIT 220
+        """, [tk, date_sort_key]).fetchall()
+
+        # ph_closes_all: most-recent-first (DESC). ph_closes: first 14 for pchg/ATR.
+        ph_closes_all = [h["close"] for h in ph_rows if h["close"]]
+        ph_closes = ph_closes_all[:14]
+
         pchg = None
-        if pc and len(prices) >= 2 and prices[1] and prices[1] > 0:
-            pchg = round((pc - prices[1]) / prices[1] * 100, 2)
-        if pchg is None and rp.get("gain") is not None:
-            pchg = round(rp["gain"], 2)
+        # Today must appear in price_history (market was open). If absent → holiday/halt → pchg None.
+        if ph_rows and ph_rows[0]["date"] == date_str and len(ph_rows) >= 2:
+            today_ph_close = ph_rows[0]["close"]
+            prev_ph_close  = ph_rows[1]["close"]
+            if today_ph_close and prev_ph_close and prev_ph_close > 0:
+                pchg = round((today_ph_close - prev_ph_close) / prev_ph_close * 100, 2)
+                if not pc:
+                    pc = today_ph_close  # backfill pc from price_history if eod row missing
+
+        # Fallback: price_history not yet populated — use eod_summary hist with gap guard
+        if pchg is None and not ph_rows:
+            hist_prices = [(h["date"], h["price_close"]) for h in hist if h["price_close"]]
+            ph_closes = [p for _, p in hist_prices]
+            if pc and len(hist_prices) >= 2:
+                prev_date_str2, prev_price2 = hist_prices[1]
+                if prev_price2 and prev_price2 > 0:
+                    days_gap = (
+                        datetime.strptime(date_str, "%d-%m-%Y")
+                        - datetime.strptime(prev_date_str2, "%d-%m-%Y")
+                    ).days
+                    if days_gap <= 7:
+                        pchg = round((pc - prev_price2) / prev_price2 * 100, 2)
+
+        prices = ph_closes  # for ATR calc (14-day window)
 
         # ── ATR% ──
         atr_pct = None
@@ -1045,6 +1165,16 @@ def compute_analytics_for_date(conn, date_str: str):
             ]
             if daily_changes:
                 atr_pct = round(sum(daily_changes) / len(daily_changes), 2)
+
+        # ── MA5 / MA13 / MA34 / MA200 / RSI14 / CM Streak — from price_history ──
+        # closes_chrono: chronological order (oldest first) for MA/RSI computation
+        closes_chrono = list(reversed(ph_closes_all))
+        ma5       = compute_ma(closes_chrono, 5)
+        ma13      = compute_ma(closes_chrono, 13)
+        ma34      = compute_ma(closes_chrono, 34)
+        ma200     = compute_ma(closes_chrono, 200)
+        rsi14     = compute_rsi14(closes_chrono)
+        cm_streak = compute_cm_streak(closes_chrono, ma5)
 
         # ── MES ──
         mes = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
@@ -1061,15 +1191,22 @@ def compute_analytics_for_date(conn, date_str: str):
         watch  = get_watch_flag(phase, pchg, atr_pct)
         action = get_action(phase, pchg, atr_pct, bm_val=bm, bm_sma10=bm_sma10, watch_flag=watch)
 
+        # ── Trade Detail: MA Structure, Gate, Narrative ──
+        ma_struct = get_ma_structure(pc, ma5, ma13, ma34, ma200)
+        trade_gate = detect_trade_detail_gate(phase, pchg, bm, bm_sma10, atr_pct, action)
+        narrative = get_phase_narrative(phase, ma_struct, trade_gate)
+
         conn.execute("""
             UPDATE eod_summary
             SET price_change_pct=?, sri=?, mes=?, volx_gap=?, rpr=?,
                 atr_pct=?, sm_sma10=?, bm_sma10=?, phase=?, action=?,
-                watch=?
+                watch=?, ma5=?, ma13=?, ma34=?, ma200=?, rsi14=?, cm_streak=?,
+                ma_structure=?, trade_gate=?, narrative=?
             WHERE date=? AND ticker=?
         """, [pchg, sri, mes, vg, rpr,
               atr_pct, sm_sma10, bm_sma10, phase, action,
-              watch,
+              watch, ma5, ma13, ma34, ma200, rsi14, cm_streak,
+              ma_struct, trade_gate, narrative,
               date_str, tk])
 
         # ── Auto-populate trade_journal ──

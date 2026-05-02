@@ -391,7 +391,8 @@ def flow():
             latest_date = latest_date_row["date"]
             a_rows = conn.execute("""
                 SELECT ticker, price_close, sri, volx_gap, vwap_sm, vwap_bm,
-                       atr_pct, sm_sma10, bm_sma10, watch, price_change_pct
+                       atr_pct, sm_sma10, bm_sma10, watch, price_change_pct,
+                       ma5, ma13, ma34, ma200, rsi14, cm_streak
                 FROM eod_summary WHERE date = ?
             """, [latest_date]).fetchall()
             for ar in a_rows:
@@ -534,44 +535,69 @@ def flow():
         pchg = gain
         mes  = round(abs(pchg) / sri, 2) if pchg is not None and sri > 0 else None
 
+        # ── MA indicators from latest analytics ──
+        ma5_v       = a.get("ma5")
+        ma13_v      = a.get("ma13")
+        ma34_v      = a.get("ma34")
+        ma200_v     = a.get("ma200")
+        rsi14_v     = a.get("rsi14")
+        cm_streak_v = a.get("cm_streak")
+
         # ── Phase / Action / Watch / SL via centralised logic ──
         phase        = "NEUTRAL"
         action       = "HOLD"
         watch        = None
 
         if rsm is not None and cm is not None:
-            from logic import classify_zenith_v3_1, get_action, get_watch_flag
+            from logic import classify_zenith_v3_1, get_action, get_watch_flag, get_ma_structure, get_phase_narrative, detect_trade_detail_gate
             bm_raw = d.get("bm_val") or 0
             phase  = classify_zenith_v3_1(sri, rsm, rpr_val, gain, bm_raw, bm_sma10, atr_pct)
             watch  = get_watch_flag(phase, gain, atr_pct)
             action = get_action(phase, gain, atr_pct, bm_val=bm_raw, bm_sma10=bm_sma10, watch_flag=watch)
             if watch is None and a.get("watch"):
                 watch = a.get("watch")
+        else:
+            from logic import get_ma_structure, get_phase_narrative, detect_trade_detail_gate
+            bm_raw = d.get("bm_val") or 0
+
+        price_now    = g.get("price") or a.get("price_close")
+        ma_structure = get_ma_structure(price_now, ma5_v, ma13_v, ma34_v, ma200_v)
+        trade_gate   = detect_trade_detail_gate(phase, gain, bm_raw, bm_sma10, atr_pct, action)
+        narrative    = get_phase_narrative(phase, ma_structure, trade_gate)
 
         tickers.append({
-            "ticker":       t,
-            "clean_money":  cm,
-            "sm_val":       sm,
-            "bm_val":       bm,
-            "rsm":          rsm,
-            "mf_plus":      mfp,
-            "mf_minus":     mfm,
-            "net_mf":       net,
-            "gain_pct":     gain,
-            "price":        g.get("price") or a.get("price_close"),
-            "tx":           int(d.get("tx") or 0),
-            "phase":        phase,
-            "action":       action,
-            "watch":        watch,
-            "sri":          sri if sri else None,
-            "mes":          mes,
-            "volx_gap":     volx_gap,
-            "rpr":          rpr_val if rpr_val else None,
-            "price_change": pchg,
-            "atr_pct":      atr_pct,
-            "sm_sma10":     round(sm_sma10, 2) if sm_sma10 else None,
-            "vwap_sm":      round(vwap_sm, 2) if vwap_sm else None,
-            "vwap_bm":      round(vwap_bm, 2) if vwap_bm else None,
+            "ticker":            t,
+            "clean_money":       cm,
+            "sm_val":            sm,
+            "bm_val":            bm,
+            "rsm":               rsm,
+            "mf_plus":           mfp,
+            "mf_minus":          mfm,
+            "net_mf":            net,
+            "gain_pct":          gain,
+            "price":             price_now,
+            "tx":                int(d.get("tx") or 0),
+            "phase":             phase,
+            "action":            action,
+            "watch":             watch,
+            "sri":               sri if sri else None,
+            "mes":               mes,
+            "volx_gap":          volx_gap,
+            "rpr":               rpr_val if rpr_val else None,
+            "price_change":      pchg,
+            "atr_pct":           atr_pct,
+            "sm_sma10":          round(sm_sma10, 2) if sm_sma10 else None,
+            "vwap_sm":           round(vwap_sm, 2) if vwap_sm else None,
+            "vwap_bm":           round(vwap_bm, 2) if vwap_bm else None,
+            "ma5":               round(ma5_v,   2) if ma5_v   is not None else None,
+            "ma13":              round(ma13_v,  2) if ma13_v  is not None else None,
+            "ma34":              round(ma34_v,  2) if ma34_v  is not None else None,
+            "ma200":             round(ma200_v, 2) if ma200_v is not None else None,
+            "rsi14":             round(rsi14_v, 1) if rsi14_v is not None else None,
+            "cm_streak":         int(cm_streak_v) if cm_streak_v is not None else None,
+            "ma_structure":      ma_structure,
+            "narrative":         narrative,
+            "bm_sma10":          round(bm_sma10, 2) if bm_sma10 else None,
         })
 
     # Sort default: clean_money desc (nulls last)
@@ -1645,6 +1671,83 @@ def admin_backfill_prices():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+@app.route("/admin/backfill-200d")
+def admin_backfill_200d():
+    """One-time 200-day price_history backfill for MA200 computation.
+
+    Fetches ~300 calendar days of Yahoo close into price_history.
+    Chunked 100 tickers × max_workers=3 to respect Yahoo rate limits.
+
+    Does NOT recompute analytics — call /admin/recompute-analytics separately
+    to avoid Gunicorn worker timeout (analytics recompute takes several minutes).
+
+    Usage: ?secret=<UPLOAD_SECRET>
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    try:
+        from scraper_daily import backfill_price_history_200d, get_scraper_db
+        conn = get_scraper_db()
+        conn.execute("PRAGMA busy_timeout=120000")
+        ph_rows = backfill_price_history_200d(conn)
+        conn.close()
+        return jsonify({
+            "ok": True,
+            "price_history_rows": ph_rows,
+            "next_step": "Call /admin/recompute-analytics?date_from=DD-MM-YYYY to populate MA columns",
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
+@app.route("/admin/recompute-analytics")
+def admin_recompute_analytics():
+    """Recompute analytics (gain%, phase, action) for date range after price_close filled.
+
+    Fixes anomalies from execution order bug (PR #52).
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return "❌ Secret salah", 403
+
+    date_from = request.args.get("date_from", "").strip()
+    date_to   = request.args.get("date_to",   "").strip() or None
+
+    if not date_from:
+        return jsonify({"ok": False, "error": "date_from required (DD-MM-YYYY)"}), 400
+
+    try:
+        from scraper_daily import compute_analytics_for_date, get_scraper_db
+        conn = get_scraper_db()
+        conn.execute("PRAGMA busy_timeout=60000")
+
+        fmt = "%d-%m-%Y"
+        dt_f = datetime.strptime(date_from, fmt)
+        dt_t = datetime.strptime(date_to, fmt) if date_to else datetime.now(WIB)
+
+        all_rows = conn.execute("SELECT DISTINCT date FROM eod_summary").fetchall()
+        dates_to_recompute = sorted(
+            [r["date"] for r in all_rows
+             if dt_f <= datetime.strptime(r["date"], fmt) <= dt_t],
+            key=lambda x: datetime.strptime(x, fmt)
+        )
+
+        recomputed = 0
+        for d in dates_to_recompute:
+            try:
+                compute_analytics_for_date(conn, d)
+                recomputed += 1
+            except Exception:
+                pass
+
+        conn.close()
+        return jsonify({"ok": True, "recomputed": recomputed, "dates": dates_to_recompute})
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 @app.route("/admin/check-db-health")
 def check_db_health():
     """Check if current DB is valid/corrupt + diagnose file issues."""
@@ -2391,6 +2494,84 @@ def backup_db():
         return jsonify({"ok": False, "error": f"Dropbox error {r.status_code}: {r.text[:300]}"}), 500
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
+
+# ── API: Trade Detail (for Trade Detail card display) ──────────────────────────
+@app.route("/api/trade-detail/<ticker>/<date_str>")
+def get_trade_detail(ticker: str, date_str: str):
+    """
+    Fetch Trade Detail narrative and metrics for a specific ticker on a date.
+
+    Returns:
+    {
+        "ok": true,
+        "ticker": "MINA",
+        "date": "01-05-2025",
+        "price_close": 3150,
+        "price_change_pct": 2.5,
+        "phase": "SOS",
+        "ma_structure": "Strong Uptrend",
+        "ma_values": {
+            "ma5": 3080,
+            "ma13": 2950,
+            "ma34": 2810,
+            "ma200": 2600
+        },
+        "rsi14": 64,
+        "cm_streak": 12,
+        "sm_metrics": {
+            "sm_sma10": 5820000,
+            "bm_sma10": 1030000,
+            "sm_val": 6500000,
+            "bm_val": 800000
+        },
+        "narrative": "Strongest Momentum: Smart Money sangat agresif melakukan markup..."
+    }
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        row = conn.execute("""
+            SELECT
+                date, ticker, price_close, price_change_pct, phase, watch,
+                ma_structure, ma5, ma13, ma34, ma200, rsi14, cm_streak,
+                sm_sma10, bm_sma10, sm_val, bm_val, atr_pct, narrative
+            FROM eod_summary
+            WHERE ticker = ? AND date = ?
+        """, [ticker.upper(), date_str]).fetchone()
+        conn.close()
+
+        if not row:
+            return jsonify({"ok": False, "error": f"Trade detail tidak ditemukan untuk {ticker} pada {date_str}"}), 404
+
+        return jsonify({
+            "ok": True,
+            "ticker": row["ticker"],
+            "date": row["date"],
+            "price_close": row["price_close"],
+            "price_change_pct": row["price_change_pct"],
+            "phase": row["phase"],
+            "watch": row["watch"],
+            "atr_pct": row["atr_pct"],
+            "ma_structure": row["ma_structure"],
+            "ma_values": {
+                "ma5": row["ma5"],
+                "ma13": row["ma13"],
+                "ma34": row["ma34"],
+                "ma200": row["ma200"],
+            },
+            "rsi14": row["rsi14"],
+            "cm_streak": row["cm_streak"],
+            "sm_metrics": {
+                "sm_sma10": row["sm_sma10"],
+                "bm_sma10": row["bm_sma10"],
+                "sm_val": row["sm_val"],
+                "bm_val": row["bm_val"],
+            },
+            "narrative": row["narrative"],
+        })
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
