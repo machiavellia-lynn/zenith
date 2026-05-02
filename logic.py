@@ -176,7 +176,8 @@ def detect_trade_detail_gate(
         return "Gate B"
 
     # Gate C: Profit taking (entry signal but price has run too far)
-    if action == "BUY" and pchg is not None and pchg > atr * 2.0:
+    th_buy_h = max(atr * 2.0, 5.0)
+    if action == "BUY" and pchg is not None and pchg >= th_buy_h:
         return "Gate C"
 
     return None
@@ -222,131 +223,139 @@ def compute_cm_streak(closes: list, ma5):
     return streak if above else -streak
 
 
-# ── MA Structure Classifier (v3.1 — 6 types) ──────────────────────────────────
+# ── MA Structure Classifier (v3.1 — 8 types) ──────────────────────────────────
 
 def get_ma_structure(price, ma5, ma13, ma34, ma200=None) -> str:
     """
-    Classify MA alignment into 6 structure types.
+    Classify MA alignment into 8 structure types per Zenith v3.1 catalog.
 
-    1. Strong Uptrend:      price > ma5 > ma13 > ma34 > ma200
-    2. Transitional Uptrend: price > ma5 > ma13 > ma34, but ma34 < ma200
-    3. Bullish Messy:       price > ma200, but ma5/13/34 are misaligned
-    4. Sideways:            all MA within 2.5% spread (consolidated)
-    5. Strong Downtrend:    price < ma5 < ma13 < ma34 < ma200
-    6. Transitional Downtrend: price < ma5 < ma13 < ma34, but ma34 > ma200
+    gap = (max(MA5,MA13,MA34) - min(MA5,MA13,MA34)) / min(MA5,MA13,MA34) * 100
+
+    gap < 3%:
+      Price > MA200 → Cluster on Macro Uptrend
+      Price ≤ MA200 → Cluster on Macro Downtrend
+
+    gap ≥ 3%, aligned_up (MA5>MA13>MA34):
+      Price > MA200 → Strong Uptrend
+      Price ≤ MA200 → Transitional Uptrend
+
+    gap ≥ 3%, aligned_down (MA5<MA13<MA34):
+      Price > MA200 → Transitional Correction
+      Price ≤ MA200 → Strong Downtrend
+
+    gap ≥ 3%, messy (crossed):
+      Price > MA200 → Bullish Messy
+      Price ≤ MA200 → Bearish Messy
     """
-    if price is None or (ma5 is None and ma13 is None):
+    if price is None or ma5 is None or ma13 is None or ma34 is None:
         return "N/A"
 
-    # ── Strong Uptrend: full bullish stack ──
-    if (ma5 is not None and ma13 is not None and ma34 is not None and
-        ma200 is not None and price > ma5 > ma13 > ma34 > ma200):
-        return "Strong Uptrend"
+    ma_max = max(ma5, ma13, ma34)
+    ma_min = min(ma5, ma13, ma34)
+    if ma_min == 0:
+        return "N/A"
+    gap = (ma_max - ma_min) / ma_min * 100
 
-    # ── Strong Downtrend: full bearish stack ──
-    if (ma5 is not None and ma13 is not None and ma34 is not None and
-        ma200 is not None and price < ma5 < ma13 < ma34 < ma200):
-        return "Strong Downtrend"
+    above_ma200 = (ma200 is None) or (price > ma200)
 
-    # ── Sideways: all MA clustered (< 2.5% spread) ──
-    if ma5 is not None and ma13 is not None and ma34 is not None:
-        ma_max = max(ma5, ma13, ma34)
-        ma_min = min(ma5, ma13, ma34)
-        spread_pct = (ma_max - ma_min) / ma_max * 100
-        if spread_pct < 2.5:
-            return "Sideways"
+    if gap < 3.0:
+        return "Cluster on Macro Uptrend" if above_ma200 else "Cluster on Macro Downtrend"
 
-    # ── Transitional Uptrend: bullish but ma34 above ma200 ──
-    if (ma5 is not None and ma13 is not None and ma34 is not None and
-        ma200 is not None and price > ma5 > ma13 > ma34 and ma34 < ma200):
-        return "Transitional Uptrend"
+    aligned_up   = ma5 > ma13 > ma34
+    aligned_down = ma5 < ma13 < ma34
 
-    # ── Transitional Downtrend: bearish but ma34 below ma200 ──
-    if (ma5 is not None and ma13 is not None and ma34 is not None and
-        ma200 is not None and price < ma5 < ma13 < ma34 and ma34 > ma200):
-        return "Transitional Downtrend"
+    if aligned_up:
+        return "Strong Uptrend" if above_ma200 else "Transitional Uptrend"
 
-    # ── Bullish Messy: price above ma200 but MA stack broken ──
-    if price is not None and ma200 is not None and price > ma200:
-        return "Bullish Messy"
+    if aligned_down:
+        return "Transitional Correction" if above_ma200 else "Strong Downtrend"
 
-    # ── Fallback for incomplete data: infer based on what's available ──
-    # If bullish alignment but no ma200: assume Strong Uptrend
-    if ma5 is not None and ma13 is not None and ma34 is not None:
-        if price > ma5 > ma13 > ma34:
-            return "Strong Uptrend"
-        if price < ma5 < ma13 < ma34:
-            return "Strong Downtrend"
-
-    # Last resort
-    return "Sideways"
+    return "Bullish Messy" if above_ma200 else "Bearish Messy"
 
 
-# ── Phase × MA Structure Narrative (6 structures × 7 phases = 42 combinations) ──
+# ── Phase × MA Structure Narrative (8 structures × 7 phases = 56 combinations) ──
 
 _PHASE_NARRATIVE: dict = {
-    # 1. STRONG UPTREND (MA5 > MA13 > MA34 > MA200)
-    ("SOS",      "Strong Uptrend"):  "Strongest Momentum: Smart Money sangat agresif melakukan markup di tengah tren yang sudah solid. Conviction sangat tinggi.",
-    ("ACCUM",    "Strong Uptrend"):  "Trend Support: Akumulasi bertahap terus berlanjut guna memperkuat struktur kenaikan harga.",
-    ("ABSORB",   "Strong Uptrend"):  "High-Level Base: Smart Money menyerap pasokan di harga atas tanpa membiarkan harga terkoreksi.",
-    ("SPRING",   "Strong Uptrend"):  "Buying the Dip: Koreksi sesaat yang langsung disambar Smart Money. ⚠️ Cek volume saat koreksi — jika volume besar, waspada: bisa jadi distribusi terselubung, bukan spring valid.",
-    ("UPTHRUST", "Strong Uptrend"):  "The Trap: Waspada! Meskipun tren terlihat kuat, Smart Money mulai melakukan exit di harga pucuk.",
-    ("DISTRI",   "Strong Uptrend"):  "Major Reversal: Distribusi aktif di tengah tren naik. Sinyal kuat bahwa tren segera berakhir.",
-    ("NEUTRAL",  "Strong Uptrend"):  "Retail Drive: Harga naik hanya karena dorongan retail. Tanpa partisipasi Big Player, tren ini rapuh.",
+    # 1. STRONG UPTREND
+    ("SOS",      "Strong Uptrend"): "Strongest Momentum — Smart Money sangat agresif di tengah tren yang sudah kuat. Konfluensi sempurna antara struktur MA bullish dan aksi SM, ini adalah setup dengan probabilitas tertinggi. Hati-hati FOMO di entry terlambat; pastikan tidak trigger Gate C.",
+    ("SPRING",   "Strong Uptrend"): "Pullback Sehat — Harga koreksi sementara di tengah tren bullish yang kuat, dan SM justru akumulasi di zona ini. Ini adalah \"buy the dip\" klasik dalam strong uptrend; setup sangat menarik jika RSM dan SRI confirm. Entry di zona SPRING dengan struktur MA intact adalah opportunity premium.",
+    ("ABSORB",   "Strong Uptrend"): "Silent Accumulation in Trend — SM mengakumulasi diam-diam tanpa banyak gerak harga, sementara struktur MA masih fully bullish. Kombinasi ini sering mendahului breakout berikutnya. Volume rendah tapi SM aktif = distribusi tersembunyi yang positif.",
+    ("ACCUM",    "Strong Uptrend"): "Steady Climb — SM mengakumulasi secara bertahap dengan tren yang fully aligned. Tidak ada urgency tinggi, tapi ini adalah posisi yang nyaman untuk hold atau tambah posisi secara gradual. Risiko rendah karena struktur makro mendukung penuh.",
+    ("UPTHRUST", "Strong Uptrend"): "Trap di Puncak Tren — Harga naik tinggi tapi BM dominan dan RPR lemah, sinyal jebakan distribusi meski struktur MA masih bullish. Ini warning penting: MA bisa lag terhadap perubahan arah. Waspadai potensi reversal jangka pendek meski tren besar masih intact.",
+    ("DISTRI",   "Strong Uptrend"): "Distribusi Tersembunyi — BM mulai aktif mendistribusi meski MA masih bullish aligned. Ini adalah early warning sign sebelum tren berbalik; MA biasanya lag beberapa hari. Hold posisi lama dengan trailing stop, hindari entry baru sampai ada konfirmasi.",
+    ("NEUTRAL",  "Strong Uptrend"): "Konsolidasi dalam Tren Kuat — Tidak ada aksi SM atau BM yang dominan hari ini, pasar istirahat sejenak. Struktur MA masih bullish penuh; ini bukan sinyal untuk keluar. Hold posisi, tunggu fase berikutnya yang kemungkinan besar masih bullish.",
 
-    # 2. TRANSITIONAL UPTREND (MA5 > MA13 > MA34 < MA200)
-    ("SOS",      "Transitional Uptrend"):  "Breakout Attempt: Smart Money mencoba menembus resistensi MA200 dengan agresivitas tinggi.",
-    ("ACCUM",    "Transitional Uptrend"):  "Reversal Loading: Persiapan mengubah tren besar. Akumulasi stabil di bawah area MA200.",
-    ("ABSORB",   "Transitional Uptrend"):  "Under Resistance Absorb: Smart Money menahan harga agar tidak jatuh sambil menyerap barang di bawah MA200.",
-    ("SPRING",   "Transitional Uptrend"):  "Bottom Shakeout: Upaya terakhir mengusir retail sebelum harga dipacu menembus MA200. ⚠️ Cek volume saat koreksi — jika volume besar, waspada: bisa jadi distribusi terselubung, bukan spring valid.",
-    ("UPTHRUST", "Transitional Uptrend"):  "Failed Breakout: Upaya naik gagal. Big Player justru jualan masif saat harga mendekati MA200.",
-    ("DISTRI",   "Transitional Uptrend"):  "Rejected: Harga tertolak dari MA200 disertai aksi jual masif oleh Big Player.",
-    ("NEUTRAL",  "Transitional Uptrend"):  "Wait & See: Harga mendekati resistensi besar tanpa ada pergerakan signifikan dari Smart Money.",
+    # 2. TRANSITIONAL UPTREND
+    ("SOS",      "Transitional Uptrend"): "Recovery Agresif — SM masuk besar-besaran dalam fase pemulihan awal, tapi MA200 masih di atas sebagai resistance besar. Sinyal kuat untuk jangka pendek-menengah, tapi harga masih harus membuktikan diri dengan break MA200. Entry menarik dengan awareness bahwa ada resistance signifikan di depan.",
+    ("SPRING",   "Transitional Uptrend"): "Dip dalam Recovery — Harga koreksi sementara di tengah fase pemulihan yang belum selesai, SM tetap akumulasi. Double-layered risk: belum break MA200 dan harga turun. Namun jika SRI dan RSM kuat, ini bisa jadi entry second chance yang bagus dalam recovery play.",
+    ("ABSORB",   "Transitional Uptrend"): "Akumulasi Diam-diam Sebelum Break — SM mengakumulasi dengan tenang sementara harga flat, membangun energi untuk potensi break MA200. Patience diperlukan; ini adalah setup jangka menengah yang menjanjikan tapi belum ada katalis langsung.",
+    ("ACCUM",    "Transitional Uptrend"): "Pemulihan Bertahap — Momentum bullish jangka pendek terbentuk perlahan, SM mulai masuk secara gradual meski MA200 masih jadi ceiling. Cocok untuk akumulasi bertahap dengan position sizing konservatif; avoid all-in karena resistance makro masih ada.",
+    ("UPTHRUST", "Transitional Uptrend"): "Fake Recovery — Harga naik tapi BM mendominasi transaksi, membuat rally dalam recovery terlihat seperti jebakan distribusi. Dengan MA200 masih di atas sebagai overhead resistance, ini adalah sinyal sangat berbahaya. Hindari entry, pertimbangkan exit jika sudah punya posisi.",
+    ("DISTRI",   "Transitional Uptrend"): "Recovery Terancam — Momentum pemulihan terganggu oleh distribusi aktif BM. Dengan MA200 masih di atas, ini bisa menjadi awal dari kegagalan recovery dan kelanjutan downtrend. Sinyal untuk reduce exposure; tunggu konfirmasi sebelum re-entry.",
+    ("NEUTRAL",  "Transitional Uptrend"): "Jeda dalam Recovery — Pasar pause, tidak ada dominasi SM atau BM hari ini. Tren pemulihan masih intact tapi belum ada dorongan baru. Hold, dan tunggu konfirmasi arah berikutnya; MA200 masih jadi target resistance yang perlu diperhatikan.",
 
-    # 3. BULLISH MESSY (Price > MA200 but MA5/13/34 berantakan)
-    ("SOS",      "Bullish Messy"):  "Clarity Seeking: Smart Money masuk untuk mengakhiri fase konsolidasi dan memulai tren naik baru.",
-    ("ACCUM",    "Bullish Messy"):  "Choppy Accum: Meskipun struktur MA berantakan, Smart Money konsisten menambah posisi.",
-    ("ABSORB",   "Bullish Messy"):  "Volatility Absorption: Smart Money menenangkan market yang liar dengan menyerap setiap tekanan jual.",
-    ("SPRING",   "Bullish Messy"):  "Technical Washout: Membersihkan antrean jual retail di tengah struktur MA yang membingungkan. ⚠️ Cek volume saat koreksi — jika volume besar, waspada: bisa jadi distribusi terselubung, bukan spring valid.",
-    ("UPTHRUST", "Bullish Messy"):  "Churning Trap: Harga terlihat ingin naik dari kekacauan MA, tapi ternyata hanya jebakan jual.",
-    ("DISTRI",   "Bullish Messy"):  "Structural Decay: Big Player memanfaatkan kekacauan harga untuk keluar perlahan dari posisi mereka.",
-    ("NEUTRAL",  "Bullish Messy"):  "No Direction: Market bergerak acak tanpa penggerak utama. Hindari sampai struktur MA rapi.",
+    # 3. TRANSITIONAL CORRECTION
+    ("SOS",      "Transitional Correction"): "Counter-Rally Kuat — SM masuk agresif di tengah tekanan jual jangka pendek, dengan MA200 masih sebagai support besar di bawah. Ini sinyal reversal jangka pendek yang menarik; potensi bounce dari zona koreksi. Entry kalkulatif dengan target kembali ke area MA34 atau lebih tinggi.",
+    ("SPRING",   "Transitional Correction"): "Bounce dari Support Makro — Harga turun lebih dalam tapi SM aktif akumulasi, dengan MA200 di bawah sebagai safety net. Setup SPRING dalam konteks koreksi makro bullish adalah salah satu setup terbaik untuk swing entry; risiko relatif terbatas karena floor makro jelas.",
+    ("ABSORB",   "Transitional Correction"): "Akumulasi di Koreksi — SM diam-diam membeli saat harga flat dalam periode koreksi, sinyal bahwa big players tidak panik meski MA jangka pendek bearish. Dengan MA200 masih sebagai safety net, ini setup yang menjanjikan untuk entry gradual.",
+    ("ACCUM",    "Transitional Correction"): "Akumulasi Defensif — SM mulai masuk secara perlahan di zona koreksi, meski belum dengan intensitas tinggi. Posisi makro masih mendukung (Price > MA200); ini fase persiapan sebelum potensi reversal. Cocok untuk gradual entry dengan stop di bawah MA200.",
+    ("UPTHRUST", "Transitional Correction"): "Dead Cat Bounce — Harga sempat naik tapi BM yang dominan; bounce ini tidak genuine. Dalam konteks koreksi jangka pendek yang sudah berjalan, UPTHRUST menandakan tekanan jual belum selesai. Exit atau hold cash; bukan waktu untuk beli.",
+    ("DISTRI",   "Transitional Correction"): "Koreksi Diperdalam — BM aktif mendistribusi di tengah koreksi yang sudah berjalan; tekanan jual bertambah. Meskipun MA200 masih di bawah sebagai support, momentum bearish jangka pendek bisa mendorong harga lebih turun sebelum bounce. Reduce exposure.",
+    ("NEUTRAL",  "Transitional Correction"): "Koreksi Tanpa Arah Jelas — Tidak ada dominasi SM atau BM, pasar bergerak sideways dalam zona koreksi. MA200 masih di bawah sebagai safety net. Situasi wait-and-see; pantau apakah SM mulai masuk (SPRING/ACCUM) atau BM semakin dominan (DISTRI).",
 
-    # 4. SIDEWAYS (Semua MA berhimpit)
-    ("SOS",      "Sideways"):  "Early Breakout: Ledakan volume dan agresivitas Smart Money untuk keluar dari zona konsolidasi.",
-    ("ACCUM",    "Sideways"):  "Base Building: Pengumpulan barang secara rapi di area harga yang sama dalam waktu lama.",
-    ("ABSORB",   "Sideways"):  "The Coil: Energi sedang dikumpulkan. Smart Money menyerap semua barang tanpa menggerakkan harga.",
-    ("SPRING",   "Sideways"):  "Final Shakeout: Harga ditarik turun sebentar untuk memicu stop loss retail sebelum dilesatkan naik. ⚠️ Cek volume saat koreksi — jika volume besar, waspada: bisa jadi distribusi terselubung, bukan spring valid.",
-    ("UPTHRUST", "Sideways"):  "False Start: Harga sempat naik dari zona sideways namun segera dibanting kembali. ⚠️ Cek transaksi BM hari ini — jika BM spike jauh di atas SMA10, ini manipulasi aktif (buang barang). Jika BM normal, cukup tekanan supply biasa.",
-    ("DISTRI",   "Sideways"):  "Silent Exit: Big Player keluar perlahan di saat market sedang membosankan.",
-    ("NEUTRAL",  "Sideways"):  "Dead Zone: Belum ada tanda-tanda kehidupan dari Smart Money. Market sedang tidur.",
+    # 4. STRONG DOWNTREND
+    ("SOS",      "Strong Downtrend"): "Counter-Rally dalam Downtrend — SM masuk agresif tapi melawan arus tren besar yang sepenuhnya bearish. Ini bisa jadi bounce signifikan tapi bukan reversal; MA200 dan MA34 di atas sebagai resistance berlapis. Trading jangka sangat pendek dengan risk management ketat; jangan hold lama.",
+    ("SPRING",   "Strong Downtrend"): "Potensi Capitulation Bottom — Harga turun tajam dengan SM akumulasi di zona yang sangat tertekan. Dalam strong downtrend, SPRING bisa menjadi tanda capitulation (akhir dari tekanan jual besar). Setup sangat high-risk, high-reward; perlu konfirmasi kuat (SRI > 2.5, RSM > 65%) sebelum pertimbangkan entry.",
+    ("ABSORB",   "Strong Downtrend"): "Akumulasi Melawan Arus — SM diam-diam membeli di tengah downtrend yang masih kuat. Bisa jadi early signal reversal jangka panjang, tapi premature untuk entry; tren besar masih bearish dan semua MA di atas sebagai resistance. Watch tapi tidak act dulu.",
+    ("ACCUM",    "Strong Downtrend"): "Akumulasi Awal di Downtrend Dalam — SM mulai masuk perlahan meski tren besar masih turun. Sinyal terlalu dini untuk action; perlu konfirmasi beberapa hari sebelum struktur MA berubah. Pantau apakah akumulasi ini berkembang menjadi ABSORB atau SOS.",
+    ("UPTHRUST", "Strong Downtrend"): "Jebakan Bull dalam Downtrend — Harga sempat naik tapi BM dominan; ini adalah relief rally palsu yang sangat berbahaya. Dalam strong downtrend, UPTHRUST adalah konfirmasi bahwa tekanan jual masih kuat dan banyak yang terjebak di harga tinggi. Sinyal SELL paling meyakinkan.",
+    ("DISTRI",   "Strong Downtrend"): "Downtrend Diperkuat — BM aktif mendistribusi dengan semua MA masih bearish; ini adalah konfirmasi downtrend paling kuat. Tidak ada alasan untuk hold, apalagi beli. Jika belum exit, ini momentum terakhir sebelum harga turun lebih dalam.",
+    ("NEUTRAL",  "Strong Downtrend"): "Downtrend Tanpa Katalis Baru — Tidak ada aksi dominan hari ini, tapi semua MA masih bearish aligned. Ini bukan tanda reversal; hanya jeda sementara. Jangan terjebak dengan quiet market dalam downtrend; stay out atau pertahankan short position.",
 
-    # 5. STRONG DOWNTREND (MA5 < MA13 < MA34 < MA200)
-    ("SOS",      "Strong Downtrend"):  "V-Shape Rebound: Spekulasi tinggi! SM masuk agresif melawan arus. ⚠️ Cek struktur MA — apakah mulai merata/konvergen? Jika masih divergen bearish penuh, SM masuk belum berarti reversal confirmed.",
-    ("ACCUM",    "Strong Downtrend"):  "Bottom Fishing: Mulai terjadi penumpukan barang di harga bawah meski tren belum berbalik.",
-    ("ABSORB",   "Strong Downtrend"):  "Floor Building: Smart Money mencoba menghentikan kejatuhan harga dengan menyerap semua tekanan jual.",
-    ("SPRING",   "Strong Downtrend"):  "Classic Spring: Harga jatuh tajam ke area baru, namun langsung diborong habis oleh Smart Money. ⚠️ Cek volume saat koreksi — jika volume besar, waspada: bisa jadi distribusi terselubung, bukan spring valid.",
-    ("UPTHRUST", "Strong Downtrend"):  "Dead Cat Bounce: Kenaikan semu. Big Player justru menambah posisi jual saat harga naik sedikit.",
-    ("DISTRI",   "Strong Downtrend"):  "Panic Continuous: Distribusi terus berlanjut. Tidak ada tanda-tanda dasar harga sudah terbentuk.",
-    ("NEUTRAL",  "Strong Downtrend"):  "Drift Down: Harga turun perlahan tanpa pendorong jelas dari kedua pihak. Hindari entry — tren belum berakhir meski tidak ada tekanan besar.",
+    # 5. CLUSTER ON MACRO UPTREND
+    ("SOS",      "Cluster on Macro Uptrend"): "Breakout dari Sideways — SM masuk besar di tengah konsolidasi yang sudah lama, dengan floor makro yang aman (Price > MA200). Setup pre-breakout klasik; jika SRI dan RSM kuat, ini sangat menarik. Harga kemungkinan besar akan keluar dari cluster dengan momentum bullish.",
+    ("SPRING",   "Cluster on Macro Uptrend"): "Shakeout dalam Konsolidasi — Harga turun sementara keluar dari cluster tapi SM aktif akumulasi; ini classic shakeout sebelum breakout naik. Dengan MA200 aman di bawah, ini adalah zona entry yang ideal jika RSM dan SRI mendukung. Risiko rendah, reward tinggi jika breakout terjadi.",
+    ("ABSORB",   "Cluster on Macro Uptrend"): "Akumulasi Diam-diam dalam Konsolidasi — SM mengumpulkan posisi dengan sabar di tengah sideways yang ketat. Ini adalah fasa sebelum breakout; pasar belum notice tapi big players sudah positioning. Hold atau tambah posisi gradual; tunggu harga keluar dari cluster.",
+    ("ACCUM",    "Cluster on Macro Uptrend"): "Fase Akumulasi Cluster — SM masuk perlahan dalam sideways yang didukung makro bullish. Tidak ada urgency breakout segera tapi probabilitas naik lebih tinggi dari turun mengingat MA200 di bawah. Entry gradual dengan sabar; jangan chase jika harga tiba-tiba spike.",
+    ("UPTHRUST", "Cluster on Macro Uptrend"): "Fake Breakout di Atas Cluster — Harga sempat keluar cluster ke atas tapi BM dominan; ini false breakout klasik. Berbahaya karena banyak trader retail akan tergoda masuk saat harga tembus sideways. Hindari entry; tunggu retest dan konfirmasi SM sebelum percaya breakout ini.",
+    ("DISTRI",   "Cluster on Macro Uptrend"): "Distribusi dalam Konsolidasi — BM aktif mendistribusi meski harga masih di atas MA200; ini warning bahwa cluster ini bukan akumulasi tapi distribusi terselubung. Jika berlanjut, harga berpotensi breakdown dari cluster ke arah bawah. Reduce position; jangan tambah di sini.",
+    ("NEUTRAL",  "Cluster on Macro Uptrend"): "Sideways Murni — Tidak ada aksi dominan, harga bergerak datar dalam cluster di atas MA200. Ini adalah fase patience; pasar sedang menentukan arah. Pantau RSM dan SRI hari-hari berikutnya; breakout dari sini biasanya cukup signifikan.",
 
-    # 6. TRANSITIONAL DOWNTREND (MA5 < MA13 < MA34 > MA200)
-    ("SOS",      "Transitional Downtrend"):  "Defense of the Line: Smart Money masuk agresif untuk menjaga agar harga tidak tembus ke bawah MA200.",
-    ("ACCUM",    "Transitional Downtrend"):  "Support Loading: Akumulasi dilakukan tepat di area dukungan jangka panjang (MA200).",
-    ("ABSORB",   "Transitional Downtrend"):  "Dynamic Support: Tekanan jual di area MA200 berhasil diredam oleh akumulasi Smart Money.",
-    ("SPRING",   "Transitional Downtrend"):  "Support Shakeout: Harga sengaja dibuat menembus MA200 sesaat untuk memicu panik sebelum ditarik kembali. ⚠️ Cek volume saat koreksi — jika volume besar, waspada: bisa jadi distribusi terselubung, bukan spring valid.",
-    ("UPTHRUST", "Transitional Downtrend"):  "Structural Failure: Upaya kembali ke jalur Bullish gagal karena Big Player justru jualan masif.",
-    ("DISTRI",   "Transitional Downtrend"):  "Breaking the Floor: Sinyal bahaya besar. Big Player membuang barang dan menekan harga ke bawah MA200.",
-    ("NEUTRAL",  "Transitional Downtrend"):  "Testing Support: Harga sedang menguji MA200 tanpa partisipasi aktif dari Smart Money.",
+    # 6. CLUSTER ON MACRO DOWNTREND
+    ("SOS",      "Cluster on Macro Downtrend"): "Rally Terbatas di Bawah MA200 — SM masuk agresif dalam sideways yang tertekan secara makro. Menarik sebagai bounce play jangka pendek tapi MA200 di atas sebagai resistance berat. Jangan ekspektasi trending move; target realistis adalah tepi atas cluster atau MA200 sebagai resistance.",
+    ("SPRING",   "Cluster on Macro Downtrend"): "Shakeout Berbahaya — Harga turun lebih dalam dari cluster yang sudah di bawah MA200; SM mencoba akumulasi di zona yang sangat tertekan. Double-risk: makro bearish dan harga jatuh dari sideways. Hanya untuk trader dengan risk tolerance tinggi dengan ukuran posisi sangat kecil.",
+    ("ABSORB",   "Cluster on Macro Downtrend"): "Akumulasi di Zona Berbahaya — SM diam-diam membeli di cluster yang berada di bawah MA200. Sinyal awal bottom fishing oleh big players, tapi masih terlalu dini. Pantau beberapa hari; jika RSM dan SRI terus naik, bisa jadi awal reversal jangka panjang.",
+    ("ACCUM",    "Cluster on Macro Downtrend"): "Akumulasi Sabar di Bawah Makro Bearish — SM mulai masuk perlahan meski kondisi makro tidak mendukung. Ini bisa jadi akumulasi jangka panjang (months), bukan sinyal entry segera. Tidak direkomendasikan untuk swing trader; mungkin relevan untuk investor jangka panjang saja.",
+    ("UPTHRUST", "Cluster on Macro Downtrend"): "Jebakan di Zona Merah — False breakout di atas cluster yang sudah tertekan makro; BM mendominasi dan MA200 jauh di atas sebagai ceiling. Salah satu setup paling berbahaya — buyer retail terjebak sementara BM distribusi aktif. SELL atau stay out.",
+    ("DISTRI",   "Cluster on Macro Downtrend"): "Silent Exit — BM mendistribusi secara tenang dalam sideways yang sudah di bawah MA200; ini adalah tanda bahwa big players sedang keluar secara halus sebelum breakdown. Konfirmasi bearish paling kuat dalam konteks ini. Segera reduce atau exit posisi.",
+    ("NEUTRAL",  "Cluster on Macro Downtrend"): "Dead Zone — Tidak ada aksi apapun dalam cluster yang sudah di bawah MA200. Ini bukan konsolidasi sehat; ini kekosongan minat. Likuiditas rendah, volatilitas rendah, tanpa katalis jelas. Stay away; banyak saham lain yang lebih layak diperhatikan.",
+
+    # 7. BULLISH MESSY
+    ("SOS",      "Bullish Messy"): "Momentum Kuat di Struktur Berantakan — SM sangat agresif tapi MA dalam kondisi chaotic. Sinyal SM valid dan menarik, tapi ketidakjelasan struktur MA menciptakan risiko false signal. Entry dengan sizing lebih kecil dari biasa; konfirmasi dengan apakah MA mulai realign dalam 2-3 hari ke depan.",
+    ("SPRING",   "Bullish Messy"): "Akumulasi dalam Volatilitas Tinggi — SM masuk di penurunan tajam sementara MA sedang chaotic; tanda big players memanfaatkan ketidakpastian. Setup ini unpredictable tapi sering terjadi sebelum tren yang lebih jelas terbentuk. Entry kecil dengan konfirmasi ketat.",
+    ("ABSORB",   "Bullish Messy"): "SM Tenang di Tengah Kekacauan MA — SM mengakumulasi dengan sabar meski struktur MA belum teratur. Ini menarik karena SM tidak terpengaruh oleh noise teknikal. Posisi makro aman (Price > MA200); tunggu MA mulai realign sebelum sizing up.",
+    ("ACCUM",    "Bullish Messy"): "Akumulasi Gradual dalam Volatilitas — SM masuk perlahan di struktur MA yang belum teratur tapi makro masih bullish. Setup ini memerlukan patience ekstra; jangan ekspektasi immediate move. Tunggu MA mulai align sebelum sizing up lebih besar.",
+    ("UPTHRUST", "Bullish Messy"): "Chaos Trap — Harga naik dengan BM dominan dalam struktur MA yang sudah berantakan; sinyal paling tidak reliable karena ketidakjelasan tren. Bisa jadi reversal awal atau hanya noise volatilitas. Default ke SELL; jangan coba menerka arah di kondisi messy + UPTHRUST.",
+    ("DISTRI",   "Bullish Messy"): "Distribusi di Tengah Volatilitas — BM aktif mendistribusi dalam kondisi MA yang sudah chaotic; ini sinyal bahwa volatilitas ini dimanfaatkan big players untuk keluar. Meskipun Price > MA200, tekanan jual bisa cukup kuat untuk menarik harga ke bawah. Exit atau reduce.",
+    ("NEUTRAL",  "Bullish Messy"): "Volatilitas Tanpa Arah — MA berantakan dan tidak ada aksi SM atau BM yang dominan; pasar sangat bingung. Dengan Price masih di atas MA200, belum ada alarm besar. Tapi hindari entry baru sampai MA mulai teratur dan ada sinyal phase yang jelas.",
+
+    # 8. BEARISH MESSY
+    ("SOS",      "Bearish Messy"): "Sinyal Kontroversial — SM agresif tapi MA chaotic dan Price di bawah MA200; konfluensi sangat buruk. Bisa jadi dead cat bounce atau awal reversal yang sangat dini. Risk sangat tinggi; jika entry, sizing minimal dan stop loss ketat di bawah low hari ini.",
+    ("SPRING",   "Bearish Messy"): "Bottom Fishing Ekstrem — Harga jatuh dalam kondisi MA chaotic dan di bawah MA200; SM mencoba akumulasi di zona yang sangat tertekan. Setup paling high-risk dalam katalog ini. Hanya relevan jika SRI > 3.0 dan RSM > 68% sebagai konfirmasi minimum. Ukuran posisi sangat kecil.",
+    ("ABSORB",   "Bearish Messy"): "Akumulasi Tersembunyi di Zona Bearish — SM diam-diam membeli di tengah kekacauan MA dan kondisi makro yang bearish. Sinyal yang contradictory dan tidak mudah dibaca. Pantau selama beberapa hari; jika konsisten, bisa jadi awal reversal besar. Belum waktunya entry.",
+    ("ACCUM",    "Bearish Messy"): "Sinyal Sangat Prematur — SM mulai masuk tipis-tipis tapi semua kondisi teknikal bertentangan (MA messy, Price < MA200). Terlalu early untuk act; kemungkinan SM sedang testing water. Skip sampai ada konfirmasi lebih kuat; risiko jauh lebih besar dari potensi keuntungan saat ini.",
+    ("UPTHRUST", "Bearish Messy"): "Maximum Danger — BM dominan, MA chaotic, Price di bawah MA200; ini adalah triple confirmation bearish. Tidak ada alasan apapun untuk beli. Jika masih punya posisi, ini adalah sinyal exit paling tegas. Prioritas pertama: capital preservation.",
+    ("DISTRI",   "Bearish Messy"): "Distribusi Aktif dalam Kekacauan — BM mendistribusi agresif di tengah MA yang chaotic dan di bawah MA200; big players sedang keluar sekencang-kencangnya. Harga berpotensi turun drastis dalam waktu dekat. EXIT IMMEDIATELY jika masih punya posisi.",
+    ("NEUTRAL",  "Bearish Messy"): "Limbo Bearish — Tidak ada aksi apapun dalam kondisi MA chaotic dan di bawah MA200. Pasar tidak tahu arah tapi semua indikator struktural bearish. Jangan masuk; ini bukan opportunity. Alihkan perhatian ke saham dengan struktur lebih jelas.",
 }
 
 
 # ── Gate Condition Overrides ──────────────────────────────────────────────────
 
 _GATE_NARRATIVES = {
-    "Gate A": "**Abnormal Supply:** Meskipun fase akumulasi, tekanan jual (Bad Money) hari ini 3× lipat rata-rata (baseline: BM SMA10). Area ini sangat berisiko.",
-    "Gate B": "**Extreme Panic:** Terdeteksi fase SPRING, namun penurunan harga terlalu ekstrim (>1.5× ATR). Risiko ARB tinggi.",
-    "Gate C": "**Profit Taking Zone:** Sinyal BUY valid, namun harga naik terlalu tinggi hari ini (>2× ATR). Tunggu koreksi ke area MA5.",
+    "Gate A": "Abnormal Supply — Terdeteksi tekanan jual masif dari Bad Money (BM hari ini 3x+ rata-rata 10 hari), meskipun fase Smart Money menunjukkan akumulasi. Ada \"tembok penjual\" yang dapat mematikan momentum SM secara tiba-tiba. Tahan entry baru sampai supply abnormal ini mereda; risiko false signal sangat tinggi saat kondisi ini aktif.",
+    "Gate B": "Extreme Panic / Risiko ARB — Terdeteksi fase SPRING namun penurunan harga melampaui 1.5× volatilitas normal (ATR), mendekati zona Auto Rejection Bawah. SM mungkin benar dalam akumulasi jangka panjang, tapi momentum turun masih sangat kuat hari ini. Tunggu konfirmasi bounce di hari berikutnya sebelum entry; \"tangkap pisau jatuh\" adalah risiko utama di kondisi ini.",
+    "Gate C": "Profit Taking Zone — Signal BUY valid dari sisi fase SM, namun harga hari ini sudah naik melampaui batas toleransi volatilitas (≥2× ATR atau ≥5%). Entry di harga ini berarti beli di puncak harian; probabilitas pullback lebih tinggi dari probabilitas kelanjutan. Tunggu koreksi atau entry di hari berikutnya jika struktur masih intact.",
 }
 
 
@@ -354,4 +363,7 @@ def get_phase_narrative(phase: str, ma_structure: str, gate: str = None) -> str:
     """Return Phase × MA Structure narrative, with optional Gate override."""
     if gate and gate in _GATE_NARRATIVES:
         return _GATE_NARRATIVES[gate]
-    return _PHASE_NARRATIVE.get((phase, ma_structure), f"Phase {phase} dalam {ma_structure}.")
+    key = (phase, ma_structure)
+    if key in _PHASE_NARRATIVE:
+        return _PHASE_NARRATIVE[key]
+    return "[NARASI TIDAK DITEMUKAN - HARAP LAMPIRKAN DATABASE TRADE DETAIL]"
