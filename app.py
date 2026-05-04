@@ -6,6 +6,7 @@ import sqlite3
 import os
 import time
 import threading
+import re
 
 
 app = Flask(__name__)
@@ -17,8 +18,40 @@ def is_authed():
 # ── Config ──────────────────────────────────────────────────────────────
 DB_PATH = os.environ.get("DB_PATH", r"C:\Users\rabim\Downloads\zenith_project\zenith.db")
 WIB     = timezone(timedelta(hours=7))
+ROOT_DIR = os.path.dirname(__file__)
+KOMPAS100_FILE = os.path.join(ROOT_DIR, "kompas100.md")
+
 _DATE_SORT = "substr(date,7,4)||substr(date,4,2)||substr(date,1,2)"
 GAIN_EXECUTOR = ThreadPoolExecutor(max_workers=10)
+
+
+def load_kompas100_reference():
+    tickers = []
+    esg = set()
+    try:
+        with open(KOMPAS100_FILE, "r", encoding="utf-8") as f:
+            for raw in f:
+                line = raw.strip()
+                if not line or line.startswith("#"):
+                    continue
+                match = re.match(r'^\d+\.\s*(.+)$', line)
+                if not match:
+                    continue
+                entry = match.group(1).strip()
+                if not entry:
+                    continue
+                parts = [p.strip() for p in re.split(r'\s*-\s*', entry, maxsplit=1)]
+                ticker = parts[0].upper()
+                if not ticker:
+                    continue
+                tickers.append(ticker)
+                if len(parts) > 1 and "ESG" in parts[1].upper():
+                    esg.add(ticker)
+    except FileNotFoundError:
+        pass
+    return frozenset(tickers), frozenset(esg)
+
+KOMPAS100_TICKERS, KOMPAS100_ESG = load_kompas100_reference()
 
 # ── Sector mapping ──────────────────────────────────────────────────────
 SECTORS = {
@@ -478,6 +511,25 @@ def flow():
         # If sector param given, still need to return sector tickers with gains
         pass
 
+    kompas100_mode = request.args.get("kompas100", "").strip().lower() in ("1", "true", "yes", "on")
+    if kompas100_mode and KOMPAS100_TICKERS:
+        for ticker in list(data):
+            if ticker not in KOMPAS100_TICKERS:
+                del data[ticker]
+        for ticker in KOMPAS100_TICKERS:
+            if ticker not in data:
+                data[ticker] = {
+                    "sm_val": 0,
+                    "bm_val": 0,
+                    "tx": 0,
+                    "tx_sm": 0,
+                    "tx_bm": 0,
+                    "mf_plus": None,
+                    "mf_minus": None,
+                    "net_mf": None,
+                    "_nodata": True,
+                }
+
     # Optional sector filter: ensure ALL sector tickers are present
     sector_name = request.args.get("sector", "").strip()
     sector_members = None
@@ -598,6 +650,7 @@ def flow():
             "ma_structure":      ma_structure,
             "narrative":         narrative,
             "bm_sma10":          round(bm_sma10, 2) if bm_sma10 else None,
+            "esg":               t in KOMPAS100_ESG,
         })
 
     # Sort default: clean_money desc (nulls last)
