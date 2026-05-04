@@ -2684,10 +2684,16 @@ def export_db_dropbox():
 
         conn.close()
 
-        # Upload to Dropbox
+        # Compress and upload to Dropbox
+        import gzip
         json_bytes = output.getvalue()
+        compressed = gzip.compress(json_bytes)
+
+        original_size_mb = round(len(json_bytes) / 1024 / 1024, 2)
+        compressed_size_mb = round(len(compressed) / 1024 / 1024, 2)
+
         ts = datetime.now(WIB).strftime("%Y-%m-%d_%H-%M-%S")
-        dropbox_path = f"/zenith_export_{ts}.json"
+        dropbox_path = f"/zenith_export_{ts}.json.gz"
 
         r = requests.post(
             "https://content.dropboxapi.com/2/files/upload",
@@ -2701,7 +2707,7 @@ def export_db_dropbox():
                 }),
                 "Content-Type": "application/octet-stream",
             },
-            data=json_bytes,
+            data=compressed,
             timeout=600,
         )
 
@@ -2709,9 +2715,11 @@ def export_db_dropbox():
             meta = r.json()
             return jsonify({
                 "ok": True,
-                "message": f"✅ Export OK → Dropbox",
+                "message": f"✅ Export OK → Dropbox (gzip compressed)",
                 "dropbox_path": meta.get("path_display", dropbox_path),
-                "size_mb": round(len(json_bytes) / 1024 / 1024, 2),
+                "original_size_mb": original_size_mb,
+                "compressed_size_mb": compressed_size_mb,
+                "compression_ratio": f"{round((1 - compressed_size_mb / original_size_mb) * 100, 1)}%",
                 "total_rows": sum(m["row_count"] for m in metadata.values()),
             })
         else:
