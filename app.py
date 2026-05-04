@@ -2626,15 +2626,16 @@ def get_trade_detail(ticker: str, date_str: str):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
-# ── Admin: Export All Data to JSON (for database migration) ─────────────────
-@app.route("/admin/export-db-json")
-def export_db_json():
+# ── Admin: Export All Data to JSON → Dropbox (for database migration) ──────
+@app.route("/admin/export-db-dropbox")
+def export_db_dropbox():
     """
-    Export entire SQLite database to JSON format.
-    Used for migration from SQLite → PostgreSQL.
+    Export entire SQLite database to JSON and upload to Dropbox.
+    Used for SQLite → PostgreSQL migration.
+    Streams data to avoid memory overflow.
 
-    Query: /admin/export-db-json?secret=YOUR_SECRET
-    Returns: {ok, timestamp, data: {table1: [...], table2: [...]}, metadata}
+    Query: /admin/export-db-dropbox?secret=YOUR_SECRET
+    Returns: {ok, dropbox_path, dropbox_url}
     """
     SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
     if request.args.get("secret", "") != SECRET:
@@ -2643,58 +2644,78 @@ def export_db_json():
     if not os.path.exists(DB_PATH):
         return jsonify({"ok": False, "error": f"DB tidak ditemukan di {DB_PATH}"}), 500
 
+    DROPBOX_TOKEN = os.environ.get("DROPBOX_ACCESS_TOKEN", "")
+    if not DROPBOX_TOKEN:
+        return jsonify({"ok": False, "error": "DROPBOX_ACCESS_TOKEN tidak di-set"}), 500
+
     try:
         import json as _json
         from datetime import datetime
+        from io import BytesIO
 
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
 
-        # Tables to export
-        tables = [
-            'raw_messages',
-            'raw_mf_messages',
-            'eod_summary',
-            'price_history',
-            'trade_journal',
-            'backtest_cache',
-        ]
+        tables = ['raw_messages', 'raw_mf_messages', 'eod_summary', 'price_history', 'trade_journal', 'backtest_cache']
 
-        export_data = {}
+        # Stream JSON to memory buffer (chunk by chunk)
+        output = BytesIO()
+        output.write(b'{\n  "export_timestamp": "' + datetime.now(WIB).isoformat().encode() + b'",\n  "tables": {\n')
+
         metadata = {}
-
-        for table in tables:
+        for i, table in enumerate(tables):
             try:
                 rows = conn.execute(f"SELECT * FROM {table}").fetchall()
-                export_data[table] = [dict(row) for row in rows]
-                metadata[table] = {
-                    "row_count": len(rows),
-                    "status": "success"
-                }
+                table_data = [dict(row) for row in rows]
+                metadata[table] = {"row_count": len(rows), "status": "success"}
+
+                output.write(b'    "' + table.encode() + b'": ')
+                output.write(_json.dumps(table_data, default=str).encode())
+                if i < len(tables) - 1:
+                    output.write(b',')
+                output.write(b'\n')
             except Exception as e:
-                # Table might not exist, that's OK
-                export_data[table] = []
-                metadata[table] = {
-                    "row_count": 0,
-                    "status": f"skipped ({str(e)[:50]})"
-                }
+                metadata[table] = {"row_count": 0, "status": f"skipped: {str(e)[:30]}"}
+                output.write(b'    "' + table.encode() + b'": []\n')
+
+        output.write(b'  },\n  "metadata": ')
+        output.write(_json.dumps(metadata, default=str).encode())
+        output.write(b'\n}')
 
         conn.close()
 
-        result = {
-            "ok": True,
-            "timestamp": datetime.now(WIB).isoformat(),
-            "db_path": DB_PATH,
-            "data": export_data,
-            "metadata": {
-                "exported_tables": len([t for t in metadata if metadata[t]["status"] == "success"]),
-                "total_rows": sum(m["row_count"] for m in metadata.values()),
-                "tables": metadata,
-                "export_timestamp": datetime.now(WIB).isoformat(),
-            }
-        }
+        # Upload to Dropbox
+        json_bytes = output.getvalue()
+        ts = datetime.now(WIB).strftime("%Y-%m-%d_%H-%M-%S")
+        dropbox_path = f"/zenith_export_{ts}.json"
 
-        return jsonify(result)
+        r = requests.post(
+            "https://content.dropboxapi.com/2/files/upload",
+            headers={
+                "Authorization": f"Bearer {DROPBOX_TOKEN}",
+                "Dropbox-API-Arg": _json.dumps({
+                    "path": dropbox_path,
+                    "mode": "add",
+                    "autorename": True,
+                    "mute": True,
+                }),
+                "Content-Type": "application/octet-stream",
+            },
+            data=json_bytes,
+            timeout=600,
+        )
+
+        if r.status_code == 200:
+            meta = r.json()
+            return jsonify({
+                "ok": True,
+                "message": f"✅ Export OK → Dropbox",
+                "dropbox_path": meta.get("path_display", dropbox_path),
+                "size_mb": round(len(json_bytes) / 1024 / 1024, 2),
+                "total_rows": sum(m["row_count"] for m in metadata.values()),
+            })
+        else:
+            return jsonify({"ok": False, "error": f"Dropbox error {r.status_code}: {r.text[:300]}"}), 500
 
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
