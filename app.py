@@ -2626,5 +2626,79 @@ def get_trade_detail(ticker: str, date_str: str):
         return jsonify({"ok": False, "error": str(e)}), 500
 
 
+# ── Admin: Export All Data to JSON (for database migration) ─────────────────
+@app.route("/admin/export-db-json")
+def export_db_json():
+    """
+    Export entire SQLite database to JSON format.
+    Used for migration from SQLite → PostgreSQL.
+
+    Query: /admin/export-db-json?secret=YOUR_SECRET
+    Returns: {ok, timestamp, data: {table1: [...], table2: [...]}, metadata}
+    """
+    SECRET = os.environ.get("UPLOAD_SECRET", "zenith2026")
+    if request.args.get("secret", "") != SECRET:
+        return jsonify({"ok": False, "error": "Secret salah"}), 403
+
+    if not os.path.exists(DB_PATH):
+        return jsonify({"ok": False, "error": f"DB tidak ditemukan di {DB_PATH}"}), 500
+
+    try:
+        import json as _json
+        from datetime import datetime
+
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+
+        # Tables to export
+        tables = [
+            'raw_messages',
+            'raw_mf_messages',
+            'eod_summary',
+            'price_history',
+            'trade_journal',
+            'backtest_cache',
+        ]
+
+        export_data = {}
+        metadata = {}
+
+        for table in tables:
+            try:
+                rows = conn.execute(f"SELECT * FROM {table}").fetchall()
+                export_data[table] = [dict(row) for row in rows]
+                metadata[table] = {
+                    "row_count": len(rows),
+                    "status": "success"
+                }
+            except Exception as e:
+                # Table might not exist, that's OK
+                export_data[table] = []
+                metadata[table] = {
+                    "row_count": 0,
+                    "status": f"skipped ({str(e)[:50]})"
+                }
+
+        conn.close()
+
+        result = {
+            "ok": True,
+            "timestamp": datetime.now(WIB).isoformat(),
+            "db_path": DB_PATH,
+            "data": export_data,
+            "metadata": {
+                "exported_tables": len([t for t in metadata if metadata[t]["status"] == "success"]),
+                "total_rows": sum(m["row_count"] for m in metadata.values()),
+                "tables": metadata,
+                "export_timestamp": datetime.now(WIB).isoformat(),
+            }
+        }
+
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
