@@ -269,6 +269,125 @@ header::before {
   .mm-value { font-size: 11px; }
 }
 
+/* Trade Detail card */
+.trade-detail-card {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.td-header {
+  display: flex; align-items: center; gap: 8px;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-title {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  letter-spacing: .08em; color: var(--accent);
+  text-transform: uppercase;
+}
+.td-market-structure-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; font-weight: 500;
+  letter-spacing: .06em; color: var(--muted);
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+.mas-badge {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; font-weight: 700;
+  padding: 3px 8px; border-radius: 4px;
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.mas-badge.strong-uptrend          { background: rgba(0,232,162,.18); color: #00e8a2; border: 1px solid rgba(0,232,162,.3); }
+.mas-badge.transitional-uptrend   { background: rgba(0,200,130,.12); color: #00c882; border: 1px solid rgba(0,200,130,.25); }
+.mas-badge.transitional-correction{ background: rgba(255,200,80,.15); color: #ffc850; border: 1px solid rgba(255,200,80,.3); }
+.mas-badge.strong-downtrend       { background: rgba(255,107,107,.18); color: #ff6b6b; border: 1px solid rgba(255,107,107,.3); }
+.mas-badge.cluster-macro-up       { background: rgba(100,220,255,.12); color: #64dcff; border: 1px solid rgba(100,220,255,.25); }
+.mas-badge.cluster-macro-down     { background: rgba(180,120,255,.12); color: #b478ff; border: 1px solid rgba(180,120,255,.25); }
+.mas-badge.bullish-messy          { background: rgba(255,200,80,.12); color: #ffc850; border: 1px solid rgba(255,200,80,.25); }
+.mas-badge.bearish-messy          { background: rgba(255,80,80,.12); color: #ff5050; border: 1px solid rgba(255,80,80,.25); }
+.mas-badge.na                     { background: rgba(100,100,120,.12); color: var(--muted); border: 1px solid var(--border); }
+/* MA grid */
+.td-ma-grid {
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-ma-item { display: flex; flex-direction: column; gap: 2px; }
+.td-ma-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+}
+.td-ma-val-row { display: flex; align-items: center; gap: 5px; }
+.td-ma-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px; font-weight: 700; color: var(--text);
+}
+.ma-stamp {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; font-weight: 700; letter-spacing: .05em;
+  padding: 1px 4px; border-radius: 3px; text-transform: uppercase; white-space: nowrap;
+}
+.ma-stamp.up   { background: rgba(0,232,162,.15); color: #00e8a2; border: 1px solid rgba(0,232,162,.25); }
+.ma-stamp.down { background: rgba(255,107,107,.15); color: #ff6b6b; border: 1px solid rgba(255,107,107,.25); }
+.ma-stamp.side { background: rgba(160,160,180,.15); color: #aab; border: 1px solid rgba(160,160,180,.25); }
+/* RSI + CM row */
+.td-rsi-row {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.td-rsi-item { display: flex; flex-direction: column; gap: 2px; }
+.td-rsi-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+}
+.td-rsi-val {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px; font-weight: 700;
+}
+.td-rsi-val.oversold    { color: var(--up); }
+.td-rsi-val.neutral-rsi { color: var(--text); }
+.td-rsi-val.overbought  { color: var(--down); }
+.td-rsi-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; color: var(--muted);
+}
+/* Narrative */
+.td-narrative {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px; color: var(--text); line-height: 1.5;
+}
+/* Gates */
+.td-gates {
+  padding: 9px 14px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.td-gates-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.td-gate {
+  display: flex; align-items: center; gap: 6px;
+  font-family: 'Space Mono', monospace; font-size: 12px;
+}
+.td-gate-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+}
+.td-gate-dot.pass { background: var(--up); }
+.td-gate-dot.fail { background: var(--down); }
+.td-gate-text { color: var(--text); }
+.td-gate-sub  { color: var(--muted); margin-left: 2px; }
+@media (max-width: 640px) {
+  .td-ma-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
 /* Ticker Strategy Fitness card */
 .fitness-card {
   margin: 0;
@@ -429,6 +548,7 @@ td:first-child { text-align: left; }
   font-size: 12px; font-weight: 700;
   color: var(--text); letter-spacing: .04em;
 }
+.td-ticker.esg { color: #d4af37; }
 .td-ticker:hover { color: var(--accent); }
 
 /* Clean money cell with bar */
@@ -1192,6 +1312,82 @@ td:first-child { text-align: left; }
         </div>
       </div>
 
+      <!-- Trade Detail Card (MA Structure, RSI, CM Streak, Narrative, Gates) -->
+      <div class="trade-detail-card" id="tradeDetailCard" style="display:none">
+        <div class="td-header">
+          <span class="td-title">Trade Detail</span>
+          <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+            <span class="td-market-structure-label">Market Structure:</span>
+            <span class="mas-badge na" id="tdMASBadge">—</span>
+          </div>
+        </div>
+        <!-- MA grid -->
+        <div class="td-ma-grid">
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 5</div>
+            <div class="td-ma-val-row">
+              <span class="td-ma-val" id="tdMA5">—</span>
+              <span class="ma-stamp" id="tdMA5stamp"></span>
+            </div>
+          </div>
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 13</div>
+            <div class="td-ma-val-row">
+              <span class="td-ma-val" id="tdMA13">—</span>
+              <span class="ma-stamp" id="tdMA13stamp"></span>
+            </div>
+          </div>
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 34</div>
+            <div class="td-ma-val-row">
+              <span class="td-ma-val" id="tdMA34">—</span>
+              <span class="ma-stamp" id="tdMA34stamp"></span>
+            </div>
+          </div>
+          <div class="td-ma-item">
+            <div class="td-ma-label">MA 200</div>
+            <div class="td-ma-val-row">
+              <span class="td-ma-val" id="tdMA200">—</span>
+              <span class="ma-stamp" id="tdMA200stamp"></span>
+            </div>
+          </div>
+        </div>
+        <!-- RSI14 + CM Streak -->
+        <div class="td-rsi-row">
+          <div class="td-rsi-item">
+            <div class="td-rsi-label">RSI 14</div>
+            <div class="td-rsi-val neutral-rsi" id="tdRSI">—</div>
+            <div class="td-rsi-sub" id="tdRSIsub"></div>
+          </div>
+          <div class="td-rsi-item">
+            <div class="td-rsi-label">CM Streak</div>
+            <div class="td-rsi-val neutral-rsi" id="tdCM">—</div>
+            <div class="td-rsi-sub" id="tdCMsub"></div>
+          </div>
+        </div>
+        <!-- Phase Narrative -->
+        <div class="td-narrative" id="tdNarrative" style="display:none"></div>
+        <!-- Gate Conditions -->
+        <div class="td-gates" id="tdGates" style="display:none">
+          <div class="td-gates-label">Action Gates</div>
+          <div class="td-gate" id="tdGateA">
+            <div class="td-gate-dot pass"></div>
+            <span class="td-gate-text">Gate A</span>
+            <span class="td-gate-sub">Supply</span>
+          </div>
+          <div class="td-gate" id="tdGateB">
+            <div class="td-gate-dot pass"></div>
+            <span class="td-gate-text">Gate B</span>
+            <span class="td-gate-sub">ARB Safety</span>
+          </div>
+          <div class="td-gate" id="tdGateC">
+            <div class="td-gate-dot pass"></div>
+            <span class="td-gate-text">Gate C</span>
+            <span class="td-gate-sub">Anti-Pucuk</span>
+          </div>
+        </div>
+      </div>
+
       <!-- Ticker Strategy Fitness -->
       <div class="fitness-card" id="fitnessCard" style="display:none">
         <div class="fitness-header">
@@ -1749,7 +1945,7 @@ function renderTable() {
 
     const actCls = r.action === 'BUY' ? 'action-buy' : r.action === 'SELL' ? 'action-sell' : r.action === 'HOLD' ? 'action-hold' : '';
     return `<tr class="${actCls}" onclick="openModal('${r.ticker}')" style="animation-delay:${Math.min(i*15,300)}ms">
-      <td><span class="td-ticker">${r.ticker}</span>${r.esg ? '<span class="esg-badge" title="ESG constituent">ESG</span>' : ''}</td>
+      <td><span class="td-ticker${r.esg ? ' esg' : ''}">${r.ticker}</span>${r.esg ? '<span class="esg-badge" title="ESG constituent">ESG</span>' : ''}</td>
       <td><span class="td-num" style="color:var(--text)">${r.price !== null && r.price !== undefined ? r.price.toLocaleString('id-ID') : '—'}</span></td>
       <td><span class="td-num" style="color:var(--muted)">${r.tx ? r.tx.toLocaleString('id-ID') : '—'}</span></td>
       <td class="cm-cell" title="Avg SM: ${vwapSm} | Avg BM: ${vwapBm}${r.atr_pct ? ' | ATR: '+atrStr : ''}">
@@ -1819,6 +2015,7 @@ function openModal(ticker) {
   // Populate metrics panel from current row data
   const rowData = allRows.find(r => r.ticker === ticker);
   populateMetricsPanel(rowData);
+  populateTradeDetail(rowData);
 
   // Sync trx date pickers from main toolbar
   const mainFrom = document.getElementById('dateFrom').value;
@@ -1941,6 +2138,138 @@ function populateMetricsPanel(r) {
     acBadge.style.display = 'inline-block';
   } else {
     acBadge.style.display = 'none';
+  }
+}
+
+function populateTradeDetail(r) {
+  const card = document.getElementById('tradeDetailCard');
+  if (!card) return;
+  if (!r) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+
+  const price = r.price || r.price_close;
+  const fmt = (v) => v != null ? v.toLocaleString('id-ID', {maximumFractionDigits: 0}) : '—';
+  const setText = (id, value, className = '') => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = value;
+    el.className = className;
+  };
+
+  const mas = r.ma_structure || 'N/A';
+  const masClassMap = {
+    'Strong Uptrend':           'strong-uptrend',
+    'Transitional Uptrend':     'transitional-uptrend',
+    'Transitional Correction':  'transitional-correction',
+    'Strong Downtrend':         'strong-downtrend',
+    'Cluster on Macro Uptrend': 'cluster-macro-up',
+    'Cluster on Macro Downtrend': 'cluster-macro-down',
+    'Bullish Messy':            'bullish-messy',
+    'Bearish Messy':            'bearish-messy',
+  };
+
+  setText('tdMASBadge', mas, 'mas-badge ' + (masClassMap[mas] || 'na'));
+  const maFields = [
+    ['tdMA5',   'tdMA5stamp',   r.ma5],
+    ['tdMA13',  'tdMA13stamp',  r.ma13],
+    ['tdMA34',  'tdMA34stamp',  r.ma34],
+    ['tdMA200', 'tdMA200stamp', r.ma200],
+  ];
+  for (const [valId, stampId, maVal] of maFields) {
+    const elVal = document.getElementById(valId);
+    const elStamp = document.getElementById(stampId);
+    if (!elVal || !elStamp) continue;
+    if (maVal != null) {
+      elVal.textContent = fmt(maVal);
+      if (price != null) {
+        const diffPct = (price - maVal) / maVal * 100;
+        if (diffPct > 0.5)        { elStamp.textContent = 'Uptrend';   elStamp.className = 'ma-stamp up'; }
+        else if (diffPct < -0.5)  { elStamp.textContent = 'Downtrend'; elStamp.className = 'ma-stamp down'; }
+        else                       { elStamp.textContent = 'Sideways';  elStamp.className = 'ma-stamp side'; }
+      } else {
+        elStamp.textContent = ''; elStamp.className = 'ma-stamp';
+      }
+    } else {
+      elVal.textContent = '—';
+      elStamp.textContent = '';
+      elStamp.className = 'ma-stamp';
+    }
+  }
+
+  const elRSI = document.getElementById('tdRSI');
+  const elRSIsub = document.getElementById('tdRSIsub');
+  if (elRSI && elRSIsub) {
+    if (r.rsi14 != null) {
+      elRSI.textContent = r.rsi14.toFixed(1);
+      if (r.rsi14 < 30)      { elRSI.className = 'td-rsi-val oversold';    elRSIsub.textContent = 'Oversold'; }
+      else if (r.rsi14 <= 70){ elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = 'Neutral'; }
+      else                    { elRSI.className = 'td-rsi-val overbought';  elRSIsub.textContent = 'Overbought'; }
+    } else {
+      elRSI.textContent = '—'; elRSI.className = 'td-rsi-val neutral-rsi'; elRSIsub.textContent = '';}
+  }
+
+  const elCM = document.getElementById('tdCM');
+  const elCMsub = document.getElementById('tdCMsub');
+  if (elCM && elCMsub) {
+    if (r.cm_streak != null) {
+      const s = r.cm_streak;
+      elCM.textContent = (s > 0 ? '+' : '') + s + 'd';
+      elCM.className = 'td-rsi-val ' + (s > 0 ? 'oversold' : s < 0 ? 'overbought' : 'neutral-rsi');
+      elCMsub.textContent = s > 0 ? 'Hari di atas MA5' : s < 0 ? 'Hari di bawah MA5' : 'Di MA5';
+    } else {
+      elCM.textContent = '—'; elCM.className = 'td-rsi-val neutral-rsi'; elCMsub.textContent = '';
+    }
+  }
+
+  const elNarr = document.getElementById('tdNarrative');
+  if (elNarr) {
+    if (r.narrative) {
+      elNarr.textContent = r.narrative;
+      elNarr.style.display = 'block';
+    } else {
+      elNarr.style.display = 'none';
+    }
+  }
+
+  const elGates = document.getElementById('tdGates');
+  if (elGates) {
+    if (r.phase && ['SOS','SPRING','ABSORB','ACCUM'].includes(r.phase)) {
+      elGates.style.display = 'flex';
+      const bm_sma10 = r.sm_metrics?.bm_sma10 || 0;
+      const bm_val   = r.sm_metrics?.bm_val   || 0;
+      const atr      = r.atr_pct  || 2.5;
+      const pchg     = r.price_change_pct;
+
+      const gateA_fail = bm_sma10 > 0 && bm_val > bm_sma10 * 3.0;
+      const elGA = document.getElementById('tdGateA');
+      if (elGA) {
+        elGA.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateA_fail ? 'fail' : 'pass');
+        elGA.querySelector('.td-gate-sub').textContent = gateA_fail
+          ? 'Abnormal Supply: Meskipun fase akumulasi, tekanan jual (Bad Money) hari ini 3× lipat rata-rata (baseline: BM SMA10). Area ini sangat berisiko.'
+          : 'Pass — Supply normal';
+      }
+
+      const gateB_fail = r.watch === 'ARB_SPRING';
+      const elGB = document.getElementById('tdGateB');
+      if (elGB) {
+        elGB.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateB_fail ? 'fail' : 'pass');
+        elGB.querySelector('.td-gate-sub').textContent = gateB_fail
+          ? 'Extreme Panic: Terdeteksi fase SPRING, namun penurunan harga terlalu ekstrim (>1.5× ATR). Risiko ARB tinggi.'
+          : 'Pass — Tidak ada ARB';
+      }
+
+      const th_c = atr * 2.0;
+      const gateC_fail = pchg != null && pchg >= th_c;
+      const elGC = document.getElementById('tdGateC');
+      if (elGC) {
+        elGC.querySelector('.td-gate-dot').className = 'td-gate-dot ' + (gateC_fail ? 'fail' : 'pass');
+        elGC.querySelector('.td-gate-sub').textContent = gateC_fail
+          ? 'Profit Taking Zone: Sinyal BUY valid, namun harga naik terlalu tinggi hari ini (>2× ATR). Tunggu koreksi ke area MA5.'
+          : 'Pass — Harga belum overextended';
+      }
+    } else {
+      elGates.style.display = 'none';
+    }
   }
 }
 
